@@ -3,7 +3,7 @@ import type { AppState, Area } from "./types"
 const iso = (offset = 0) => {
   const date = new Date()
   date.setDate(date.getDate() + offset)
-  return date.toISOString().slice(0, 10)
+  return date.toLocaleDateString("en-CA")
 }
 
 export const areaMeta: Record<Area, {

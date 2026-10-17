@@ -1,4 +1,4 @@
-const CACHE = "life-studio-shell-v1"
+const CACHE = "life-studio-shell-v2"
 const SHELL = ["/", "/manifest.webmanifest", "/life-studio-icon.svg"]
 
 self.addEventListener("install", (event) => {
@@ -20,14 +20,37 @@ self.addEventListener("activate", (event) => {
 })
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return
-  if (event.request.mode === "navigate") {
-    event.respondWith(fetch(event.request).catch(() => caches.match("/")))
+  const { request } = event
+  const url = new URL(request.url)
+  if (request.method !== "GET" || url.origin !== self.location.origin) return
+  if (url.pathname.startsWith("/api/")) return
+
+  // Pages: network first so new deploys show up, cached shell when offline.
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone()
+          caches.open(CACHE).then((cache) => cache.put("/", copy))
+          return response
+        })
+        .catch(() => caches.match("/")),
+    )
     return
   }
+
+  // Hashed assets and images: cache first, filled in as they are used.
   event.respondWith(
-    caches
-      .match(event.request)
-      .then((cached) => cached || fetch(event.request)),
+    caches.match(request).then(
+      (cached) =>
+        cached ||
+        fetch(request).then((response) => {
+          if (response.ok) {
+            const copy = response.clone()
+            caches.open(CACHE).then((cache) => cache.put(request, copy))
+          }
+          return response
+        }),
+    ),
   )
 })

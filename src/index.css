@@ -4929,3 +4929,134 @@ textarea::placeholder {
     transition-duration: 0.01ms !important;
   }
 }
+
+.proposal form {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.proposal-preview {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.proposal-preview > p {
+  margin: 0;
+}
+
+.proposal-action {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 44px;
+  border-top: 1px solid var(--line);
+  padding-top: 0.6rem;
+  cursor: pointer;
+}
+
+.proposal-action input {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  accent-color: var(--moss);
+}
+
+.proposal-action > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.money-guide__answer p {
+  white-space: pre-line;
+}
+
+.sync-status,
+.sync-form {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 0.7rem;
+}
+
+.sync-form input[type="password"] {
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  padding: 0 0.85rem;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font: inherit;
+}
+
+.sync-replace {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.sync-replace input {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  margin: 0;
+  accent-color: var(--moss);
+}
+
+.sync-replace span {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.sync-replace small {
+  color: var(--ink-soft);
+}
+
+.settings-list section p.sync-pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  background: var(--sage-soft);
+  color: var(--moss-dark);
+  font-weight: 700;
+}
+
+.settings-list section p.sync-pill.is-error,
+.settings-list section p.sync-pill.is-offline {
+  background: var(--peach-soft);
+  color: var(--terracotta);
+}
+
+.live-transcript {
+  max-width: 34ch;
+  min-height: 3.2em;
+  margin: 0 auto 0.6rem;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 1.15rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.recording-orb.is-listening > span {
+  animation: listening-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes listening-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording-orb.is-listening > span {
+    animation: none;
+  }
+}

@@ -7,6 +7,8 @@ import {
   CalendarRange,
   Check,
   ChevronRight,
+  CloudCheck,
+  CloudOff,
   CircleDollarSign,
   Clock3,
   Coffee,
@@ -25,6 +27,7 @@ import {
   PenLine,
   Play,
   Plus,
+  RefreshCw,
   RotateCcw,
   Settings,
   Sparkles,
@@ -48,7 +51,17 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react"
+import {
+  askMoneyGuide,
+  askStudio,
+  localDate,
+  suggestGymSession,
+  type StudioAction,
+  type StudioProposal,
+} from "./ai"
 import { getVoiceNote, saveVoiceNote as storeVoiceNote } from "./audioStore"
+import { listen, speechSupported } from "./speech"
+import { downloadVoice, getPasscode } from "./sync"
 import { areaMeta, demoState } from "./data"
 import type {
   AppState,
@@ -59,12 +72,12 @@ import type {
   PlanItem,
   Project,
 } from "./types"
-import { useLifeStudioState } from "./useLifeStudioState"
+import { useLifeStudioState, type SyncStatus } from "./useLifeStudioState"
 
 type Route = "today" | "plan" | "progress" | "space"
 type SpaceKey = Area | "breathe" | "preferences"
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => localDate()
 const uid = () => crypto.randomUUID()
 const formatDate = (value: string, options?: Intl.DateTimeFormatOptions) =>
   new Intl.DateTimeFormat(
@@ -93,7 +106,7 @@ const areaIcon: Record<Area, LucideIcon> = {
   home: Home,
 }
 
-const navItems: { key: Route label: string icon: LucideIcon }[] = [
+const navItems: { key: Route; label: string; icon: LucideIcon }[] = [
   { key: "today", label: "Today", icon: Coffee },
   { key: "plan", label: "Plan", icon: CalendarDays },
   { key: "progress", label: "Progress", icon: Sparkles },
@@ -162,7 +175,7 @@ function IconButton({
   )
 }
 
-function AreaMark({ area, compact = false }: { area: Area compact?: boolean }) {
+function AreaMark({ area, compact = false }: { area: Area; compact?: boolean }) {
   const Icon = areaIcon[area]
   return (
     <span
@@ -702,7 +715,7 @@ function PlanView({
       Array.from({ length: 7 }, (_, index) => {
         const date = new Date()
         date.setDate(date.getDate() + index)
-        return date.toISOString().slice(0, 10)
+        return localDate(date)
       }),
     [],
   )
@@ -716,7 +729,7 @@ function PlanView({
   const moveTomorrow = (item: PlanItem) => {
     const target = new Date(`${item.date}T12:00:00`)
     target.setDate(target.getDate() + 1)
-    const targetDate = target.toISOString().slice(0, 10)
+    const targetDate = localDate(target)
     const conflict = state.plan.some(
       (candidate) =>
         candidate.date === targetDate &&
@@ -2008,6 +2021,117 @@ type SpaceProps = {
   reset?: (kind: "demo" | "empty") => void
 }
 
+type SyncControls = ReturnType<typeof useLifeStudioState>["sync"]
+
+const syncLabel: Record<SyncStatus, string> = {
+  off: "Not connected",
+  syncing: "Syncing…",
+  synced: "Synced",
+  offline: "Offline · will sync later",
+  locked: "Passcode needed",
+  error: "Sync paused",
+}
+
+// Plays a voice note from this device, or fetches it from your other devices.
+async function loadVoiceNote(id: string) {
+  const local = await getVoiceNote(id).catch(() => undefined)
+  if (local) return local
+  if (!getPasscode()) return undefined
+  const remote = await downloadVoice(id).catch(() => undefined)
+  if (remote) await storeVoiceNote(id, remote).catch(() => undefined)
+  return remote
+}
+
+function SyncSettings({ sync }: { sync: SyncControls }) {
+  const [passcode, setPasscodeInput] = useState("")
+  const [replace, setReplace] = useState(false)
+  const connected = sync.status !== "off" && sync.status !== "locked"
+  const Icon = sync.status === "synced" ? CloudCheck : CloudOff
+
+  return (
+    <section className="sync-setting">
+      <div>
+        <h3>Sync across devices</h3>
+        <p>
+          Your studio and voice notes are saved privately to your own site, so
+          your phone and laptop stay in step. Enter the same passcode on each
+          device.
+        </p>
+      </div>
+      {connected ? (
+        <div className="sync-status">
+          <p className={`sync-pill is-${sync.status}`} role="status">
+            <Icon size={16} />
+            {syncLabel[sync.status]}
+            {sync.status === "synced" && sync.lastSynced > 0 && (
+              <small>
+                {" "}
+                ·{" "}
+                {new Date(sync.lastSynced).toLocaleTimeString("en-GB", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </small>
+            )}
+          </p>
+          {sync.message && <p className="capture-disclaimer">{sync.message}</p>}
+          <div className="inline-actions">
+            <Button
+              variant="secondary"
+              icon={RefreshCw}
+              onClick={() => sync.syncNow()}
+            >
+              Sync now
+            </Button>
+            <Button variant="ghost" onClick={sync.disconnect}>
+              Stop syncing on this device
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <form
+          className="sync-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!passcode.trim()) return
+            sync.connect(passcode, replace ? "upload" : "load")
+          }}
+        >
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={passcode}
+            onChange={(event) => setPasscodeInput(event.target.value)}
+            placeholder="Studio passcode"
+            aria-label="Studio passcode"
+          />
+          <label className="sync-replace">
+            <input
+              type="checkbox"
+              checked={replace}
+              onChange={(event) => setReplace(event.target.checked)}
+            />
+            <span>
+              Replace the synced studio with this device’s data
+              <small>
+                Leave unticked to load what you saved on your other devices.
+              </small>
+            </span>
+          </label>
+          <Button type="submit" disabled={!passcode.trim()}>
+            Connect
+          </Button>
+          {sync.message && (
+            <p className="capture-disclaimer" role="alert">
+              {sync.message}
+            </p>
+          )}
+        </form>
+      )}
+    </section>
+  )
+}
+
 function BreatheSpace({ state, update, close }: SpaceProps) {
   const [practice, setPractice] = useState<"guided" | "quiet">("guided")
   const [duration, setDuration] = useState(180)
@@ -2498,17 +2622,20 @@ function MoneySpace({ state, update, close }: SpaceProps) {
   const moneyGoals = state.goals.filter((goal) => goal.area === "money")
   const completedLessons = state.moneyLessonsCompleted ?? []
 
-  const askGuide = (event: FormEvent<HTMLFormElement>) => {
+  const [guideLoading, setGuideLoading] = useState(false)
+  const [guideError, setGuideError] = useState("")
+
+  const askGuide = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const lower = question.toLowerCase()
-    const answer = lower.includes("risk")
-      ? "Risk is not one thing. A useful starting point is to separate short-term price movement from the chance of permanently losing money, then connect both to when you may need the money."
-      : lower.includes("compound")
-        ? "Compounding means growth can build on earlier growth. Time, consistency, fees, and returns all affect the result; it is a concept to understand, not a guaranteed outcome."
-        : lower.includes("divers")
-          ? "Diversification means avoiding dependence on one investment outcome. It can spread risk, but it cannot remove risk or guarantee gains."
-          : "A helpful next step is to define the term, understand its trade-offs, and connect it to your time horizon before considering any action."
-    setGuideAnswer(answer)
+    if (!question.trim() || guideLoading) return
+    setGuideLoading(true)
+    setGuideError("")
+    try {
+      setGuideAnswer(await askMoneyGuide(question.trim()))
+    } catch (error) {
+      setGuideError((error as Error).message)
+    }
+    setGuideLoading(false)
   }
 
   if (selectedLesson) {
@@ -2653,7 +2780,7 @@ function MoneySpace({ state, update, close }: SpaceProps) {
           <span className="money-guide-card__icon">
             <WandSparkles size={25} />
           </span>
-          <p className="eyebrow">Demo AI learning guide</p>
+          <p className="eyebrow">AI learning guide</p>
           <h3>Ask without pretending you should already know.</h3>
           <p>
             Explore concepts, vocabulary, and trade-offs. It will not recommend
@@ -2670,8 +2797,8 @@ function MoneySpace({ state, update, close }: SpaceProps) {
           <div className="prototype-note">
             <Sparkles size={19} />
             <p>
-              This educational response is simulated. The guide does not know
-              your income, holdings, tax situation, or risk capacity.
+              Answers come from AI and are educational only. The guide does not
+              know your income, holdings, tax situation, or risk capacity.
             </p>
           </div>
           <form onSubmit={askGuide}>
@@ -2684,10 +2811,19 @@ function MoneySpace({ state, update, close }: SpaceProps) {
                 placeholder="What does diversification actually do?"
               />
             </label>
-            <Button type="submit" disabled={!question.trim()} icon={Sparkles}>
-              Explain it simply
+            <Button
+              type="submit"
+              disabled={!question.trim() || guideLoading}
+              icon={Sparkles}
+            >
+              {guideLoading ? "Thinking…" : "Explain it simply"}
             </Button>
           </form>
+          {guideError && (
+            <p className="capture-disclaimer" role="alert">
+              {guideError}
+            </p>
+          )}
           {guideAnswer && (
             <div className="money-guide__answer" role="status">
               <span>
@@ -3176,8 +3312,12 @@ function GymCoach({
   const [equipment, setEquipment] = useState("Gym machines and free weights")
   const [note, setNote] = useState("")
   const [preview, setPreview] = useState<string[]>([])
+  const [cues, setCues] = useState<string[]>([])
+  const [headline, setHeadline] = useState({ title: "", summary: "" })
+  const [coachLoading, setCoachLoading] = useState(false)
+  const [coachError, setCoachError] = useState("")
 
-  const buildPreview = () => {
+  const buildOfflinePreview = () => {
     const lower = goal.toLowerCase()
     const exercises =
       lower.includes("hackney") || lower.includes("run")
@@ -3201,6 +3341,35 @@ function GymCoach({
               "Comfortable carry",
             ]
     setPreview(energy === "low" ? exercises.slice(0, 3) : exercises)
+    setCues([])
+    setHeadline({ title: "", summary: "" })
+  }
+
+  const buildPreview = async () => {
+    if (coachLoading) return
+    setCoachLoading(true)
+    setCoachError("")
+    try {
+      const suggestion = await suggestGymSession({
+        goal,
+        energy,
+        equipment,
+        note: note.trim(),
+      })
+      const exercises = (suggestion.exercises ?? []).filter((item) =>
+        item?.name?.trim(),
+      )
+      if (!exercises.length) throw new Error("Studio returned no exercises.")
+      setPreview(exercises.map((item) => item.name.trim()))
+      setCues(exercises.map((item) => item.cue))
+      setHeadline({ title: suggestion.title, summary: suggestion.summary })
+    } catch (error) {
+      setCoachError(
+        `${(error as Error).message} Showing a simple offline suggestion instead.`,
+      )
+      buildOfflinePreview()
+    }
+    setCoachLoading(false)
   }
 
   const savePlan = () => {
@@ -3253,7 +3422,7 @@ function GymCoach({
             duration: energy === "low" ? 25 : 40,
             mode: "flexible",
             status: "planned",
-            note: "Reviewed and saved from the simulated Studio coach",
+            note: "Reviewed and saved from the Studio coach",
           },
         ],
       }),
@@ -3353,33 +3522,40 @@ function GymCoach({
               restrictions, pause and seek qualified professional guidance.
             </p>
           </div>
-          <Button type="submit" icon={WandSparkles}>
-            Suggest a session
+          <Button type="submit" icon={WandSparkles} disabled={coachLoading}>
+            {coachLoading ? "Shaping a session…" : "Suggest a session"}
           </Button>
+          {coachError && (
+            <p className="capture-disclaimer" role="alert">
+              {coachError}
+            </p>
+          )}
         </form>
 
         {preview.length > 0 && (
           <section className="coach-preview">
             <div>
-              <p className="eyebrow">Simulated coaching proposal</p>
+              <p className="eyebrow">Coaching proposal · edit before use</p>
               <h3>
-                {energy === "low"
-                  ? "A shorter supportive session"
-                  : "A steady full-body session"}
+                {headline.title ||
+                  (energy === "low"
+                    ? "A shorter supportive session"
+                    : "A steady full-body session")}
               </h3>
               <p>
-                {energy === "low" ? "One" : "Two"} comfortable set
-                {energy === "low" ? "" : "s"} each. Finish with energy left.
+                {headline.summary ||
+                  `${energy === "low" ? "One comfortable set" : "Two comfortable sets"} each. Finish with energy left.`}
               </p>
             </div>
             <ol>
-              {preview.map((exercise) => (
-                <li key={exercise}>
-                  <span>{preview.indexOf(exercise) + 1}</span>
+              {preview.map((exercise, index) => (
+                <li key={`${exercise}-${index}`}>
+                  <span>{index + 1}</span>
                   <div>
                     <strong>{exercise}</strong>
                     <small>
-                      8–10 comfortable reps · editable in the player
+                      {cues[index] ||
+                        "8–10 comfortable reps · editable in the player"}
                     </small>
                   </div>
                 </li>
@@ -3394,7 +3570,7 @@ function GymCoach({
               </Button>
             </div>
             <p className="capture-disclaimer">
-              General educational guidance only. The simulated coach does not
+              General educational guidance only. The AI coach does not
               diagnose, treat, or replace a qualified health or fitness
               professional.
             </p>
@@ -3774,7 +3950,13 @@ function DanceLogger({
   )
 }
 
-function PreferencesSpace({ state, update, close, reset }: SpaceProps) {
+function PreferencesSpace({
+  state,
+  update,
+  close,
+  reset,
+  sync,
+}: SpaceProps & { sync: SyncControls }) {
   const [name, setName] = useState(state.name)
   const togglePriority = (area: Area) =>
     update(
@@ -3795,6 +3977,7 @@ function PreferencesSpace({ state, update, close, reset }: SpaceProps) {
       wide
     >
       <div className="settings-list">
+        <SyncSettings sync={sync} />
         <section>
           <div>
             <h3>What should the studio call you?</h3>
@@ -3881,8 +4064,8 @@ function PreferencesSpace({ state, update, close, reset }: SpaceProps) {
             <h3>Your Studio companion</h3>
             <p>
               Ask for help planning, organising, learning, reflecting, or
-              shaping a gentle next step. Voice recording is real; AI responses
-              are simulated in this prototype and always previewed.
+              shaping a gentle next step. Speak or type; every AI suggestion is
+              previewed before anything changes.
             </p>
           </div>
           <div className="settings-companion">
@@ -4051,8 +4234,307 @@ function AddPlanModal({
   )
 }
 
-type CaptureMode = "choose" | "recording" | "review" | "processing" | "proposal" | "error"
-type RecordingPurpose = "assistant" | "note"
+type CaptureMode =
+  | "choose"
+  | "listening"
+  | "recording"
+  | "review"
+  | "processing"
+  | "compose"
+  | "error"
+
+const MAX_RECORDING_SECONDS = 180
+const MAX_LISTENING_SECONDS = 120
+const areaKeys = Object.keys(areaMeta) as Area[]
+const isDate = (value: string | null): value is string =>
+  !!value && /^\d{4}-\d{2}-\d{2}$/.test(value)
+const isTime = (value: string | null): value is string =>
+  !!value && /^\d{2}:\d{2}$/.test(value)
+
+function preferredAudioType() {
+  if (typeof MediaRecorder === "undefined") return ""
+  return (
+    ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find(
+      (type) => MediaRecorder.isTypeSupported?.(type),
+    ) ?? ""
+  )
+}
+
+const blankAction = (
+  type: StudioAction["type"],
+  summary: string,
+): StudioAction => ({
+  type,
+  summary,
+  title: null,
+  body: null,
+  date: null,
+  time: null,
+  duration: null,
+  area: null,
+  mode: null,
+  planId: null,
+  amount: null,
+  category: null,
+  scale: null,
+  milestones: null,
+  exercises: null,
+  nextAction: null,
+})
+
+// Offline fallback: a small keyword parser used when the AI service is unreachable.
+function offlineProposal(text: string, state: AppState): StudioProposal {
+  const lower = text.toLowerCase()
+  const reply = "Studio is offline, so here is a simple suggestion to review."
+  if (lower.includes("gym") || lower.includes("workout")) {
+    return {
+      reply,
+      actions: [
+        {
+          ...blankAction("add_gym_session", "Add a gentle gym session to Today"),
+          title: "Gentle gym session",
+          duration: 35,
+          exercises: lower.includes("dance")
+            ? ["Supported split squat", "Cable row", "Incline push"]
+            : ["Sit to stand or leg press", "Supported row", "Calf raise"],
+        },
+      ],
+    }
+  }
+  if (lower.includes("move") || lower.includes("reschedule")) {
+    const item = state.plan.find(
+      (candidate) =>
+        candidate.status === "planned" && candidate.mode !== "fixed",
+    )
+    if (!item) return { reply: "There is no flexible plan to move.", actions: [] }
+    const date = new Date(`${item.date}T12:00:00`)
+    date.setDate(date.getDate() + 1)
+    return {
+      reply,
+      actions: [
+        {
+          ...blankAction("move_plan", `Move “${item.title}” to tomorrow`),
+          planId: item.id,
+          date: localDate(date),
+        },
+      ],
+    }
+  }
+  if (lower.includes("spent") || lower.includes("£")) {
+    const amount = Number(text.match(/£(\d+(?:\.\d{1,2})?)/)?.[1] ?? 0)
+    return {
+      reply,
+      actions: [
+        {
+          ...blankAction("add_transaction", `Add a £${amount} expense`),
+          title:
+            text.replace(/spent|£\d+(?:\.\d{1,2})?/gi, "").trim() ||
+            "Captured expense",
+          amount,
+          category: "Captured",
+        },
+      ],
+    }
+  }
+  if (lower.startsWith("journal")) {
+    return {
+      reply,
+      actions: [
+        {
+          ...blankAction("add_journal", "Save a journal entry"),
+          title: "Captured reflection",
+          body: text.replace(/^journal:\s*/i, ""),
+        },
+      ],
+    }
+  }
+  if (lower.includes("goal")) {
+    return {
+      reply,
+      actions: [
+        {
+          ...blankAction("add_goal", "Add a goal to shape with milestones"),
+          title:
+            text.split(":").slice(1).join(":").trim() ||
+            "A new goal to shape over time",
+          scale: lower.includes("big") ? "big" : "small",
+        },
+      ],
+    }
+  }
+  if (lower.includes("plan my") || lower.includes("balanced day")) {
+    return {
+      reply,
+      actions: [
+        {
+          ...blankAction("add_plan", "Add a gentle focus to Today"),
+          title: "Choose one thing that would make today feel mine",
+          duration: 20,
+        },
+      ],
+    }
+  }
+  return {
+    reply,
+    actions: [
+      {
+        ...blankAction("add_project", "Capture this as a project idea"),
+        title: "A captured idea",
+        body: text.replace(/^idea:\s*/i, ""),
+      },
+    ],
+  }
+}
+
+function applyAction(current: AppState, action: StudioAction): AppState {
+  const area =
+    action.area && areaKeys.includes(action.area) ? action.area : undefined
+  const date = isDate(action.date) ? action.date : today()
+  const title = action.title?.trim()
+  switch (action.type) {
+    case "add_plan":
+      return {
+        ...current,
+        plan: [
+          ...current.plan,
+          {
+            id: uid(),
+            title: title || "A new plan",
+            area: area ?? current.priorities[0] ?? "home",
+            date,
+            time: isTime(action.time) ? action.time : undefined,
+            duration: action.duration ?? undefined,
+            mode: action.mode ?? "flexible",
+            status: "planned",
+            note: action.body ?? undefined,
+          },
+        ],
+      }
+    case "move_plan":
+    case "complete_plan":
+      return {
+        ...current,
+        plan: current.plan.map((item) =>
+          item.id !== action.planId
+            ? item
+            : action.type === "complete_plan"
+              ? { ...item, status: "complete" }
+              : {
+                  ...item,
+                  date,
+                  time: isTime(action.time) ? action.time : item.time,
+                },
+        ),
+      }
+    case "add_journal":
+      return {
+        ...current,
+        journal: [
+          {
+            id: uid(),
+            title: title || "Captured reflection",
+            body: action.body ?? "",
+            date,
+          },
+          ...current.journal,
+        ],
+      }
+    case "add_project":
+      return {
+        ...current,
+        projects: [
+          {
+            id: uid(),
+            title: title || "A captured idea",
+            note: action.body ?? "",
+            stage: "Seed",
+            nextAction: action.nextAction ?? "Give it twenty curious minutes",
+          },
+          ...current.projects,
+        ],
+      }
+    case "add_goal":
+      return {
+        ...current,
+        goals: [
+          {
+            id: uid(),
+            title: title || "A new goal to shape over time",
+            area: area ?? current.priorities[0] ?? "create",
+            scale: action.scale ?? "small",
+            status: "tending",
+            nextStep:
+              action.nextAction ?? "Choose the smallest meaningful first step",
+            milestones: (action.milestones ?? []).map((milestone) => ({
+              id: uid(),
+              title: milestone,
+            })),
+          },
+          ...current.goals,
+        ],
+      }
+    case "add_transaction":
+      return {
+        ...current,
+        transactions: [
+          {
+            id: uid(),
+            title: title || "Captured expense",
+            amount: Math.round(Math.abs(action.amount ?? 0) * 100),
+            date,
+            category: action.category ?? "Captured",
+          },
+          ...current.transactions,
+        ],
+      }
+    case "add_gym_session": {
+      const sessionId = uid()
+      const exercises = action.exercises?.length
+        ? action.exercises
+        : ["Sit to stand or leg press", "Supported row", "Calf raise"]
+      return {
+        ...current,
+        gymSessionPlans: [
+          {
+            id: sessionId,
+            title: title || "Gentle gym session",
+            createdAt: new Date().toISOString(),
+            goal: "Studio suggestion",
+            exercises,
+          },
+          ...(current.gymSessionPlans ?? []),
+        ],
+        workout: {
+          active: false,
+          current: 0,
+          sets: exercises.flatMap((exercise) =>
+            [1, 2].map((round) => ({
+              id: `${sessionId}-${exercise}-${round}`,
+              exercise,
+              reps: 8,
+              complete: false,
+            })),
+          ),
+        },
+        plan: [
+          ...current.plan,
+          {
+            id: uid(),
+            title: title || "Gentle gym session",
+            area: "move",
+            date,
+            duration: action.duration ?? 35,
+            mode: "flexible",
+            status: "planned",
+            note: "Suggested by Studio. Edit it to suit you.",
+          },
+        ],
+      }
+    }
+    default:
+      return current
+  }
+}
 
 function VoiceCapture({
   state,
@@ -4064,27 +4546,40 @@ function VoiceCapture({
   update: SpaceProps["update"]
 }) {
   const [mode, setMode] = useState<CaptureMode>("choose")
-  const [purpose, setPurpose] = useState<RecordingPurpose>("assistant")
   const [text, setText] = useState("")
   const [noteTitle, setNoteTitle] = useState("")
   const [elapsed, setElapsed] = useState(0)
   const [level, setLevel] = useState(0)
   const [audioUrl, setAudioUrl] = useState("")
   const [playingUrl, setPlayingUrl] = useState("")
+  const [processingLabel, setProcessingLabel] = useState("")
+  const [proposal, setProposal] = useState<StudioProposal | null>(null)
+  const [selected, setSelected] = useState<boolean[]>([])
+  const [aiError, setAiError] = useState("")
+  const [errorKind, setErrorKind] = useState<"mic" | "storage" | "speech">(
+    "mic",
+  )
+  const [heard, setHeard] = useState("")
+  const listener = useRef<ReturnType<typeof listen> | null>(null)
   const recorder = useRef<MediaRecorder | null>(null)
   const stream = useRef<MediaStream | null>(null)
+  const audioContext = useRef<AudioContext | null>(null)
   const recordedBlob = useRef<Blob | null>(null)
   const chunks = useRef<Blob[]>([])
+  const discarded = useRef(false)
   const analyserFrame = useRef<number | null>(null)
 
   const stopTracks = () => {
     stream.current?.getTracks().forEach((track) => track.stop())
     stream.current = null
     if (analyserFrame.current) cancelAnimationFrame(analyserFrame.current)
+    analyserFrame.current = null
+    audioContext.current?.close().catch(() => undefined)
+    audioContext.current = null
   }
 
   useEffect(() => {
-    if (mode !== "recording") return
+    if (mode !== "recording" && mode !== "listening") return
     const timer = window.setInterval(
       () => setElapsed((value) => value + 1),
       1000,
@@ -4092,17 +4587,102 @@ function VoiceCapture({
     return () => window.clearInterval(timer)
   }, [mode])
 
+  useEffect(() => {
+    if (mode === "recording" && elapsed >= MAX_RECORDING_SECONDS)
+      recorder.current?.stop()
+    if (mode === "listening" && elapsed >= MAX_LISTENING_SECONDS)
+      listener.current?.stop()
+  }, [elapsed, mode])
+
   useEffect(
     () => () => {
+      if (recorder.current?.state === "recording") {
+        discarded.current = true
+        recorder.current.stop()
+      }
       stopTracks()
-      if (audioUrl) URL.revokeObjectURL(audioUrl)
-      if (playingUrl) URL.revokeObjectURL(playingUrl)
+      listener.current?.cancel()
     },
-    [audioUrl, playingUrl],
+    [],
   )
 
-  const startRecording = async (nextPurpose: RecordingPurpose = purpose) => {
-    setPurpose(nextPurpose)
+  useEffect(
+    () => () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl)
+    },
+    [audioUrl],
+  )
+
+  useEffect(
+    () => () => {
+      if (playingUrl) URL.revokeObjectURL(playingUrl)
+    },
+    [playingUrl],
+  )
+
+  const runAssistant = async (request: string) => {
+    const input = request.trim()
+    if (!input) return
+    setText(input)
+    setProposal(null)
+    setAiError("")
+    setProcessingLabel("Studio is thinking…")
+    setMode("processing")
+    try {
+      const result = await askStudio(input, state)
+      const actions = Array.isArray(result.actions) ? result.actions : []
+      setProposal({ reply: result.reply ?? "", actions })
+      setSelected(actions.map(() => true))
+    } catch (error) {
+      setAiError((error as Error).message)
+    }
+    setMode("compose")
+  }
+
+  const startListening = () => {
+    if (!speechSupported()) {
+      openComposer()
+      setAiError(
+        "Voice isn’t available in this browser. Tap the microphone on your keyboard to dictate, or type instead.",
+      )
+      return
+    }
+    setHeard("")
+    setElapsed(0)
+    setMode("listening")
+    listener.current = listen({
+      onText: setHeard,
+      onDone: (transcript) => {
+        listener.current = null
+        if (transcript.trim()) runAssistant(transcript)
+        else {
+          openComposer()
+          setAiError("Studio didn’t catch anything. Try again or type it.")
+        }
+      },
+      onError: (kind) => {
+        listener.current = null
+        if (kind === "permission") {
+          setErrorKind("speech")
+          setMode("error")
+        } else {
+          openComposer()
+          setAiError(
+            "Voice recognition isn’t available right now. Tap the microphone on your keyboard to dictate, or type instead.",
+          )
+        }
+      },
+    })
+  }
+
+  const cancelListening = () => {
+    listener.current?.cancel()
+    listener.current = null
+    setMode("choose")
+  }
+
+  const startRecording = async () => {
+    setErrorKind("mic")
     if (
       !navigator.mediaDevices?.getUserMedia ||
       typeof MediaRecorder === "undefined"
@@ -4115,261 +4695,98 @@ function VoiceCapture({
         audio: true,
       })
       stream.current = mediaStream
-      const mediaRecorder = new MediaRecorder(mediaStream)
+      const mimeType = preferredAudioType()
+      const mediaRecorder = mimeType
+        ? new MediaRecorder(mediaStream, { mimeType })
+        : new MediaRecorder(mediaStream)
       recorder.current = mediaRecorder
       chunks.current = []
-      mediaRecorder.ondataavailable = (event) =>
-        event.data.size && chunks.current.push(event.data)
+      discarded.current = false
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size) chunks.current.push(event.data)
+      }
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks.current, { type: mediaRecorder.mimeType })
+        stopTracks()
+        if (discarded.current) return
+        const blob = new Blob(chunks.current, {
+          type: (mediaRecorder.mimeType || mimeType || "audio/mp4").split(
+            ";",
+          )[0],
+        })
         recordedBlob.current = blob
         setAudioUrl(URL.createObjectURL(blob))
-        stopTracks()
         setMode("review")
       }
-      mediaRecorder.start()
+      mediaRecorder.start(1000)
       setElapsed(0)
       setMode("recording")
 
-      const audioContext = new AudioContext()
-      const source = audioContext.createMediaStreamSource(mediaStream)
-      const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 64
-      source.connect(analyser)
-      const data = new Uint8Array(analyser.frequencyBinCount)
-      const sample = () => {
-        analyser.getByteFrequencyData(data)
-        setLevel(
-          data.reduce((sum, value) => sum + value, 0) / data.length / 255,
-        )
-        analyserFrame.current = requestAnimationFrame(sample)
+      const AudioContextClass =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext
+      if (AudioContextClass) {
+        const context = new AudioContextClass()
+        audioContext.current = context
+        const source = context.createMediaStreamSource(mediaStream)
+        const analyser = context.createAnalyser()
+        analyser.fftSize = 64
+        source.connect(analyser)
+        const data = new Uint8Array(analyser.frequencyBinCount)
+        const sample = () => {
+          analyser.getByteFrequencyData(data)
+          setLevel(
+            data.reduce((sum, value) => sum + value, 0) / data.length / 255,
+          )
+          analyserFrame.current = requestAnimationFrame(sample)
+        }
+        sample()
       }
-      sample()
     } catch {
+      stopTracks()
       setMode("error")
     }
   }
 
-  const useDemoTranscript = () => {
-    setMode("processing")
-    window.setTimeout(() => {
-      setText("Move my next flexible plan to tomorrow afternoon.")
-      setMode("proposal")
-    }, 900)
+  const discardRecording = () => {
+    discarded.current = true
+    if (recorder.current?.state === "recording") recorder.current.stop()
+    stopTracks()
+    setMode("choose")
   }
 
-  const promptAssistant = (prompt: string) => {
-    setText(prompt)
-    setMode("proposal")
+  const openComposer = (prefill = "") => {
+    setHeard("")
+    setText(prefill)
+    setProposal(null)
+    setAiError("")
+    setMode("compose")
   }
 
-  const proposalKind = () => {
-    const lower = text.toLowerCase()
-    if (lower.includes("gym") || lower.includes("workout")) return "gym"
-    if (lower.includes("plan my") || lower.includes("balanced day"))
-      return "plan"
-    if (lower.includes("move") || lower.includes("reschedule")) return "move"
-    if (lower.includes("goal")) return "goal"
-    if (lower.includes("inspir")) return "inspiration"
-    if (lower.includes("spent") || lower.includes("£")) return "money"
-    if (lower.startsWith("journal")) return "journal"
-    return "idea"
+  const useOffline = () => {
+    const result = offlineProposal(text, state)
+    setAiError("")
+    setProposal(result)
+    setSelected(result.actions.map(() => true))
   }
 
-  const proposalLabel: Record<ReturnType<typeof proposalKind>, string> = {
-    gym: "Create a gentle gym-session starting point",
-    plan: "Create a gentle shape for today",
-    move: "Move the next flexible plan to tomorrow",
-    goal: "Add a goal you can shape with milestones",
-    inspiration: "Save a creative inspiration",
-    money: "Add a manual transaction",
-    journal: "Save a journal entry",
-    idea: "Capture a project idea",
-  }
+  const isValidAction = (action: StudioAction) =>
+    action.type === "move_plan" || action.type === "complete_plan"
+      ? state.plan.some((item) => item.id === action.planId)
+      : true
 
-  const saveProposal = () => {
-    const lower = text.toLowerCase()
-    const kind = proposalKind()
-    if (kind === "gym") {
-      const exercises = lower.includes("dance")
-        ? ["Supported split squat", "Cable row", "Incline push"]
-        : ["Sit to stand or leg press", "Supported row", "Calf raise"]
-      const sessionId = uid()
-      update(
-        (current) => ({
-          ...current,
-          gymSessionPlans: [
-            {
-              id: sessionId,
-              title: "Gentle gym session",
-              createdAt: new Date().toISOString(),
-              goal: lower.includes("hackney")
-                ? "Hackney Half Marathon"
-                : lower.includes("dance")
-                  ? "Dance support"
-                  : "Everyday strength",
-              exercises,
-            },
-            ...(current.gymSessionPlans ?? []),
-          ],
-          workout: {
-            active: false,
-            current: 0,
-            sets: exercises.flatMap((exercise) =>
-              [1, 2].map((round) => ({
-                id: `${sessionId}-${exercise}-${round}`,
-                exercise,
-                reps: 8,
-                complete: false,
-              })),
-            ),
-          },
-          plan: [
-            ...current.plan,
-            {
-              id: uid(),
-              title: "Gentle gym session",
-              area: "move",
-              date: today(),
-              duration: 35,
-              mode: "flexible",
-              status: "planned",
-              note: "Review and edit this simulated coaching suggestion before use",
-            },
-          ],
-        }),
-        "A gentle gym-session starting point is on Today.",
-      )
-    } else if (kind === "plan") {
-      update(
-        (current) => ({
-          ...current,
-          plan: [
-            ...current.plan,
-            {
-              id: uid(),
-              title: "Choose one thing that would make today feel mine",
-              area: current.priorities[0] ?? "home",
-              date: today(),
-              duration: 20,
-              mode: "flexible",
-              status: "planned",
-              note: "Suggested by the simulated Studio assistant",
-            },
-          ],
-        }),
-        "A gentle focus was added to Today.",
-      )
-    } else if (kind === "move") {
-      update((current) => {
-        const item = current.plan.find(
-          (candidate) =>
-            candidate.status === "planned" && candidate.mode !== "fixed",
-        )
-        if (!item) return current
-        const date = new Date(`${item.date}T12:00:00`)
-        date.setDate(date.getDate() + 1)
-        return {
-          ...current,
-          plan: current.plan.map((candidate) =>
-            candidate.id === item.id
-              ? { ...candidate, date: date.toISOString().slice(0, 10) }
-              : candidate,
-          ),
-        }
-      }, "Your next flexible plan moved to tomorrow.")
-    } else if (kind === "goal") {
-      const title =
-        text.split(":").slice(1).join(":").trim() ||
-        "A new goal to shape over time"
-      update(
-        (current) => ({
-          ...current,
-          goals: [
-            {
-              id: uid(),
-              title,
-              area: current.priorities[0] ?? "create",
-              scale: lower.includes("big") ? "big" : "small",
-              status: "tending",
-              nextStep: "Choose the smallest meaningful first step",
-              milestones: lower.includes("big")
-                ? [
-                    {
-                      id: uid(),
-                      title: "Name what a good beginning looks like",
-                    },
-                  ]
-                : [],
-            },
-            ...current.goals,
-          ],
-        }),
-        "Your new goal is ready to shape.",
-      )
-    } else if (kind === "money") {
-      const amount = Number(text.match(/£(\d+(?:\.\d{1,2})?)/)?.[1] ?? 0)
-      update(
-        (current) => ({
-          ...current,
-          transactions: [
-            {
-              id: uid(),
-              title:
-                text.replace(/spent|£\d+(?:\.\d{1,2})?/gi, "").trim() ||
-                "Captured expense",
-              amount: Math.round(amount * 100),
-              date: today(),
-              category: "Captured",
-            },
-            ...current.transactions,
-          ],
-        }),
-        "Expense saved after your confirmation.",
-      )
-    } else if (kind === "journal") {
-      update(
-        (current) => ({
-          ...current,
-          journal: [
-            {
-              id: uid(),
-              title: "Captured reflection",
-              body: text.replace(/^journal:\s*/i, ""),
-              date: today(),
-            },
-            ...current.journal,
-          ],
-        }),
-        "Reflection saved after your confirmation.",
-      )
-    } else {
-      const inspiration =
-        kind === "inspiration"
-          ? "Take one familiar London route at a different hour and collect three details you usually miss."
-          : text.replace(/^idea:\s*/i, "")
-      update(
-        (current) => ({
-          ...current,
-          projects: [
-            {
-              id: uid(),
-              title:
-                kind === "inspiration"
-                  ? "Three details from a familiar route"
-                  : "A captured idea",
-              note: inspiration,
-              stage: "Seed",
-              nextAction: "Give it twenty curious minutes",
-            },
-            ...current.projects,
-          ],
-        }),
-        kind === "inspiration"
-          ? "Inspiration saved as a project seed."
-          : "Idea saved after your confirmation.",
-      )
-    }
+  const confirmProposal = () => {
+    if (!proposal) return
+    const chosen = proposal.actions.filter(
+      (action, index) => selected[index] && isValidAction(action),
+    )
+    if (!chosen.length) return
+    update(
+      (current) => chosen.reduce(applyAction, current),
+      chosen.length === 1
+        ? "Saved after your confirmation."
+        : `${chosen.length} changes saved after your confirmation.`,
+    )
     onClose()
   }
 
@@ -4395,16 +4812,55 @@ function VoiceCapture({
       )
       onClose()
     } catch {
+      setErrorKind("storage")
       setMode("error")
     }
   }
 
   const playSavedNote = async (id: string) => {
-    const blob = await getVoiceNote(id)
+    const blob = await loadVoiceNote(id)
     if (!blob) return
-    if (playingUrl) URL.revokeObjectURL(playingUrl)
     setPlayingUrl(URL.createObjectURL(blob))
   }
+
+  const quickActions: {
+    icon: LucideIcon
+    title: string
+    hint: string
+    prompt: string
+  }[] = [
+    {
+      icon: CalendarRange,
+      title: "Plan my day",
+      hint: "Find a manageable shape",
+      prompt: "Help me plan a balanced day with what I already have.",
+    },
+    {
+      icon: ArrowRight,
+      title: "Move something",
+      hint: "Reschedule without the guilt",
+      prompt: "Move my next flexible plan to tomorrow afternoon.",
+    },
+    {
+      icon: Sparkles,
+      title: "Add a goal",
+      hint: "Break it into milestones",
+      prompt: "Add a bigger goal: Create something I am proud to share",
+    },
+    {
+      icon: Lightbulb,
+      title: "Find inspiration",
+      hint: "A small prompt, not homework",
+      prompt:
+        "Give me one creative inspiration for this week and save it as a project idea.",
+    },
+    {
+      icon: Dumbbell,
+      title: "Plan a gym session",
+      hint: "Start from a goal, then edit",
+      prompt: "Plan a gentle gym session to support my Hackney Half goal.",
+    },
+  ]
 
   return (
     <Modal
@@ -4427,79 +4883,22 @@ function VoiceCapture({
               </div>
             </div>
             <div className="assistant-actions">
+              {quickActions.map(({ icon: Icon, title, hint, prompt }) => (
+                <button
+                  type="button"
+                  onClick={() => runAssistant(prompt)}
+                  key={title}
+                >
+                  <Icon size={20} />
+                  <span>
+                    <strong>{title}</strong>
+                    <small>{hint}</small>
+                  </span>
+                </button>
+              ))}
               <button
                 type="button"
-                onClick={() =>
-                  promptAssistant(
-                    "Help me plan a balanced day with what I already have.",
-                  )
-                }
-              >
-                <CalendarRange size={20} />
-                <span>
-                  <strong>Plan my day</strong>
-                  <small>Find a manageable shape</small>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  promptAssistant(
-                    "Move my next flexible plan to tomorrow afternoon.",
-                  )
-                }
-              >
-                <ArrowRight size={20} />
-                <span>
-                  <strong>Move something</strong>
-                  <small>Reschedule without the guilt</small>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  promptAssistant(
-                    "Add a bigger goal: Create something I am proud to share",
-                  )
-                }
-              >
-                <Sparkles size={20} />
-                <span>
-                  <strong>Add a goal</strong>
-                  <small>Break it into milestones</small>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  promptAssistant(
-                    "Give me one creative inspiration for this week.",
-                  )
-                }
-              >
-                <Lightbulb size={20} />
-                <span>
-                  <strong>Find inspiration</strong>
-                  <small>A small prompt, not homework</small>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  promptAssistant(
-                    "Plan a gentle gym session to support my Hackney Half goal.",
-                  )
-                }
-              >
-                <Dumbbell size={20} />
-                <span>
-                  <strong>Plan a gym session</strong>
-                  <small>Start from a goal, then edit</small>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => promptAssistant("Journal: Today I feel…")}
+                onClick={() => openComposer("Journal: Today I feel ")}
               >
                 <Heart size={20} />
                 <span>
@@ -4509,7 +4908,7 @@ function VoiceCapture({
               </button>
             </div>
             <div className="assistant-inputs">
-              <button type="button" onClick={() => startRecording("assistant")}>
+              <button type="button" onClick={startListening}>
                 <span>
                   <Mic size={23} />
                 </span>
@@ -4519,7 +4918,7 @@ function VoiceCapture({
                 </div>
                 <ChevronRight size={18} />
               </button>
-              <button type="button" onClick={() => setMode("proposal")}>
+              <button type="button" onClick={() => openComposer()}>
                 <span>
                   <PenLine size={21} />
                 </span>
@@ -4529,7 +4928,7 @@ function VoiceCapture({
                 </div>
                 <ChevronRight size={18} />
               </button>
-              <button type="button" onClick={() => startRecording("note")}>
+              <button type="button" onClick={startRecording}>
                 <span>
                   <AudioLines size={22} />
                 </span>
@@ -4543,7 +4942,7 @@ function VoiceCapture({
             {(state.voiceNotes ?? []).length > 0 && (
               <div className="recent-voice-notes">
                 <p className="eyebrow">Recent voice notes</p>
-                {(state.voiceNotes ?? []).slice(0, 2).map((note) => (
+                {(state.voiceNotes ?? []).slice(0, 3).map((note) => (
                   <button
                     type="button"
                     onClick={() => playSavedNote(note.id)}
@@ -4565,9 +4964,9 @@ function VoiceCapture({
             <div className="prototype-note">
               <Sparkles size={19} />
               <p>
-                Recording and voice notes are real and local. AI planning and
-                transcription are simulated in this prototype; every change is
-                previewed before saving.
+                Your browser turns speech into text for free, then Studio’s AI
+                suggests changes. Voice notes are never sent to AI. Nothing
+                changes until you confirm.
               </p>
             </div>
             <div className="assistant-boundary">
@@ -4580,21 +4979,31 @@ function VoiceCapture({
             </div>
           </>
         )}
+        {mode === "listening" && (
+          <div className="recording-state">
+            <div className="recording-orb is-listening">
+              <span />
+              <Mic size={31} />
+            </div>
+            <p className="eyebrow">Listening · tap send when you’re done</p>
+            <p className="live-transcript" aria-live="polite">
+              {heard || "Go ahead, I’m listening…"}
+            </p>
+            <Button icon={Check} onClick={() => listener.current?.stop()}>
+              Send to Studio
+            </Button>
+            <Button variant="ghost" icon={Trash2} onClick={cancelListening}>
+              Cancel
+            </Button>
+          </div>
+        )}
         {mode === "recording" && (
           <div className="recording-state">
             <div className="recording-orb">
               <span style={{ transform: `scale(${1 + level * 0.6})` }} />
-              {purpose === "assistant" ? (
-                <Mic size={31} />
-              ) : (
-                <AudioLines size={31} />
-              )}
+              <AudioLines size={31} />
             </div>
-            <p className="eyebrow">
-              {purpose === "assistant"
-                ? "Talking to Studio · audio stays local"
-                : "Recording a private voice note"}
-            </p>
+            <p className="eyebrow">Recording a private voice note</p>
             <div className="recording-time">
               {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}
             </div>
@@ -4609,15 +5018,7 @@ function VoiceCapture({
             <Button icon={Square} onClick={() => recorder.current?.stop()}>
               Stop recording
             </Button>
-            <Button
-              variant="ghost"
-              icon={Trash2}
-              onClick={() => {
-                recorder.current?.stop()
-                stopTracks()
-                setMode("choose")
-              }}
-            >
+            <Button variant="ghost" icon={Trash2} onClick={discardRecording}>
               Discard
             </Button>
           </div>
@@ -4625,103 +5026,150 @@ function VoiceCapture({
         {mode === "review" && (
           <div className="audio-review">
             <p className="eyebrow">Recording complete · {elapsed} seconds</p>
-            <h3>
-              {purpose === "note"
-                ? "Keep this thought as a voice note."
-                : "Your request is ready."}
-            </h3>
+            <h3>Keep this thought as a voice note.</h3>
             <audio src={audioUrl} controls />
-            {purpose === "note" ? (
-              <div className="voice-note-save">
-                <label>
-                  <span>Give it a short title</span>
-                  <input
-                    value={noteTitle}
-                    onChange={(event) => setNoteTitle(event.target.value)}
-                    placeholder="A thought after the walk"
-                    autoFocus
-                  />
-                </label>
-                <Button icon={AudioLines} onClick={saveRecordedNote}>
-                  Save voice note
-                </Button>
-                <p>
-                  The recording is stored privately in this browser and is not
-                  sent to AI.
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="prototype-note">
-                  <Sparkles size={19} />
-                  <p>
-                    Real transcription is not connected. Use an editable demo
-                    transcript to preview how Studio would help.
-                  </p>
-                </div>
-                <Button icon={Sparkles} onClick={useDemoTranscript}>
-                  Use demo transcript
-                </Button>
-                <Button variant="ghost" onClick={() => setMode("proposal")}>
-                  Type my request instead
-                </Button>
-              </>
-            )}
+            <div className="voice-note-save">
+              <label>
+                <span>Give it a short title</span>
+                <input
+                  value={noteTitle}
+                  onChange={(event) => setNoteTitle(event.target.value)}
+                  placeholder="A thought after the walk"
+                  autoFocus
+                />
+              </label>
+              <Button icon={AudioLines} onClick={saveRecordedNote}>
+                Save voice note
+              </Button>
+              <p>
+                The recording is stored privately in this browser and is not
+                sent to AI.
+              </p>
+            </div>
           </div>
         )}
         {mode === "processing" && (
           <div className="processing">
             <span className="processing__ring" />
-            <p className="eyebrow">Simulated AI planning</p>
-            <h3>Preparing an editable proposal…</h3>
+            <p className="eyebrow">Studio assistant</p>
+            <h3>{processingLabel}</h3>
           </div>
         )}
-        {mode === "proposal" && (
+        {mode === "compose" && (
           <div className="proposal">
             <button
               type="button"
               className="back-link"
               onClick={() => {
                 setText("")
+                setProposal(null)
+                setAiError("")
                 setMode("choose")
               }}
             >
               <ArrowLeft size={17} /> Assistant home
             </button>
-            <label>
-              <span>
-                {audioUrl
-                  ? "Editable demo transcript"
-                  : "What would you like Studio to help with?"}
-              </span>
-              <textarea
-                autoFocus
-                rows={5}
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                placeholder="Help me plan today, move Friday’s admin, add a goal, or save an idea…"
-              />
-            </label>
-            {text && (
-              <div className="proposal-preview">
+            <form
+              onSubmit={(event) => {
+                event.preventDefault()
+                runAssistant(text)
+              }}
+            >
+              <label>
+                <span>
+                  {heard
+                    ? "What Studio heard · edit if needed"
+                    : "What would you like Studio to help with?"}
+                </span>
+                <textarea
+                  autoFocus={!text}
+                  rows={4}
+                  value={text}
+                  onChange={(event) => setText(event.target.value)}
+                  placeholder="Help me plan today, move Friday’s admin, add a goal, or save an idea…"
+                />
+              </label>
+              <Button
+                type="submit"
+                variant={proposal ? "secondary" : "primary"}
+                disabled={!text.trim()}
+                icon={WandSparkles}
+              >
+                {proposal ? "Ask again" : "Ask Studio"}
+              </Button>
+            </form>
+            {aiError && (
+              <div className="prototype-note" role="alert">
+                <Sparkles size={19} />
+                <p>
+                  {aiError}{" "}
+                  {text.trim() && (
+                    <button
+                      type="button"
+                      className="text-link"
+                      onClick={useOffline}
+                    >
+                      Use a simple offline suggestion
+                    </button>
+                  )}
+                </p>
+              </div>
+            )}
+            {proposal && (
+              <div className="proposal-preview" role="status">
                 <p className="eyebrow">
                   Studio proposes · review before saving
                 </p>
-                <div>
-                  <WandSparkles size={20} />
-                  <span>
-                    <strong>{proposalLabel[proposalKind()]}</strong>
-                    <small>Nothing changes until you confirm.</small>
-                  </span>
-                </div>
+                {proposal.reply && <p>{proposal.reply}</p>}
+                {proposal.actions.map((action, index) => (
+                  <label className="proposal-action" key={index}>
+                    <input
+                      type="checkbox"
+                      checked={selected[index] ?? false}
+                      disabled={!isValidAction(action)}
+                      onChange={(event) =>
+                        setSelected((current) =>
+                          current.map((value, position) =>
+                            position === index ? event.target.checked : value,
+                          ),
+                        )
+                      }
+                    />
+                    <WandSparkles size={20} />
+                    <span>
+                      <strong>{action.summary}</strong>
+                      <small>
+                        {[
+                          action.title,
+                          isDate(action.date) && formatDate(action.date),
+                          action.time,
+                          action.amount != null && `£${action.amount}`,
+                          !isValidAction(action) && "Plan not found",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </small>
+                    </span>
+                  </label>
+                ))}
               </div>
             )}
-            <Button disabled={!text.trim()} icon={Check} onClick={saveProposal}>
-              Confirm this action
-            </Button>
+            {proposal && proposal.actions.length > 0 && (
+              <Button
+                disabled={
+                  !proposal.actions.some(
+                    (action, index) => selected[index] && isValidAction(action),
+                  )
+                }
+                icon={Check}
+                onClick={confirmProposal}
+              >
+                Confirm{" "}
+                {selected.filter(Boolean).length > 1 ? "these changes" : "this"}
+              </Button>
+            )}
             <p className="capture-disclaimer">
-              This proposal is simulated and deterministic. You stay in control
-              of every change.
+              AI suggestions can be wrong. You stay in control of every change.
             </p>
           </div>
         )}
@@ -4730,18 +5178,27 @@ function VoiceCapture({
             <span>
               <MicOff size={28} />
             </span>
-            <h3>The microphone or local audio store is not available.</h3>
+            <h3>
+              {errorKind === "storage"
+                ? "This browser could not save the voice note."
+                : errorKind === "speech"
+                  ? "Voice recognition needs permission."
+                  : "The microphone is not available."}
+            </h3>
             <p>
-              Permission may be off, or this browser may not support local
-              recording. Studio still works by typing.
+              {errorKind === "storage"
+                ? "Private browsing or full storage can block saving audio. Studio still works by typing."
+                : errorKind === "speech"
+                  ? "Allow the microphone and speech recognition for this site. On iPhone, also turn on Settings › General › Keyboard › Enable Dictation. Studio still works by typing."
+                  : "Microphone permission may be off. On iPhone, check Settings › Safari › Microphone. Studio still works by typing."}
             </p>
-            <Button onClick={() => setMode("proposal")}>Type to Studio</Button>
+            <Button onClick={() => openComposer()}>Type to Studio</Button>
             <Button
               variant="ghost"
               icon={RotateCcw}
-              onClick={() => startRecording(purpose)}
+              onClick={errorKind === "speech" ? startListening : startRecording}
             >
-              Try recording again
+              {errorKind === "speech" ? "Try talking again" : "Try recording again"}
             </Button>
           </div>
         )}
@@ -4751,7 +5208,7 @@ function VoiceCapture({
 }
 
 export default function App() {
-  const { state, update, notice, reset } = useLifeStudioState()
+  const { state, update, notice, reset, sync } = useLifeStudioState()
   const [route, setRoute] = useState<Route>(routeFromPath)
   const [space, setSpace] = useState<SpaceKey | null>(null)
   const [capture, setCapture] = useState(false)
@@ -4987,6 +5444,7 @@ export default function App() {
           update={update}
           close={() => setSpace(null)}
           reset={reset}
+          sync={sync}
         />
       )}
     </div>

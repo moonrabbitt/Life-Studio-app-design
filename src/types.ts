@@ -101,6 +101,7 @@ export type VoiceNote = {
   title: string
   createdAt: string
   duration: number
+  uploaded?: boolean
 }
 
 export type MovementNote = {
