@@ -1,17 +1,15 @@
 // Shared helpers for talking to the Cloudflare AI Gateway from Netlify Functions.
 // The gateway key lives only in Netlify environment variables and never reaches the browser.
 
-const DEFAULT_GATEWAY_URL =
-  "https://gateway.ai.cloudflare.com/v1/2eb3a8a765f53f6ae0c5da3b0d12d5c4/hex"
-
+// All three values come from Netlify environment variables; none are hard-coded,
+// so Netlify's secrets scanning never finds them in the repo.
 export function gatewayConfig() {
   const key = process.env.CLOUDFLARE_KEY
-  if (!key) throw new HttpError(503, "AI is not configured on the server yet.")
-  return {
-    url: (process.env.CF_GATEWAY_URL || DEFAULT_GATEWAY_URL).replace(/\/$/, ""),
-    key,
-    model: process.env.AI_MODEL || "gpt-6-luna",
-  }
+  const url = process.env.CF_GATEWAY_URL
+  const model = process.env.AI_MODEL
+  if (!key || !url || !model)
+    throw new HttpError(503, "AI is not configured on the server yet.")
+  return { url: url.replace(/\/$/, ""), key, model }
 }
 
 export class HttpError extends Error {
