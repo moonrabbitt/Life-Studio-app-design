@@ -101,6 +101,15 @@ export async function callResponses({
 
   if (!response.ok) {
     console.error("Gateway error", response.status, await response.text())
+    if (response.status === 402)
+      throw new HttpError(
+        402,
+        "The AI has run out of credits. Top up your Cloudflare AI Gateway balance, then try again.",
+      )
+    if (response.status === 401 || response.status === 403)
+      throw new HttpError(502, "The AI key was rejected. Check CLOUDFLARE_KEY in Netlify.")
+    if (response.status === 429)
+      throw new HttpError(429, "The AI is busy right now. Try again in a minute.")
     throw new HttpError(502, "The AI service returned an error. Please try again.")
   }
 

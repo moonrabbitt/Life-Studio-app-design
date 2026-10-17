@@ -5806,3 +5806,41 @@ textarea::placeholder {
     display: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   iPhone home-screen fit
+--------------------------------------------------------------------------- */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Safari zooms the page when a field under 16px is focused, and stays zoomed. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
+.modal {
+  max-height: calc(100vh - env(safe-area-inset-top) - 0.5rem);
+  max-height: calc(100dvh - env(safe-area-inset-top) - 0.5rem);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  overflow-x: hidden;
+}
+
+.modal-backdrop {
+  height: 100vh;
+  height: 100dvh;
+  overscroll-behavior: contain;
+}
+
+.modal img,
+.modal audio,
+.modal video {
+  max-width: 100%;
+}
