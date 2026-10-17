@@ -1,0 +1,4994 @@
+import {
+  ArrowLeft,
+  ArrowRight,
+  AudioLines,
+  BookOpen,
+  CalendarDays,
+  CalendarRange,
+  Check,
+  ChevronRight,
+  CircleDollarSign,
+  Clock3,
+  Coffee,
+  Dumbbell,
+  Feather,
+  Film,
+  Heart,
+  Home,
+  Lightbulb,
+  Menu,
+  MessageCircle,
+  Mic,
+  MicOff,
+  Music2,
+  Pause,
+  PenLine,
+  Play,
+  Plus,
+  RotateCcw,
+  Settings,
+  Sparkles,
+  Square,
+  ShieldCheck,
+  Trash2,
+  TrendingUp,
+  UserRound,
+  Users,
+  WalletCards,
+  WandSparkles,
+  Wind,
+  X,
+  type LucideIcon,
+} from "lucide-react"
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react"
+import { getVoiceNote, saveVoiceNote as storeVoiceNote } from "./audioStore"
+import { areaMeta, demoState } from "./data"
+import type {
+  AppState,
+  Area,
+  CheckIn,
+  Goal,
+  JournalEntry,
+  PlanItem,
+  Project,
+} from "./types"
+import { useLifeStudioState } from "./useLifeStudioState"
+
+type Route = "today" | "plan" | "progress" | "space"
+type SpaceKey = Area | "breathe" | "preferences"
+
+const today = () => new Date().toISOString().slice(0, 10)
+const uid = () => crypto.randomUUID()
+const formatDate = (value: string, options?: Intl.DateTimeFormatOptions) =>
+  new Intl.DateTimeFormat(
+    "en-GB",
+    options ?? { day: "numeric", month: "short" },
+  ).format(new Date(`${value}T12:00:00`))
+const formatMoney = (pence: number) =>
+  new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(pence / 100)
+
+const routePath: Record<Route, string> = {
+  today: "/",
+  plan: "/plan",
+  progress: "/progress",
+  space: "/space",
+}
+
+const areaIcon: Record<Area, LucideIcon> = {
+  reflect: Feather,
+  create: Lightbulb,
+  connect: Users,
+  move: Heart,
+  money: CircleDollarSign,
+  home: Home,
+}
+
+const navItems: { key: Route label: string icon: LucideIcon }[] = [
+  { key: "today", label: "Today", icon: Coffee },
+  { key: "plan", label: "Plan", icon: CalendarDays },
+  { key: "progress", label: "Progress", icon: Sparkles },
+  { key: "space", label: "My space", icon: UserRound },
+]
+
+function routeFromPath(): Route {
+  const value = window.location.pathname
+  if (value.endsWith("/plan")) return "plan"
+  if (value.endsWith("/progress")) return "progress"
+  if (value.endsWith("/space")) return "space"
+  return "today"
+}
+
+function Button({
+  children,
+  onClick,
+  variant = "primary",
+  icon: Icon,
+  type = "button",
+  disabled,
+  className = "",
+}: {
+  children: ReactNode
+  onClick?: () => void
+  variant?: "primary" | "secondary" | "ghost" | "danger"
+  icon?: LucideIcon
+  type?: "button" | "submit"
+  disabled?: boolean
+  className?: string
+}) {
+  return (
+    <button
+      className={`button button--${variant} ${className}`}
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      {Icon && <Icon size={18} strokeWidth={1.8} />}
+      <span>{children}</span>
+    </button>
+  )
+}
+
+function IconButton({
+  label,
+  icon: Icon,
+  onClick,
+  active,
+}: {
+  label: string
+  icon: LucideIcon
+  onClick?: () => void
+  active?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      className={`icon-button ${active ? "is-active" : ""}`}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+    >
+      <Icon size={20} strokeWidth={1.8} />
+    </button>
+  )
+}
+
+function AreaMark({ area, compact = false }: { area: Area compact?: boolean }) {
+  const Icon = areaIcon[area]
+  return (
+    <span
+      className={`area-mark area-${area} ${
+        compact ? "area-mark--compact" : ""
+      }`}
+    >
+      <Icon size={compact ? 14 : 17} strokeWidth={1.9} />
+      {!compact && areaMeta[area].label}
+    </span>
+  )
+}
+
+function LogoMark() {
+  return (
+    <svg
+      className="brand-mark"
+      viewBox="0 0 48 48"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect width="48" height="48" rx="15" fill="#34543f" />
+      <path
+        d="M13 36V22.5C13 14.5 17.8 9 24 9s11 5.5 11 13.5V36H13Z"
+        fill="#fffaf0"
+      />
+      <circle cx="25.5" cy="19" r="5.5" fill="#e9b59c" />
+      <path
+        d="M18 34c5.8-1.5 9.6-5.3 12.6-11.4-1.2 6.5-4.7 11.4-10.8 14.1"
+        fill="none"
+        stroke="#34543f"
+        strokeWidth="2.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M21.5 29.5c-3.8.1-5.7-1.8-5.9-4.8 3.8-.4 6.2 1 6.8 3.9"
+        fill="#9eae8d"
+      />
+      <path
+        d="M26.8 25.2c.5-3.5 2.8-5.1 5.8-4.7.1 3.5-1.7 5.7-4.9 5.8"
+        fill="#9eae8d"
+      />
+    </svg>
+  )
+}
+
+function Modal({
+  title,
+  eyebrow,
+  children,
+  onClose,
+  wide = false,
+}: {
+  title: string
+  eyebrow?: string
+  children: ReactNode
+  onClose: () => void
+  wide?: boolean
+}) {
+  const dialogRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    const focusable = () =>
+      Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), audio[controls], [href], [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      )
+    const initialFocus =
+      dialogRef.current?.querySelector<HTMLElement>("[autofocus]") ??
+      focusable()[0]
+    initialFocus?.focus()
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose()
+        return
+      }
+      if (event.key !== "Tab") return
+      const elements = focusable()
+      const first = elements[0]
+      const last = elements[elements.length - 1]
+      if (!first || !last) return
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    window.addEventListener("keydown", handleKey)
+    return () => {
+      window.removeEventListener("keydown", handleKey)
+      document.body.style.overflow = previousOverflow
+      previouslyFocused?.focus()
+    }
+  }, [onClose])
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        ref={dialogRef}
+        className={`modal ${wide ? "modal--wide" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal__handle" />
+        <header className="modal__header">
+          <div>
+            {eyebrow && <p className="eyebrow">{eyebrow}</p>}
+            <h2>{title}</h2>
+          </div>
+          <IconButton icon={X} label="Close" onClick={onClose} />
+        </header>
+        <div className="modal__body">{children}</div>
+      </section>
+    </div>
+  )
+}
+
+function EmptyState({
+  title,
+  body,
+  action,
+  onAction,
+}: {
+  title: string
+  body: string
+  action: string
+  onAction: () => void
+}) {
+  return (
+    <div className="empty-state">
+      <img src="/assets/samoyed.png" alt="" />
+      <div>
+        <h3>{title}</h3>
+        <p>{body}</p>
+        <Button variant="secondary" icon={Plus} onClick={onAction}>
+          {action}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function Onboarding({
+  onFinish,
+}: {
+  onFinish: (
+    priorities: Area[],
+    density: AppState["density"],
+    examples: boolean,
+  ) => void
+}) {
+  const [step, setStep] = useState(1)
+  const [priorities, setPriorities] = useState<Area[]>([])
+  const [density, setDensity] = useState<AppState["density"]>("few")
+  const [examples, setExamples] = useState(true)
+
+  const toggleArea = (area: Area) => {
+    setPriorities((current) =>
+      current.includes(area)
+        ? current.filter((item) => item !== area)
+        : current.length < 3
+          ? [...current, area]
+          : current,
+    )
+  }
+
+  return (
+    <main className="onboarding">
+      <div className="onboarding__visual">
+        <img
+          src="/assets/life-studio-room.png"
+          alt="A sunlit creative room overlooking London"
+        />
+        <div className="onboarding__brand">
+          <LogoMark />
+          <div>
+            <span>Life Studio</span>
+            <p>A place to shape a life that feels like yours.</p>
+          </div>
+        </div>
+      </div>
+      <section className="onboarding__panel">
+        <div className="onboarding__progress">
+          <span>Getting started</span>
+          <span>{step} of 3</span>
+        </div>
+        <div className="progress-track">
+          <span style={{ width: `${(step / 3) * 100}%` }} />
+        </div>
+
+        {step === 1 && (
+          <div className="onboarding__content">
+            <p className="eyebrow">Your season, your emphasis</p>
+            <h1>What would you like more room for?</h1>
+            <p>
+              Choose up to three. This changes what appears first, not what
+              counts.
+            </p>
+            <div className="choice-grid">
+              {(Object.keys(areaMeta) as Area[]).map((area) => {
+                const Icon = areaIcon[area]
+                const selected = priorities.includes(area)
+                return (
+                  <button
+                    type="button"
+                    className={`choice-card area-${area} ${
+                      selected ? "is-selected" : ""
+                    }`}
+                    aria-pressed={selected}
+                    onClick={() => toggleArea(area)}
+                    key={area}
+                  >
+                    <Icon size={22} />
+                    <strong>{areaMeta[area].label}</strong>
+                    <small>{areaMeta[area].short}</small>
+                    {selected && (
+                      <Check className="choice-card__check" size={17} />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="onboarding__content">
+            <p className="eyebrow">Make it realistic</p>
+            <h1>How much should Today hold?</h1>
+            <p>
+              You can always make a day smaller, fuller, or completely open.
+            </p>
+            <div className="stacked-choices">
+              {[
+                ["one", "One clear focus", "Keep the day especially quiet."],
+                [
+                  "few",
+                  "A few gentle things",
+                  "A balanced shape with breathing room.",
+                ],
+                ["full", "A fuller view", "Show more of what is available."],
+              ].map(([value, label, description]) => (
+                <button
+                  type="button"
+                  className={`radio-card ${
+                    density === value ? "is-selected" : ""
+                  }`}
+                  aria-pressed={density === value}
+                  onClick={() => setDensity(value as AppState["density"])}
+                  key={value}
+                >
+                  <span className="radio-card__dot" />
+                  <span>
+                    <strong>{label}</strong>
+                    <small>{description}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="onboarding__content">
+            <p className="eyebrow">Your first week</p>
+            <h1>Would examples make it easier?</h1>
+            <p>
+              Start with a few clearly labelled ideas, or open a fresh studio
+              and add only what matters.
+            </p>
+            <div className="preview-card">
+              <div className="preview-card__image">
+                <img src="/assets/samoyed.png" alt="" />
+              </div>
+              <button
+                type="button"
+                className={`radio-card ${examples ? "is-selected" : ""}`}
+                aria-pressed={examples}
+                onClick={() => setExamples(true)}
+              >
+                <span className="radio-card__dot" />
+                <span>
+                  <strong>Begin with editable examples</strong>
+                  <small>
+                    See how ideas, friends, home, and movement can sit together.
+                  </small>
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`radio-card ${!examples ? "is-selected" : ""}`}
+                aria-pressed={!examples}
+                onClick={() => setExamples(false)}
+              >
+                <span className="radio-card__dot" />
+                <span>
+                  <strong>Start with open space</strong>
+                  <small>A calm empty studio with simple add actions.</small>
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        <footer className="onboarding__actions">
+          {step > 1 ? (
+            <Button
+              variant="ghost"
+              icon={ArrowLeft}
+              onClick={() => setStep(step - 1)}
+            >
+              Back
+            </Button>
+          ) : (
+            <span />
+          )}
+          {step < 3 ? (
+            <Button onClick={() => setStep(step + 1)}>
+              Continue <ArrowRight size={17} />
+            </Button>
+          ) : (
+            <Button onClick={() => onFinish(priorities, density, examples)}>
+              Open my studio <ArrowRight size={17} />
+            </Button>
+          )}
+        </footer>
+      </section>
+    </main>
+  )
+}
+
+function TodayView({
+  state,
+  update,
+  onAdd,
+  onOpenSpace,
+}: {
+  state: AppState
+  update: (recipe: (current: AppState) => AppState, message?: string) => void
+  onAdd: () => void
+  onOpenSpace: (space: SpaceKey) => void
+}) {
+  const currentItems = state.plan
+    .filter((item) => item.date === today() && item.status === "planned")
+    .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""))
+  const max = state.density === "one" ? 1 : state.density === "few" ? 3 : 5
+  const visibleItems = currentItems.slice(0, max)
+  const hour = new Date().getHours()
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
+
+  const setCheckIn = (value: CheckIn) =>
+    update(
+      (current) => ({ ...current, checkIn: value }),
+      "Today has been softened to fit.",
+    )
+  const complete = (id: string) =>
+    update(
+      (current) => ({
+        ...current,
+        plan: current.plan.map((item) =>
+          item.id === id ? { ...item, status: "complete" } : item,
+        ),
+      }),
+      "Noted. One thing tended to.",
+    )
+
+  return (
+    <div className="page today-page">
+      <section className="today-hero">
+        <img
+          src="/assets/life-studio-room.png"
+          alt=""
+          className="today-hero__image"
+        />
+        <div className="today-hero__veil" />
+        <div className="today-hero__content">
+          <p className="eyebrow eyebrow--light">
+            {formatDate(today(), {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}
+          </p>
+          <h1>
+            {greeting}, {state.name}.
+          </h1>
+          <p>What would make today feel a little more like yours?</p>
+        </div>
+      </section>
+
+      <section className="check-in floating-card">
+        <div>
+          <p className="eyebrow">A small check-in</p>
+          <h2>How much room is there today?</h2>
+        </div>
+        <div className="segmented" aria-label="Energy check-in">
+          {[
+            ["low", "Keep it small"],
+            ["steady", "Steady"],
+            ["open", "Room to explore"],
+          ].map(([value, label]) => (
+            <button
+              type="button"
+              className={state.checkIn === value ? "is-active" : ""}
+              aria-pressed={state.checkIn === value}
+              onClick={() => setCheckIn(value as CheckIn)}
+              key={value}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <div className="page-grid">
+        <div className="page-grid__main">
+          <section className="section-block">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Today’s shape</p>
+                <h2>
+                  {visibleItems.length
+                    ? "A few things, with space between"
+                    : "Open space"}
+                </h2>
+              </div>
+              <Button variant="ghost" icon={Plus} onClick={onAdd}>
+                Add
+              </Button>
+            </div>
+            {visibleItems.length ? (
+              <div className="today-list">
+                {visibleItems.map((item, index) => (
+                  <article
+                    className={`today-item ${
+                      index === 0 ? "today-item--focus" : ""
+                    }`}
+                    key={item.id}
+                  >
+                    <div className="today-item__time">
+                      <span>{item.time ?? "Anytime"}</span>
+                      {item.duration && <small>{item.duration} min</small>}
+                    </div>
+                    <div className="today-item__body">
+                      <AreaMark area={item.area} />
+                      <h3>{item.title}</h3>
+                      <p>
+                        {item.mode === "fixed"
+                          ? "A fixed point in the day."
+                          : item.mode === "maybe"
+                            ? "Optional. Let it go if the space matters more."
+                            : "Flexible. Move it until it fits."}
+                      </p>
+                      <div className="inline-actions">
+                        <Button onClick={() => complete(item.id)} icon={Check}>
+                          Done
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => onOpenSpace(item.area)}
+                        >
+                          Open {areaMeta[item.area].label}
+                        </Button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="We can keep today small."
+                body="Open time counts. Add one gentle intention only if it would help."
+                action="Add one thing"
+                onAction={onAdd}
+              />
+            )}
+          </section>
+        </div>
+
+        <aside className="page-grid__aside">
+          <section className="companion-card">
+            <div>
+              <p className="eyebrow">A quiet corner</p>
+              <h3>A softer day still belongs to your life.</h3>
+              <p>Rest, make tea, write one line, or leave the space open.</p>
+            </div>
+            <img src="/assets/samoyed.png" alt="" />
+          </section>
+          <section className="quick-spaces">
+            <div className="section-heading section-heading--small">
+              <h3>Drop into a space</h3>
+            </div>
+            <div className="quick-spaces__grid">
+              {(["reflect", "create", "connect", "money"] as Area[]).map(
+                (area) => {
+                  const Icon = areaIcon[area]
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => onOpenSpace(area)}
+                      key={area}
+                    >
+                      <Icon size={19} />
+                      <span>{areaMeta[area].label}</span>
+                    </button>
+                  )
+                },
+              )}
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+function PlanView({
+  state,
+  update,
+  onAdd,
+}: {
+  state: AppState
+  update: (recipe: (current: AppState) => AppState, message?: string) => void
+  onAdd: (date?: string) => void
+}) {
+  const days = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, index) => {
+        const date = new Date()
+        date.setDate(date.getDate() + index)
+        return date.toISOString().slice(0, 10)
+      }),
+    [],
+  )
+  const [selected, setSelected] = useState(days[0])
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
+  const items = state.plan
+    .filter((item) => item.date === selected)
+    .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""))
+  const selectedItem = state.plan.find((item) => item.id === selectedItemId)
+
+  const moveTomorrow = (item: PlanItem) => {
+    const target = new Date(`${item.date}T12:00:00`)
+    target.setDate(target.getDate() + 1)
+    const targetDate = target.toISOString().slice(0, 10)
+    const conflict = state.plan.some(
+      (candidate) =>
+        candidate.date === targetDate &&
+        candidate.time === item.time &&
+        candidate.status === "planned",
+    )
+    update(
+      (current) => ({
+        ...current,
+        plan: current.plan.map((candidate) =>
+          candidate.id === item.id
+            ? { ...candidate, date: targetDate }
+            : candidate,
+        ),
+      }),
+      conflict
+        ? "Moved. There is another plan at that time, so both remain visible."
+        : "Moved to a kinder day.",
+    )
+  }
+
+  return (
+    <div className="page">
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">Your week</p>
+          <h1>Plan with room to change.</h1>
+          <p>
+            Commitments, possibilities, and genuine open space live together
+            here.
+          </p>
+        </div>
+        <Button icon={Plus} onClick={() => onAdd(selected)}>
+          Add something
+        </Button>
+      </header>
+
+      <nav className="day-strip" aria-label="Choose a day">
+        {days.map((date) => (
+          <button
+            type="button"
+            className={selected === date ? "is-selected" : ""}
+            aria-current={selected === date ? "date" : undefined}
+            onClick={() => setSelected(date)}
+            key={date}
+          >
+            <span>{formatDate(date, { weekday: "short" })}</span>
+            <strong>{formatDate(date, { day: "numeric" })}</strong>
+            <small>
+              {state.plan.filter(
+                (item) => item.date === date && item.status === "planned",
+              ).length || "—"}
+            </small>
+          </button>
+        ))}
+      </nav>
+
+      <div className="plan-layout">
+        <section className="agenda">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">
+                {formatDate(selected, { weekday: "long" })}
+              </p>
+              <h2>{formatDate(selected, { day: "numeric", month: "long" })}</h2>
+            </div>
+            <span className="open-space-label">Open space is intentional</span>
+          </div>
+          {items.length ? (
+            <div className="agenda__timeline">
+              {items.map((item) => (
+                <article
+                  className={`agenda-item area-border-${item.area}`}
+                  key={item.id}
+                >
+                  <div className="agenda-item__time">
+                    <strong>{item.time ?? "Anytime"}</strong>
+                    <span>
+                      {item.duration ? `${item.duration} min` : item.mode}
+                    </span>
+                  </div>
+                  <div className="agenda-item__content">
+                    <AreaMark area={item.area} />
+                    <h3>{item.title}</h3>
+                    <p>
+                      {item.status === "complete"
+                        ? "Complete"
+                        : item.status === "let-go"
+                          ? "Let go"
+                          : `${item.mode[0].toUpperCase()}${item.mode.slice(1)}`}
+                    </p>
+                    {(item.steps ?? []).length > 0 && (
+                      <span className="agenda-item__steps">
+                        {
+                          (item.steps ?? []).filter((step) => step.complete)
+                            .length
+                        }{" "}
+                        of {(item.steps ?? []).length} steps
+                      </span>
+                    )}
+                  </div>
+                  {item.status === "planned" && (
+                    <div className="agenda-item__actions">
+                      <Button
+                        variant="secondary"
+                        onClick={() => setSelectedItemId(item.id)}
+                      >
+                        Open
+                      </Button>
+                      <Button
+                        icon={Check}
+                        onClick={() =>
+                          update(
+                            (current) => ({
+                              ...current,
+                              plan: current.plan.map((candidate) =>
+                                candidate.id === item.id
+                                  ? { ...candidate, status: "complete" }
+                                  : candidate,
+                              ),
+                            }),
+                            item.goalId
+                              ? "Done—and added to the goal’s progress."
+                              : "Done. This now appears in Progress.",
+                          )
+                        }
+                      >
+                        Done
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => moveTomorrow(item)}
+                      >
+                        Move
+                      </Button>
+                      <IconButton
+                        label="Let this go"
+                        icon={X}
+                        onClick={() =>
+                          update(
+                            (current) => ({
+                              ...current,
+                              plan: current.plan.map((candidate) =>
+                                candidate.id === item.id
+                                  ? { ...candidate, status: "let-go" }
+                                  : candidate,
+                              ),
+                            }),
+                            "Let go. Nothing needs to be made up.",
+                          )
+                        }
+                      />
+                    </div>
+                  )}
+                  {item.status !== "planned" && (
+                    <div className="agenda-item__actions">
+                      <Button
+                        variant="ghost"
+                        onClick={() => setSelectedItemId(item.id)}
+                      >
+                        Review
+                      </Button>
+                    </div>
+                  )}
+                </article>
+              ))}
+              <button
+                type="button"
+                className="open-space"
+                onClick={() => onAdd(selected)}
+              >
+                <Plus size={18} />
+                <span>
+                  <strong>Open space</strong>
+                  <small>Keep it, or add something that would help.</small>
+                </span>
+              </button>
+            </div>
+          ) : (
+            <EmptyState
+              title="Nothing is asking for this day."
+              body="Leave it open, or add a small intention without filling every hour."
+              action="Add an intention"
+              onAction={() => onAdd(selected)}
+            />
+          )}
+        </section>
+
+        <aside className="plan-note">
+          <CalendarDays size={23} />
+          <h3>Plans, not promises</h3>
+          <p>
+            Flexible things can move. Maybe things can disappear. Life Studio
+            will never create debt from a missed plan.
+          </p>
+        </aside>
+      </div>
+      {selectedItem && (
+        <PlanItemDetail
+          item={selectedItem}
+          goal={state.goals.find((goal) => goal.id === selectedItem.goalId)}
+          onClose={() => setSelectedItemId(null)}
+          update={update}
+        />
+      )}
+    </div>
+  )
+}
+
+function PlanItemDetail({
+  item,
+  goal,
+  onClose,
+  update,
+}: {
+  item: PlanItem
+  goal?: Goal
+  onClose: () => void
+  update: SpaceProps["update"]
+}) {
+  const [stepTitle, setStepTitle] = useState("")
+  const steps = item.steps ?? []
+  const completedSteps = steps.filter((step) => step.complete).length
+
+  return (
+    <Modal
+      title={item.title}
+      eyebrow={`${areaMeta[item.area].label} · ${formatDate(item.date, {
+        day: "numeric",
+        month: "long",
+      })}`}
+      onClose={onClose}
+    >
+      <div className="plan-detail">
+        <section className="plan-detail__summary">
+          <AreaMark area={item.area} />
+          <div>
+            <span>{item.time ?? "Anytime"}</span>
+            <span>
+              {item.duration ? `${item.duration} minutes` : "Open duration"}
+            </span>
+            <span>
+              {item.mode === "fixed"
+                ? "Fixed commitment"
+                : item.mode === "maybe"
+                  ? "Optional"
+                  : "Flexible"}
+            </span>
+          </div>
+          {goal && (
+            <div className="plan-detail__goal">
+              <Sparkles size={18} />
+              <span>
+                <small>Contributes to</small>
+                <strong>{goal.title}</strong>
+              </span>
+            </div>
+          )}
+        </section>
+
+        <section className="plan-steps">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Steps</p>
+              <h3>
+                {steps.length
+                  ? `${completedSteps} of ${steps.length} done`
+                  : "Break it down gently"}
+              </h3>
+            </div>
+          </div>
+          {steps.length > 0 && (
+            <div className="plan-step-list">
+              {steps.map((step) => (
+                <button
+                  type="button"
+                  className={step.complete ? "is-complete" : ""}
+                  aria-pressed={step.complete}
+                  onClick={() =>
+                    update(
+                      (current) => ({
+                        ...current,
+                        plan: current.plan.map((planItem) =>
+                          planItem.id === item.id
+                            ? {
+                                ...planItem,
+                                steps: (planItem.steps ?? []).map(
+                                  (candidate) =>
+                                    candidate.id === step.id
+                                      ? {
+                                          ...candidate,
+                                          complete: !candidate.complete,
+                                        }
+                                      : candidate,
+                                ),
+                              }
+                            : planItem,
+                        ),
+                      }),
+                      step.complete ? "Step reopened." : "One step done.",
+                    )
+                  }
+                  key={step.id}
+                >
+                  <span>{step.complete && <Check size={17} />}</span>
+                  <strong>{step.title}</strong>
+                </button>
+              ))}
+            </div>
+          )}
+          <form
+            className="plan-step-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (!stepTitle.trim()) return
+              update(
+                (current) => ({
+                  ...current,
+                  plan: current.plan.map((planItem) =>
+                    planItem.id === item.id
+                      ? {
+                          ...planItem,
+                          steps: [
+                            ...(planItem.steps ?? []),
+                            {
+                              id: uid(),
+                              title: stepTitle.trim(),
+                              complete: false,
+                            },
+                          ],
+                        }
+                      : planItem,
+                  ),
+                }),
+                "Step added.",
+              )
+              setStepTitle("")
+            }}
+          >
+            <input
+              value={stepTitle}
+              onChange={(event) => setStepTitle(event.target.value)}
+              placeholder="Add one small next step"
+              aria-label="New plan step"
+            />
+            <Button type="submit" variant="secondary" icon={Plus}>
+              Add step
+            </Button>
+          </form>
+        </section>
+
+        <div className="plan-detail__actions">
+          {item.status !== "complete" ? (
+            <Button
+              icon={Check}
+              onClick={() =>
+                update(
+                  (current) => ({
+                    ...current,
+                    plan: current.plan.map((planItem) =>
+                      planItem.id === item.id
+                        ? { ...planItem, status: "complete" }
+                        : planItem,
+                    ),
+                  }),
+                  goal
+                    ? "Complete. This now contributes to the linked goal."
+                    : "Complete. This now appears in Progress.",
+                )
+              }
+            >
+              Mark the whole thing done
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              onClick={() =>
+                update(
+                  (current) => ({
+                    ...current,
+                    plan: current.plan.map((planItem) =>
+                      planItem.id === item.id
+                        ? { ...planItem, status: "planned" }
+                        : planItem,
+                    ),
+                  }),
+                  "Reopened without losing its steps.",
+                )
+              }
+            >
+              Reopen
+            </Button>
+          )}
+          <p>
+            Completing steps records the path. Marking the item done is what
+            sends it to Progress.
+          </p>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function ProgressView({
+  state,
+  update,
+}: {
+  state: AppState
+  update: (recipe: (current: AppState) => AppState, message?: string) => void
+}) {
+  const [reviewing, setReviewing] = useState(false)
+  const [addingGoal, setAddingGoal] = useState(false)
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null)
+  const [celebration, setCelebration] = useState("")
+  const completeItems = state.plan.filter((item) => item.status === "complete")
+  const activeAreas = Array.from(
+    new Set(completeItems.map((item) => item.area)),
+  )
+  const biggerGoals = state.goals.filter(
+    (goal) => (goal.scale ?? "big") === "big",
+  )
+  const smallerGoals = state.goals.filter(
+    (goal) => (goal.scale ?? "small") === "small",
+  )
+  const selectedGoal = state.goals.find((goal) => goal.id === selectedGoalId)
+
+  const completeMilestone = (goalId: string, milestoneId: string) => {
+    const goal = state.goals.find((item) => item.id === goalId)
+    const milestone = (goal?.milestones ?? []).find(
+      (item) => item.id === milestoneId,
+    )
+    const wasComplete = Boolean(milestone?.completedAt)
+    update((current) => ({
+      ...current,
+      goals: current.goals.map((item) =>
+        item.id === goalId
+          ? {
+              ...item,
+              milestones: (item.milestones ?? []).map((step) =>
+                step.id === milestoneId
+                  ? {
+                      ...step,
+                      completedAt: step.completedAt
+                        ? undefined
+                        : new Date().toISOString(),
+                    }
+                  : step,
+              ),
+            }
+          : item,
+      ),
+    }))
+    if (!wasComplete && milestone) {
+      setCelebration(milestone.title)
+      window.setTimeout(() => setCelebration(""), 2600)
+    }
+  }
+
+  const addMilestone = (goalId: string, title: string) => {
+    update(
+      (current) => ({
+        ...current,
+        goals: current.goals.map((goal) =>
+          goal.id === goalId
+            ? {
+                ...goal,
+                milestones: [...(goal.milestones ?? []), { id: uid(), title }],
+              }
+            : goal,
+        ),
+      }),
+      "A new milestone is ready when you are.",
+    )
+  }
+
+  return (
+    <div className="page">
+      <header className="page-header progress-header">
+        <div>
+          <p className="eyebrow">Things taking shape</p>
+          <h1>Notice what is becoming yours.</h1>
+          <p>
+            No life score. Just goals, moments, and what you want to tend next.
+          </p>
+        </div>
+        <Button icon={PenLine} onClick={() => setReviewing(true)}>
+          Weekly reflection
+        </Button>
+      </header>
+
+      <section className="moments-banner">
+        <div className="moments-banner__art">
+          <img src="/assets/dance-pavilion.png" alt="" />
+        </div>
+        <div className="moments-banner__content">
+          <p className="eyebrow">This week, in your own words</p>
+          <blockquote>
+            “More space is not the same as doing nothing.”
+          </blockquote>
+          <div className="moment-tags">
+            {activeAreas.length ? (
+              activeAreas.map((area) => <AreaMark area={area} key={area} />)
+            ) : (
+              <span>There is nothing to prove this week.</span>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <div className="progress-grid">
+        <section className="section-block">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Goals</p>
+              <h2>Things worth tending</h2>
+            </div>
+            <Button
+              variant="ghost"
+              icon={Plus}
+              onClick={() => setAddingGoal(true)}
+            >
+              New goal
+            </Button>
+          </div>
+          <div className="goal-groups">
+            {biggerGoals.length > 0 && (
+              <div>
+                <div className="goal-group-heading">
+                  <div>
+                    <h3>Bigger goals</h3>
+                    <p>Longer journeys, held in smaller milestones.</p>
+                  </div>
+                  <Sparkles size={20} />
+                </div>
+                <div className="goal-list">
+                  {biggerGoals.map((goal) => {
+                    const milestones = goal.milestones ?? []
+                    const complete = milestones.filter(
+                      (milestone) => milestone.completedAt,
+                    ).length
+                    const linkedComplete = state.plan.filter(
+                      (item) =>
+                        item.goalId === goal.id && item.status === "complete",
+                    ).length
+                    const progress = milestones.length
+                      ? Math.round((complete / milestones.length) * 100)
+                      : 0
+                    return (
+                      <article
+                        className="goal-card goal-card--big"
+                        key={goal.id}
+                      >
+                        <div className="goal-card__topline">
+                          <AreaMark area={goal.area} />
+                          <span>Big goal</span>
+                        </div>
+                        <h3>{goal.title}</h3>
+                        {goal.dateLabel && (
+                          <p className="goal-card__date">{goal.dateLabel}</p>
+                        )}
+                        <div className="goal-progress">
+                          <div>
+                            <span>How far you’ve come</span>
+                            <strong>
+                              {complete} of {milestones.length} milestones
+                            </strong>
+                          </div>
+                          <div
+                            className="goal-progress__track"
+                            role="progressbar"
+                            aria-label={`${goal.title} milestone progress`}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={progress}
+                          >
+                            <span style={{ width: `${progress}%` }} />
+                          </div>
+                        </div>
+                        <div className="goal-card__next">
+                          <span>Next gentle step</span>
+                          <p>{goal.nextStep}</p>
+                        </div>
+                        {linkedComplete > 0 && (
+                          <div className="goal-linked-progress">
+                            <Check size={15} />
+                            <span>
+                              {linkedComplete} completed plan item
+                              {linkedComplete === 1 ? "" : "s"} contributing
+                            </span>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          className="text-link"
+                          onClick={() => setSelectedGoalId(goal.id)}
+                        >
+                          See the journey <ChevronRight size={16} />
+                        </button>
+                      </article>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {smallerGoals.length > 0 && (
+              <div>
+                <div className="goal-group-heading">
+                  <div>
+                    <h3>Smaller goals</h3>
+                    <p>Closer steps that can stay simple.</p>
+                  </div>
+                </div>
+                <div className="small-goal-list">
+                  {smallerGoals.map((goal) => (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedGoalId(goal.id)}
+                      key={goal.id}
+                    >
+                      <AreaMark area={goal.area} compact />
+                      <span>
+                        <strong>{goal.title}</strong>
+                        <small>{goal.nextStep}</small>
+                        {state.plan.some(
+                          (item) =>
+                            item.goalId === goal.id &&
+                            item.status === "complete",
+                        ) && <small>Plan progress recorded</small>}
+                      </span>
+                      <ChevronRight size={17} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <aside className="week-note">
+          <p className="eyebrow">A factual glance</p>
+          <h3>{completeItems.length || "No"} things tended this week</h3>
+          <p>
+            {completeItems.length
+              ? `Across ${activeAreas.length} part${
+                  activeAreas.length === 1 ? "" : "s"
+                } of life. Nothing is ranked.`
+              : "An empty week is information, not a verdict."}
+          </p>
+          <div className="week-note__areas">
+            {(Object.keys(areaMeta) as Area[]).map((area) => {
+              const count = completeItems.filter(
+                (item) => item.area === area,
+              ).length
+              return (
+                <div key={area}>
+                  <AreaMark area={area} compact />
+                  <span>
+                    {count
+                      ? `${count} moment${count === 1 ? "" : "s"}`
+                      : "Quiet"}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </aside>
+      </div>
+
+      {reviewing && (
+        <WeeklyReview
+          onClose={() => setReviewing(false)}
+          onSave={() => {
+            update(
+              (current) => current,
+              "Your reflection is saved on this device.",
+            )
+            setReviewing(false)
+          }}
+        />
+      )}
+      {selectedGoal && (
+        <GoalDetail
+          goal={selectedGoal}
+          onClose={() => setSelectedGoalId(null)}
+          onToggleMilestone={(milestoneId) =>
+            completeMilestone(selectedGoal.id, milestoneId)
+          }
+          onAddMilestone={(title) => addMilestone(selectedGoal.id, title)}
+        />
+      )}
+      {addingGoal && (
+        <NewGoalModal
+          onClose={() => setAddingGoal(false)}
+          onSave={(goal) => {
+            update(
+              (current) => ({
+                ...current,
+                goals: [goal, ...current.goals],
+              }),
+              "Your new goal is ready to shape.",
+            )
+            setAddingGoal(false)
+          }}
+        />
+      )}
+      {celebration && <MilestoneCelebration title={celebration} />}
+    </div>
+  )
+}
+
+function GoalDetail({
+  goal,
+  onClose,
+  onToggleMilestone,
+  onAddMilestone,
+}: {
+  goal: Goal
+  onClose: () => void
+  onToggleMilestone: (milestoneId: string) => void
+  onAddMilestone: (title: string) => void
+}) {
+  const [newMilestone, setNewMilestone] = useState("")
+  const milestones = goal.milestones ?? []
+  const complete = milestones.filter((milestone) => milestone.completedAt)
+  const progress = milestones.length
+    ? Math.round((complete.length / milestones.length) * 100)
+    : 0
+
+  return (
+    <Modal
+      title={goal.title}
+      eyebrow={goal.scale === "big" ? "A bigger goal" : "A smaller goal"}
+      onClose={onClose}
+      wide
+    >
+      <div className="goal-detail">
+        <section className="goal-detail__summary">
+          <AreaMark area={goal.area} />
+          {goal.dateLabel && (
+            <p className="goal-card__date">{goal.dateLabel}</p>
+          )}
+          <h3>
+            {complete.length
+              ? `You’ve already made ${complete.length} meaningful step${
+                  complete.length === 1 ? "" : "s"
+                }.`
+              : "The first step can be beautifully small."}
+          </h3>
+          <p>
+            Progress here means moments you want to remember—not pressure to
+            move at a particular speed.
+          </p>
+          {milestones.length > 0 && (
+            <div className="goal-detail__progress">
+              <div
+                className="goal-progress__track"
+                role="progressbar"
+                aria-label="Completed milestones"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progress}
+              >
+                <span style={{ width: `${progress}%` }} />
+              </div>
+              <strong>{progress}% of this path explored</strong>
+            </div>
+          )}
+        </section>
+
+        {goal.scale === "big" || milestones.length > 0 ? (
+          <section className="milestone-section">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Milestones</p>
+                <h3>The path, one piece at a time</h3>
+              </div>
+              <span>{complete.length} celebrated</span>
+            </div>
+            <div className="milestone-list">
+              {milestones.map((milestone, index) => (
+                <button
+                  type="button"
+                  className={milestone.completedAt ? "is-complete" : ""}
+                  aria-pressed={Boolean(milestone.completedAt)}
+                  onClick={() => onToggleMilestone(milestone.id)}
+                  key={milestone.id}
+                >
+                  <span className="milestone-list__line" />
+                  <span className="milestone-list__check">
+                    {milestone.completedAt ? <Check size={18} /> : index + 1}
+                  </span>
+                  <span>
+                    <strong>{milestone.title}</strong>
+                    <small>
+                      {milestone.completedAt
+                        ? `Celebrated ${formatDate(
+                            milestone.completedAt.slice(0, 10),
+                            {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            },
+                          )}`
+                        : "Mark this when it feels true"}
+                    </small>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <form
+              className="milestone-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (!newMilestone.trim()) return
+                onAddMilestone(newMilestone.trim())
+                setNewMilestone("")
+              }}
+            >
+              <input
+                value={newMilestone}
+                onChange={(event) => setNewMilestone(event.target.value)}
+                placeholder="Add another meaningful milestone"
+                aria-label="New milestone"
+              />
+              <Button type="submit" variant="secondary" icon={Plus}>
+                Add
+              </Button>
+            </form>
+          </section>
+        ) : (
+          <section className="small-goal-detail">
+            <p className="eyebrow">Next gentle step</p>
+            <h3>{goal.nextStep}</h3>
+            <p>
+              Smaller goals do not need a project plan. If this grows, you can
+              turn it into a bigger goal and add milestones later.
+            </p>
+          </section>
+        )}
+
+        {complete.length > 0 && (
+          <section className="look-back">
+            <div>
+              <Sparkles size={22} />
+              <div>
+                <p className="eyebrow">Look how far you’ve come</p>
+                <h3>These moments are part of the story now.</h3>
+              </div>
+            </div>
+            <div className="look-back__moments">
+              {complete.map((milestone) => (
+                <span key={milestone.id}>{milestone.title}</span>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function MilestoneCelebration({ title }: { title: string }) {
+  return (
+    <div className="milestone-celebration" role="status" aria-live="polite">
+      <div className="milestone-celebration__sparkles" aria-hidden="true">
+        {Array.from({ length: 8 }, (_, index) => (
+          <Sparkles key={index} size={16 + (index % 3) * 4} />
+        ))}
+      </div>
+      <div className="milestone-celebration__card">
+        <span>
+          <Sparkles size={28} />
+        </span>
+        <p className="eyebrow">A moment worth keeping</p>
+        <h3>You did that.</h3>
+        <p>{title}</p>
+        <small>It’s now part of how far you’ve come.</small>
+      </div>
+    </div>
+  )
+}
+
+function NewGoalModal({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void
+  onSave: (goal: Goal) => void
+}) {
+  const [scale, setScale] = useState<Goal["scale"]>("small")
+  return (
+    <Modal
+      title="Create a goal"
+      eyebrow="Something worth tending"
+      onClose={onClose}
+    >
+      <form
+        className="plan-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const data = new FormData(event.currentTarget)
+          onSave({
+            id: uid(),
+            title: String(data.get("title")),
+            area: String(data.get("area")) as Area,
+            scale,
+            status: "tending",
+            nextStep:
+              String(data.get("nextStep")) ||
+              "Choose the smallest meaningful first step",
+            milestones:
+              scale === "big"
+                ? [
+                    {
+                      id: uid(),
+                      title: "Name what a good beginning looks like",
+                    },
+                  ]
+                : [],
+          })
+        }}
+      >
+        <label>
+          <span>What would you like to move toward?</span>
+          <input
+            name="title"
+            required
+            autoFocus
+            placeholder="Name the goal in your own words"
+          />
+        </label>
+        <fieldset className="goal-size-choice">
+          <legend>What kind of goal is this?</legend>
+          <button
+            type="button"
+            className={scale === "small" ? "is-selected" : ""}
+            aria-pressed={scale === "small"}
+            onClick={() => setScale("small")}
+          >
+            <Check size={17} />
+            <span>
+              <strong>Smaller goal</strong>
+              <small>A direct next step without a project plan.</small>
+            </span>
+          </button>
+          <button
+            type="button"
+            className={scale === "big" ? "is-selected" : ""}
+            aria-pressed={scale === "big"}
+            onClick={() => setScale("big")}
+          >
+            <Sparkles size={17} />
+            <span>
+              <strong>Bigger goal</strong>
+              <small>A longer path you can break into milestones.</small>
+            </span>
+          </button>
+        </fieldset>
+        <label>
+          <span>Part of life</span>
+          <select name="area" defaultValue="create">
+            {(Object.keys(areaMeta) as Area[]).map((area) => (
+              <option value={area} key={area}>
+                {areaMeta[area].label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>First gentle step, optional</span>
+          <input name="nextStep" placeholder="What is small enough to begin?" />
+        </label>
+        <div className="modal-actions">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" icon={Plus}>
+            Create goal
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function WeeklyReview({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void
+  onSave: () => void
+}) {
+  const [step, setStep] = useState(0)
+  const prompts = [
+    "What gave you energy?",
+    "What felt heavier than expected?",
+    "What would you like to make room for?",
+    "What is safe to make smaller or let go?",
+  ]
+  const [answers, setAnswers] = useState(["", "", "", ""])
+
+  return (
+    <Modal
+      title="A gentle look back"
+      eyebrow="Whole-life weekly reflection"
+      onClose={onClose}
+    >
+      <div className="review">
+        <div className="review__progress">
+          {prompts.map((_, index) => (
+            <span className={index <= step ? "is-active" : ""} key={index} />
+          ))}
+        </div>
+        <p className="eyebrow">
+          Question {step + 1} of {prompts.length}
+        </p>
+        <h3>{prompts[step]}</h3>
+        <textarea
+          rows={6}
+          value={answers[step]}
+          placeholder="A few words are enough…"
+          onChange={(event) =>
+            setAnswers((current) =>
+              current.map((answer, index) =>
+                index === step ? event.target.value : answer,
+              ),
+            )
+          }
+        />
+        <div className="modal-actions">
+          {step > 0 && (
+            <Button variant="ghost" onClick={() => setStep(step - 1)}>
+              Back
+            </Button>
+          )}
+          <span />
+          {step < prompts.length - 1 ? (
+            <Button onClick={() => setStep(step + 1)}>Next question</Button>
+          ) : (
+            <Button onClick={onSave}>Save reflection</Button>
+          )}
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+const spaceCards: {
+  key: SpaceKey
+  title: string
+  description: string
+  icon: LucideIcon
+  accent: string
+}[] = [
+  {
+    key: "reflect",
+    title: "Journal",
+    description: "A private place to notice what is here.",
+    icon: Feather,
+    accent: "peach",
+  },
+  {
+    key: "breathe",
+    title: "Breathe",
+    description: "Guided breathing, quiet meditation, and a little space.",
+    icon: Wind,
+    accent: "sage",
+  },
+  {
+    key: "create",
+    title: "Projects",
+    description: "Ideas, writing, film, music, and things becoming.",
+    icon: Film,
+    accent: "gold",
+  },
+  {
+    key: "connect",
+    title: "People",
+    description: "The people you want to keep close, without obligation.",
+    icon: Users,
+    accent: "rose",
+  },
+  {
+    key: "move",
+    title: "Movement",
+    description: "Walk, run, dance, build strength, or recover.",
+    icon: Heart,
+    accent: "sage",
+  },
+  {
+    key: "money",
+    title: "Money",
+    description: "Goals, investing knowledge, and long-term thinking.",
+    icon: WalletCards,
+    accent: "olive",
+  },
+  {
+    key: "home",
+    title: "Home & routine",
+    description: "Practical care, ordinary rhythm, and rest.",
+    icon: Home,
+    accent: "blue",
+  },
+]
+
+function MySpaceView({
+  state,
+  openSpace,
+}: {
+  state: AppState
+  openSpace: (key: SpaceKey) => void
+}) {
+  return (
+    <div className="page space-page">
+      <header className="space-hero">
+        <img src="/assets/life-studio-room.png" alt="" />
+        <div className="space-hero__content">
+          <p className="eyebrow eyebrow--light">My space</p>
+          <h1>Everything you’re making room for.</h1>
+          <p>Private, local, and allowed to change with you.</p>
+        </div>
+      </header>
+
+      <section className="space-grid">
+        {spaceCards.map(({ key, title, description, icon: Icon, accent }) => {
+          const count =
+            key === "reflect"
+              ? state.journal.length
+              : key === "breathe"
+                ? (state.breatheSessions ?? []).length
+                : key === "create"
+                  ? state.projects.length
+                  : key === "connect"
+                    ? state.people.length
+                    : key === "money"
+                      ? state.goals.filter((goal) => goal.area === "money")
+                          .length + (state.moneyLessonsCompleted ?? []).length
+                      : key === "home"
+                        ? state.routines.length
+                        : state.goals.filter((goal) => goal.area === "move")
+                            .length + (state.gymSessionPlans ?? []).length
+          const countLabel =
+            key === "reflect"
+              ? `${count} page${count === 1 ? "" : "s"}`
+              : key === "breathe"
+                ? `${count} quiet moment${count === 1 ? "" : "s"}`
+                : key === "create"
+                  ? `${count} project${count === 1 ? "" : "s"}`
+                  : key === "connect"
+                    ? `${count} person${count === 1 ? "" : "s"}`
+                    : key === "money"
+                      ? `${count} growing thing${count === 1 ? "" : "s"}`
+                      : key === "home"
+                        ? `${count} routine${count === 1 ? "" : "s"}`
+                        : `${count} movement thread${count === 1 ? "" : "s"}`
+          return (
+            <button
+              type="button"
+              className={`space-card space-card--${accent}`}
+              onClick={() => openSpace(key)}
+              key={key}
+            >
+              <span className="space-card__icon">
+                <Icon size={23} strokeWidth={1.7} />
+              </span>
+              <span className="space-card__copy">
+                <strong>{title}</strong>
+                <small>{description}</small>
+                <span>{countLabel}</span>
+              </span>
+              <ChevronRight size={20} />
+            </button>
+          )
+        })}
+      </section>
+
+      <section className="studio-note">
+        <div>
+          <p className="eyebrow">Make it yours</p>
+          <h2>This is Avika’s studio, not a generic dashboard.</h2>
+          <p>
+            Change what appears first, how much Today holds, and what your
+            companion helps you tend.
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          icon={Settings}
+          onClick={() => openSpace("preferences")}
+        >
+          My Studio settings
+        </Button>
+      </section>
+    </div>
+  )
+}
+
+function JournalSpace({ state, update, close }: SpaceProps) {
+  const [editing, setEditing] = useState<JournalEntry | null>(null)
+  const save = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const entry: JournalEntry = {
+      id: editing?.id ?? uid(),
+      title: String(form.get("title") || "Untitled entry"),
+      body: String(form.get("body") || ""),
+      mood: String(form.get("mood") || ""),
+      date: editing?.date ?? today(),
+    }
+    update(
+      (current) => ({
+        ...current,
+        journal: editing
+          ? current.journal.map((item) =>
+              item.id === editing.id ? entry : item,
+            )
+          : [entry, ...current.journal],
+      }),
+      "Journal entry saved on this device.",
+    )
+    setEditing(null)
+  }
+
+  return (
+    <Modal title="Journal" eyebrow="Reflect" onClose={close} wide>
+      <div className="feature-layout">
+        <div className="feature-main">
+          <form className="writing-form" onSubmit={save}>
+            <label>
+              <span>Title</span>
+              <input
+                name="title"
+                defaultValue={editing?.title}
+                placeholder="A few words for this moment"
+              />
+            </label>
+            <label>
+              <span>Your page</span>
+              <textarea
+                name="body"
+                rows={10}
+                defaultValue={editing?.body}
+                placeholder="Start wherever you are…"
+              />
+            </label>
+            <div className="form-row">
+              <label>
+                <span>Feeling word, optional</span>
+                <input
+                  name="mood"
+                  defaultValue={editing?.mood}
+                  placeholder="Steady, tender, curious…"
+                />
+              </label>
+              <Button type="submit" icon={Feather}>
+                Save entry
+              </Button>
+            </div>
+          </form>
+        </div>
+        <aside className="feature-aside">
+          <p className="eyebrow">Recent pages</p>
+          <div className="mini-list">
+            {state.journal.map((entry) => (
+              <button
+                type="button"
+                onClick={() => setEditing(entry)}
+                key={entry.id}
+              >
+                <strong>{entry.title}</strong>
+                <small>
+                  {formatDate(entry.date)} {entry.mood ? `· ${entry.mood}` : ""}
+                </small>
+                <span>{entry.body}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
+      </div>
+    </Modal>
+  )
+}
+
+type SpaceProps = {
+  state: AppState
+  update: (recipe: (current: AppState) => AppState, message?: string) => void
+  close: () => void
+  reset?: (kind: "demo" | "empty") => void
+}
+
+function BreatheSpace({ state, update, close }: SpaceProps) {
+  const [practice, setPractice] = useState<"guided" | "quiet">("guided")
+  const [duration, setDuration] = useState(180)
+  const [remaining, setRemaining] = useState(180)
+  const [running, setRunning] = useState(false)
+  const [finished, setFinished] = useState(false)
+  const elapsed = duration - remaining
+  const cycle = elapsed % 12
+  const phase =
+    practice === "quiet"
+      ? "Be here"
+      : cycle < 4
+        ? "Breathe in"
+        : cycle < 6
+          ? "Rest gently"
+          : "Breathe out"
+
+  useEffect(() => {
+    if (!running || remaining <= 0) return
+    const timer = window.setInterval(
+      () =>
+        setRemaining((value) => {
+          if (value <= 1) {
+            setRunning(false)
+            setFinished(true)
+            return 0
+          }
+          return value - 1
+        }),
+      1000,
+    )
+    return () => window.clearInterval(timer)
+  }, [running, remaining])
+
+  const chooseDuration = (seconds: number) => {
+    setDuration(seconds)
+    setRemaining(seconds)
+    setRunning(false)
+    setFinished(false)
+  }
+
+  const resetPractice = () => {
+    setRemaining(duration)
+    setRunning(false)
+    setFinished(false)
+  }
+
+  return (
+    <Modal
+      title="Breathe"
+      eyebrow="A quiet practice within Reflect"
+      onClose={close}
+      wide
+    >
+      <div className="breathe-layout">
+        <section className="breathe-intro">
+          <div>
+            <p className="eyebrow">No streaks, no perfect calm</p>
+            <h3>Make a little room inside the day.</h3>
+            <p>
+              Follow a gentle breath cue or sit with a quiet timer. Stop or
+              return to normal breathing whenever you need.
+            </p>
+          </div>
+          <img src="/assets/samoyed.png" alt="" />
+        </section>
+
+        <section className="breathe-player">
+          <div className="segmented" aria-label="Choose a practice">
+            <button
+              type="button"
+              className={practice === "guided" ? "is-active" : ""}
+              aria-pressed={practice === "guided"}
+              onClick={() => {
+                setPractice("guided")
+                resetPractice()
+              }}
+            >
+              Guided breathing
+            </button>
+            <button
+              type="button"
+              className={practice === "quiet" ? "is-active" : ""}
+              aria-pressed={practice === "quiet"}
+              onClick={() => {
+                setPractice("quiet")
+                resetPractice()
+              }}
+            >
+              Quiet meditation
+            </button>
+          </div>
+
+          <div
+            className={`breath-orb ${
+              running ? "is-running" : ""
+            } breath-orb--${phase.toLowerCase().replace(/ /g, "-")}`}
+            aria-live="polite"
+          >
+            <Wind size={28} />
+            <strong>{phase}</strong>
+            <span>
+              {Math.floor(remaining / 60)}:
+              {String(remaining % 60).padStart(2, "0")}
+            </span>
+          </div>
+
+          <div className="breathe-durations" aria-label="Practice duration">
+            {[
+              [60, "1 min"],
+              [180, "3 min"],
+              [300, "5 min"],
+            ].map(([seconds, label]) => (
+              <button
+                type="button"
+                className={duration === seconds ? "is-selected" : ""}
+                aria-pressed={duration === seconds}
+                onClick={() => chooseDuration(seconds as number)}
+                key={seconds}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {!finished ? (
+            <div className="inline-actions breathe-actions">
+              <Button
+                icon={running ? Pause : Play}
+                onClick={() => setRunning(!running)}
+              >
+                {running ? "Pause" : elapsed ? "Continue" : "Begin"}
+              </Button>
+              {elapsed > 0 && (
+                <Button variant="ghost" onClick={() => setFinished(true)}>
+                  End gently
+                </Button>
+              )}
+            </div>
+          ) : (
+            <form
+              className="breathe-finish"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const data = new FormData(event.currentTarget)
+                update(
+                  (current) => ({
+                    ...current,
+                    breatheSessions: [
+                      {
+                        id: uid(),
+                        duration: Math.max(1, duration - remaining),
+                        completedAt: new Date().toISOString(),
+                        note: String(data.get("note") || "") || undefined,
+                      },
+                      ...(current.breatheSessions ?? []),
+                    ],
+                  }),
+                  "A quiet moment saved—without a streak.",
+                )
+                resetPractice()
+              }}
+            >
+              <p className="eyebrow">That was enough</p>
+              <h3>How do you feel now?</h3>
+              <textarea
+                name="note"
+                rows={3}
+                placeholder="Optional. One word is enough…"
+              />
+              <Button type="submit" icon={Check}>
+                Save this moment
+              </Button>
+            </form>
+          )}
+
+          <p className="breathe-safety">
+            Breathing practices should feel comfortable. Stop if you feel dizzy,
+            distressed, or unwell and return to your normal breath.
+          </p>
+        </section>
+
+        <aside className="breathe-history">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Recent moments</p>
+              <h3>Space you’ve already made</h3>
+            </div>
+          </div>
+          {(state.breatheSessions ?? []).length ? (
+            <div>
+              {(state.breatheSessions ?? []).slice(0, 5).map((session) => (
+                <article key={session.id}>
+                  <span>
+                    <Wind size={16} />
+                  </span>
+                  <div>
+                    <strong>
+                      {Math.max(1, Math.round(session.duration / 60))} quiet
+                      minute
+                      {session.duration >= 90 ? "s" : ""}
+                    </strong>
+                    <small>
+                      {formatDate(session.completedAt.slice(0, 10))}
+                    </small>
+                    {session.note && <p>{session.note}</p>}
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p>
+              Your completed practices can gather here gently. Nothing is missed
+              and nothing is overdue.
+            </p>
+          )}
+          <Button
+            variant="secondary"
+            icon={Plus}
+            onClick={() =>
+              update(
+                (current) => ({
+                  ...current,
+                  plan: [
+                    ...current.plan,
+                    {
+                      id: uid(),
+                      title: "A few quiet minutes",
+                      area: "reflect",
+                      date: today(),
+                      duration: 5,
+                      mode: "maybe",
+                      status: "planned",
+                    },
+                  ],
+                }),
+                "A quiet five minutes is on Today, only if it helps.",
+              )
+            }
+          >
+            Add quiet time to Today
+          </Button>
+        </aside>
+      </div>
+    </Modal>
+  )
+}
+
+function ProjectsSpace({ state, update, close }: SpaceProps) {
+  const [adding, setAdding] = useState(false)
+  const save = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    const cost = Number(data.get("cost") || 0)
+    const project: Project = {
+      id: uid(),
+      title: String(data.get("title")),
+      note: String(data.get("note")),
+      stage: "Seed",
+      nextAction: String(data.get("nextAction")),
+      estimatedCost: Math.round(cost * 100),
+    }
+    update(
+      (current) => ({ ...current, projects: [project, ...current.projects] }),
+      "Project planted.",
+    )
+    setAdding(false)
+  }
+
+  return (
+    <Modal title="Projects" eyebrow="Create" onClose={close} wide>
+      <div className="feature-topline">
+        <p>Ideas can be seeds, works in progress, or quietly resting.</p>
+        <Button icon={Plus} onClick={() => setAdding(!adding)}>
+          New project
+        </Button>
+      </div>
+      {adding && (
+        <form className="inline-form" onSubmit={save}>
+          <input name="title" required placeholder="Project name" />
+          <input name="nextAction" placeholder="One next action" />
+          <input
+            name="cost"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Estimated cost, optional"
+          />
+          <textarea
+            name="note"
+            rows={3}
+            placeholder="What is calling you toward it?"
+          />
+          <Button type="submit">Plant the seed</Button>
+        </form>
+      )}
+      <div className="project-grid">
+        {state.projects.map((project) => (
+          <article className="project-card" key={project.id}>
+            <div className="project-card__visual">
+              {project.title.toLowerCase().includes("london") ? (
+                <img src="/assets/life-studio-room.png" alt="" />
+              ) : (
+                <Music2 size={35} />
+              )}
+            </div>
+            <div className="project-card__body">
+              <span className="stage-pill">{project.stage}</span>
+              <h3>{project.title}</h3>
+              <p>{project.note}</p>
+              {project.nextAction && (
+                <div className="next-action">
+                  <span>Next action</span>
+                  <strong>{project.nextAction}</strong>
+                </div>
+              )}
+              <div className="project-card__footer">
+                <span>
+                  {project.estimatedCost
+                    ? `${formatMoney(project.estimatedCost)} estimate`
+                    : "No cost estimate"}
+                </span>
+                <Button
+                  variant="ghost"
+                  onClick={() =>
+                    update(
+                      (current) => ({
+                        ...current,
+                        plan: [
+                          ...current.plan,
+                          {
+                            id: uid(),
+                            title:
+                              project.nextAction || `Tend to ${project.title}`,
+                            area: "create",
+                            date: today(),
+                            mode: "flexible",
+                            status: "planned",
+                            duration: 25,
+                          },
+                        ],
+                      }),
+                      "Next action added to Today.",
+                    )
+                  }
+                >
+                  Add to Today
+                </Button>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </Modal>
+  )
+}
+
+function PeopleSpace({ state, update, close }: SpaceProps) {
+  const [name, setName] = useState("")
+  return (
+    <Modal title="People" eyebrow="Connect" onClose={close} wide>
+      <div className="people-intro">
+        <div>
+          <h3>Connection without obligation.</h3>
+          <p>
+            Private notes and gentle intentions. No overdue friends, no
+            relationship score.
+          </p>
+        </div>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!name.trim()) return
+            update(
+              (current) => ({
+                ...current,
+                people: [
+                  {
+                    id: uid(),
+                    name,
+                    note: "",
+                    nextTouch: "When it feels right",
+                  },
+                  ...current.people,
+                ],
+              }),
+              `${name} added privately.`,
+            )
+            setName("")
+          }}
+        >
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Add someone"
+          />
+          <Button type="submit" icon={Plus}>
+            Add
+          </Button>
+        </form>
+      </div>
+      <div className="people-grid">
+        {state.people.map((person) => (
+          <article className="person-card" key={person.id}>
+            <div className="person-card__avatar">{person.name.slice(0, 1)}</div>
+            <div>
+              <h3>{person.name}</h3>
+              <p>
+                {person.note ||
+                  "A private space for what you want to remember."}
+              </p>
+              <span>{person.nextTouch}</span>
+            </div>
+            <Button
+              variant="secondary"
+              icon={MessageCircle}
+              onClick={() =>
+                update(
+                  (current) => ({
+                    ...current,
+                    plan: [
+                      ...current.plan,
+                      {
+                        id: uid(),
+                        title: `Reach out to ${person.name}`,
+                        area: "connect",
+                        date: today(),
+                        mode: "maybe",
+                        status: "planned",
+                        duration: 10,
+                      },
+                    ],
+                  }),
+                  "A gentle connection intention is on Today.",
+                )
+              }
+            >
+              Plan a hello
+            </Button>
+          </article>
+        ))}
+      </div>
+    </Modal>
+  )
+}
+
+function MoneySpace({ state, update, close }: SpaceProps) {
+  const lessons = [
+    {
+      id: "time-in-market",
+      title: "Why time matters more than perfect timing",
+      theme: "Foundations",
+      minutes: 8,
+      summary:
+        "Explore how compounding, consistency, and a long time horizon can work together.",
+      reflection:
+        "What would a patient approach to growing money make possible in your life?",
+    },
+    {
+      id: "risk-language",
+      title: "Making risk feel less mysterious",
+      theme: "Risk & resilience",
+      minutes: 10,
+      summary:
+        "Learn the difference between volatility, permanent loss, and the risk of not meeting a future goal.",
+      reflection:
+        "Which kinds of uncertainty feel manageable, and which would keep you awake?",
+    },
+    {
+      id: "diversification",
+      title: "The quiet power of diversification",
+      theme: "Building blocks",
+      minutes: 9,
+      summary:
+        "Understand why spreading exposure can reduce dependence on any single company, sector, or story.",
+      reflection:
+        "Where might you currently be relying too heavily on one outcome?",
+    },
+  ]
+  const dayIndex = new Date().getDate() % lessons.length
+  const dailyLesson = lessons[dayIndex]
+  const [selectedLesson, setSelectedLesson] =
+    useState<typeof lessons[number] | null>(null)
+  const [addingGoal, setAddingGoal] = useState(false)
+  const [guideOpen, setGuideOpen] = useState(false)
+  const [question, setQuestion] = useState("")
+  const [guideAnswer, setGuideAnswer] = useState("")
+  const moneyGoals = state.goals.filter((goal) => goal.area === "money")
+  const completedLessons = state.moneyLessonsCompleted ?? []
+
+  const askGuide = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const lower = question.toLowerCase()
+    const answer = lower.includes("risk")
+      ? "Risk is not one thing. A useful starting point is to separate short-term price movement from the chance of permanently losing money, then connect both to when you may need the money."
+      : lower.includes("compound")
+        ? "Compounding means growth can build on earlier growth. Time, consistency, fees, and returns all affect the result; it is a concept to understand, not a guaranteed outcome."
+        : lower.includes("divers")
+          ? "Diversification means avoiding dependence on one investment outcome. It can spread risk, but it cannot remove risk or guarantee gains."
+          : "A helpful next step is to define the term, understand its trade-offs, and connect it to your time horizon before considering any action."
+    setGuideAnswer(answer)
+  }
+
+  if (selectedLesson) {
+    const complete = completedLessons.includes(selectedLesson.id)
+    return (
+      <Modal
+        title={selectedLesson.title}
+        eyebrow={`${selectedLesson.theme} · ${selectedLesson.minutes} minute lesson`}
+        onClose={close}
+        wide
+      >
+        <button
+          type="button"
+          className="back-link"
+          onClick={() => setSelectedLesson(null)}
+        >
+          <ArrowLeft size={17} /> Money studio
+        </button>
+        <article className="money-lesson">
+          <div className="money-lesson__visual">
+            <span>
+              <BookOpen size={34} />
+            </span>
+            <div>
+              <p className="eyebrow">Today’s learning</p>
+              <h3>{selectedLesson.title}</h3>
+              <p>{selectedLesson.summary}</p>
+            </div>
+          </div>
+          <section>
+            <h3>One idea to hold onto</h3>
+            <p>
+              Investing is less about finding a perfect moment and more about
+              understanding the relationship between time, uncertainty,
+              diversification, costs, and your own goals. The right learning
+              pace is one that helps you make informed decisions without
+              urgency.
+            </p>
+          </section>
+          <section className="lesson-example">
+            <TrendingUp size={23} />
+            <div>
+              <h3>A simple thought experiment</h3>
+              <p>
+                Imagine two plans: one depends on predicting exactly what
+                happens next, while the other is designed to remain sensible
+                across many possible futures. What qualities would make the
+                second plan feel resilient?
+              </p>
+            </div>
+          </section>
+          <section className="lesson-reflection">
+            <p className="eyebrow">Think it through</p>
+            <h3>{selectedLesson.reflection}</h3>
+            <textarea
+              rows={4}
+              placeholder="A private note for your own thinking…"
+            />
+          </section>
+          <div className="lesson-actions">
+            <Button
+              icon={complete ? Check : BookOpen}
+              onClick={() =>
+                update(
+                  (current) => ({
+                    ...current,
+                    moneyLessonsCompleted: complete
+                      ? current.moneyLessonsCompleted.filter(
+                          (id) => id !== selectedLesson.id,
+                        )
+                      : [...current.moneyLessonsCompleted, selectedLesson.id],
+                  }),
+                  complete
+                    ? "Lesson reopened."
+                    : "Lesson complete. Your learning path has grown.",
+                )
+              }
+            >
+              {complete ? "Completed" : "Complete lesson"}
+            </Button>
+            <p>
+              Educational content only. This prototype does not provide
+              personalized investment advice.
+            </p>
+          </div>
+        </article>
+      </Modal>
+    )
+  }
+
+  return (
+    <Modal
+      title="Money studio"
+      eyebrow="Learn, reflect, and grow with intention"
+      onClose={close}
+      wide
+    >
+      <section className="money-studio-hero">
+        <div>
+          <p className="eyebrow eyebrow--light">
+            Your money, understood slowly
+          </p>
+          <h3>Grow knowledge before chasing outcomes.</h3>
+          <p>
+            Build your investing confidence, shape long-term goals, and ask
+            better questions one lesson at a time.
+          </p>
+        </div>
+        <TrendingUp size={48} strokeWidth={1.35} />
+      </section>
+
+      <div className="money-studio-grid">
+        <section className="daily-lesson-card">
+          <div className="daily-lesson-card__top">
+            <span>
+              <BookOpen size={23} />
+            </span>
+            <div>
+              <p className="eyebrow">
+                Today’s lesson · {dailyLesson.minutes} min
+              </p>
+              <h3>{dailyLesson.title}</h3>
+            </div>
+          </div>
+          <p>{dailyLesson.summary}</p>
+          <div className="daily-lesson-card__footer">
+            <span>
+              {completedLessons.includes(dailyLesson.id)
+                ? "Completed and ready to revisit"
+                : "One calm idea for today"}
+            </span>
+            <Button
+              icon={BookOpen}
+              onClick={() => setSelectedLesson(dailyLesson)}
+            >
+              Open lesson
+            </Button>
+          </div>
+        </section>
+
+        <section className="money-guide-card">
+          <span className="money-guide-card__icon">
+            <WandSparkles size={25} />
+          </span>
+          <p className="eyebrow">Demo AI learning guide</p>
+          <h3>Ask without pretending you should already know.</h3>
+          <p>
+            Explore concepts, vocabulary, and trade-offs. It will not recommend
+            investments or tell you what to buy.
+          </p>
+          <Button variant="secondary" onClick={() => setGuideOpen(!guideOpen)}>
+            {guideOpen ? "Close guide" : "Ask the guide"}
+          </Button>
+        </section>
+      </div>
+
+      {guideOpen && (
+        <section className="money-guide">
+          <div className="prototype-note">
+            <Sparkles size={19} />
+            <p>
+              This educational response is simulated. The guide does not know
+              your income, holdings, tax situation, or risk capacity.
+            </p>
+          </div>
+          <form onSubmit={askGuide}>
+            <label>
+              <span>What would you like to understand?</span>
+              <textarea
+                rows={3}
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                placeholder="What does diversification actually do?"
+              />
+            </label>
+            <Button type="submit" disabled={!question.trim()} icon={Sparkles}>
+              Explain it simply
+            </Button>
+          </form>
+          {guideAnswer && (
+            <div className="money-guide__answer" role="status">
+              <span>
+                <WandSparkles size={19} />
+              </span>
+              <div>
+                <p className="eyebrow">A starting point</p>
+                <p>{guideAnswer}</p>
+                <small>
+                  Learn the principle, then verify important decisions with
+                  regulated, qualified guidance.
+                </small>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      <section className="money-goals">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Money goals</p>
+            <h3>What are you growing toward?</h3>
+          </div>
+          <Button
+            variant="ghost"
+            icon={Plus}
+            onClick={() => setAddingGoal(!addingGoal)}
+          >
+            Add goal
+          </Button>
+        </div>
+        {addingGoal && (
+          <form
+            className="money-goal-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const data = new FormData(event.currentTarget)
+              update(
+                (current) => ({
+                  ...current,
+                  goals: [
+                    {
+                      id: uid(),
+                      title: String(data.get("title")),
+                      area: "money",
+                      scale: "big",
+                      status: "tending",
+                      nextStep:
+                        String(data.get("nextStep")) ||
+                        "Learn what this goal would need from me",
+                      milestones: [
+                        {
+                          id: uid(),
+                          title: "Define what this goal means to me",
+                        },
+                      ],
+                    },
+                    ...current.goals,
+                  ],
+                }),
+                "Money goal added to your bigger goals.",
+              )
+              setAddingGoal(false)
+            }}
+          >
+            <input
+              name="title"
+              required
+              placeholder="Build long-term investing confidence"
+            />
+            <input
+              name="nextStep"
+              placeholder="A first learning or planning step"
+            />
+            <Button type="submit">Create goal</Button>
+          </form>
+        )}
+        <div className="money-goal-list">
+          {moneyGoals.map((goal) => {
+            const milestones = goal.milestones ?? []
+            const completed = milestones.filter(
+              (milestone) => milestone.completedAt,
+            ).length
+            return (
+              <article key={goal.id}>
+                <div>
+                  <span className="money-goal-list__icon">
+                    <TrendingUp size={20} />
+                  </span>
+                  <div>
+                    <h3>{goal.title}</h3>
+                    <p>{goal.nextStep}</p>
+                  </div>
+                </div>
+                <span>
+                  {completed} of {milestones.length} milestones
+                </span>
+              </article>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="learning-path">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Learning path</p>
+            <h3>A foundation you can build on</h3>
+          </div>
+          <ShieldCheck size={22} />
+        </div>
+        <div className="learning-path__list">
+          {lessons.map((lesson, index) => (
+            <button
+              type="button"
+              onClick={() => setSelectedLesson(lesson)}
+              key={lesson.id}
+            >
+              <span
+                className={
+                  completedLessons.includes(lesson.id) ? "is-complete" : ""
+                }
+              >
+                {completedLessons.includes(lesson.id) ? (
+                  <Check size={16} />
+                ) : (
+                  index + 1
+                )}
+              </span>
+              <div>
+                <strong>{lesson.title}</strong>
+                <small>
+                  {lesson.theme} · {lesson.minutes} min
+                </small>
+              </div>
+              <ChevronRight size={18} />
+            </button>
+          ))}
+        </div>
+      </section>
+    </Modal>
+  )
+}
+
+function HomeSpace({ state, update, close }: SpaceProps) {
+  return (
+    <Modal
+      title="Home & routine"
+      eyebrow="Tend to ordinary life"
+      onClose={close}
+      wide
+    >
+      <div className="home-banner">
+        <div>
+          <h3>Practical care, without a perfect routine.</h3>
+          <p>Complete, skip, or return later. There are no streaks here.</p>
+        </div>
+        <Button
+          icon={Plus}
+          onClick={() =>
+            update(
+              (current) => ({
+                ...current,
+                routines: [
+                  ...current.routines,
+                  {
+                    id: uid(),
+                    title: "A new gentle routine",
+                    cadence: "When it helps",
+                    completedDates: [],
+                  },
+                ],
+              }),
+              "A new editable routine is ready.",
+            )
+          }
+        >
+          Add routine
+        </Button>
+      </div>
+      <div className="routine-list">
+        {state.routines.map((routine) => {
+          const done = routine.completedDates.includes(today())
+          return (
+            <article className={done ? "is-complete" : ""} key={routine.id}>
+              <button
+                type="button"
+                className="routine-check"
+                aria-label={done ? "Mark not complete" : "Mark complete"}
+                aria-pressed={done}
+                onClick={() =>
+                  update(
+                    (current) => ({
+                      ...current,
+                      routines: current.routines.map((item) =>
+                        item.id === routine.id
+                          ? {
+                              ...item,
+                              completedDates: done
+                                ? item.completedDates.filter(
+                                    (date) => date !== today(),
+                                  )
+                                : [...item.completedDates, today()],
+                            }
+                          : item,
+                      ),
+                    }),
+                    done ? "Opened again." : "Tended to, for today.",
+                  )
+                }
+              >
+                {done && <Check size={18} />}
+              </button>
+              <div>
+                <h3>{routine.title}</h3>
+                <p>{routine.cadence}</p>
+              </div>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  const title = window.prompt(
+                    "Rename this routine",
+                    routine.title,
+                  )
+                  if (!title?.trim()) return
+                  update(
+                    (current) => ({
+                      ...current,
+                      routines: current.routines.map((item) =>
+                        item.id === routine.id
+                          ? { ...item, title: title.trim() }
+                          : item,
+                      ),
+                    }),
+                    "Routine updated.",
+                  )
+                }}
+              >
+                Edit
+              </Button>
+            </article>
+          )
+        })}
+      </div>
+      <div className="ten-minute-card">
+        <Clock3 size={24} />
+        <div>
+          <h3>Need a ten-minute reset?</h3>
+          <p>Clear one surface, collect what belongs elsewhere, then stop.</p>
+        </div>
+        <Button
+          variant="secondary"
+          onClick={() =>
+            update(
+              (current) => ({
+                ...current,
+                plan: [
+                  ...current.plan,
+                  {
+                    id: uid(),
+                    title: "Ten-minute home reset",
+                    area: "home",
+                    date: today(),
+                    mode: "maybe",
+                    duration: 10,
+                    status: "planned",
+                  },
+                ],
+              }),
+              "A ten-minute reset is on Today.",
+            )
+          }
+        >
+          Add to Today
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
+function MovementSpace({ state, update, close }: SpaceProps) {
+  const [mode, setMode] =
+    useState<"landing" | "coach" | "strength" | "run" | "dance">("landing")
+  const [noteDraft, setNoteDraft] = useState("")
+  if (mode === "coach") {
+    return (
+      <GymCoach
+        state={state}
+        update={update}
+        onBack={() => setMode("landing")}
+        close={close}
+      />
+    )
+  }
+  if (mode === "strength") {
+    return (
+      <StrengthPlayer
+        state={state}
+        update={update}
+        onBack={() => setMode("landing")}
+        close={close}
+      />
+    )
+  }
+  if (mode === "run") {
+    return (
+      <RunPlayer
+        onBack={() => setMode("landing")}
+        close={close}
+        update={update}
+      />
+    )
+  }
+  if (mode === "dance") {
+    return (
+      <DanceLogger
+        onBack={() => setMode("landing")}
+        close={close}
+        update={update}
+      />
+    )
+  }
+  return (
+    <Modal
+      title="Movement"
+      eyebrow="One part of a whole life"
+      onClose={close}
+      wide
+    >
+      <div className="movement-hero">
+        <img
+          src="/assets/dance-pavilion.png"
+          alt="A dancer moving in a sunlit riverside pavilion"
+        />
+        <div>
+          <p className="eyebrow eyebrow--light">
+            Move in a way that meets you here
+          </p>
+          <h3>Strength, air, rhythm, or rest.</h3>
+          <p>Choose what would support the day. Nothing is owed.</p>
+        </div>
+      </div>
+      <div className="movement-grid">
+        <button
+          type="button"
+          className="movement-grid__coach"
+          onClick={() => setMode("coach")}
+        >
+          <WandSparkles size={24} />
+          <strong>Plan with your Studio coach</strong>
+          <small>Shape a gym session around your goal and energy</small>
+          <ChevronRight size={18} />
+        </button>
+        <button type="button" onClick={() => setMode("strength")}>
+          <Dumbbell size={24} />
+          <strong>Gentle strength</strong>
+          <small>35 min · full body · editable</small>
+          <ChevronRight size={18} />
+        </button>
+        <button type="button" onClick={() => setMode("run")}>
+          <Play size={24} />
+          <strong>Run / walk</strong>
+          <small>Foreground intervals · no GPS</small>
+          <ChevronRight size={18} />
+        </button>
+        <button type="button" onClick={() => setMode("dance")}>
+          <Music2 size={24} />
+          <strong>Dance</strong>
+          <small>Log a class or flexible practice</small>
+          <ChevronRight size={18} />
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            update(
+              (current) => ({
+                ...current,
+                plan: [
+                  ...current.plan,
+                  {
+                    id: uid(),
+                    title: "Recovery and open space",
+                    area: "move",
+                    date: today(),
+                    mode: "flexible",
+                    status: "planned",
+                    duration: 20,
+                  },
+                ],
+              }),
+              "Recovery is the plan.",
+            )
+          }
+        >
+          <Coffee size={24} />
+          <strong>Recovery</strong>
+          <small>Rest, walk, or gentle mobility</small>
+          <ChevronRight size={18} />
+        </button>
+      </div>
+      <section className="movement-notes">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Movement notes</p>
+            <h3>Keep what you want your coach to remember</h3>
+          </div>
+          <PenLine size={20} />
+        </div>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!noteDraft.trim()) return
+            update(
+              (current) => ({
+                ...current,
+                movementNotes: [
+                  {
+                    id: uid(),
+                    text: noteDraft.trim(),
+                    createdAt: new Date().toISOString(),
+                  },
+                  ...(current.movementNotes ?? []),
+                ],
+              }),
+              "Movement note saved on this device.",
+            )
+            setNoteDraft("")
+          }}
+        >
+          <textarea
+            rows={3}
+            value={noteDraft}
+            onChange={(event) => setNoteDraft(event.target.value)}
+            placeholder="Equipment I liked, something that felt good, a question for next time…"
+          />
+          <Button type="submit" variant="secondary" icon={Plus}>
+            Save note
+          </Button>
+        </form>
+        {(state.movementNotes ?? []).length > 0 && (
+          <div className="movement-note-list">
+            {(state.movementNotes ?? []).slice(0, 3).map((note) => (
+              <article key={note.id}>
+                <p>{note.text}</p>
+                <span>{formatDate(note.createdAt.slice(0, 10))}</span>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+      <section className="movement-goals">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Known goals</p>
+            <h3>Dates stay honest</h3>
+          </div>
+        </div>
+        {state.goals
+          .filter((goal) => goal.area === "move")
+          .map((goal) => (
+            <article key={goal.id}>
+              <div>
+                <strong>{goal.title}</strong>
+                <p>{goal.dateLabel}</p>
+              </div>
+              <span>{goal.nextStep}</span>
+            </article>
+          ))}
+      </section>
+    </Modal>
+  )
+}
+
+function GymCoach({
+  state,
+  update,
+  onBack,
+  close,
+}: SpaceProps & { onBack: () => void }) {
+  const movementGoals = state.goals.filter((goal) => goal.area === "move")
+  const [goal, setGoal] = useState(
+    movementGoals[0]?.title ?? "Everyday strength",
+  )
+  const [energy, setEnergy] = useState<CheckIn>("steady")
+  const [equipment, setEquipment] = useState("Gym machines and free weights")
+  const [note, setNote] = useState("")
+  const [preview, setPreview] = useState<string[]>([])
+
+  const buildPreview = () => {
+    const lower = goal.toLowerCase()
+    const exercises =
+      lower.includes("hackney") || lower.includes("run")
+        ? [
+            "Goblet squat or sit to stand",
+            "Supported cable row",
+            "Calf raise",
+            "Dead bug or comfortable trunk hold",
+          ]
+        : lower.includes("dance") || lower.includes("fairplay")
+          ? [
+              "Supported split squat",
+              "Cable or band row",
+              "Incline push",
+              "Single-leg balance with support",
+            ]
+          : [
+              "Sit to stand or leg press",
+              "Supported row",
+              "Incline push",
+              "Comfortable carry",
+            ]
+    setPreview(energy === "low" ? exercises.slice(0, 3) : exercises)
+  }
+
+  const savePlan = () => {
+    if (!preview.length) return
+    const sessionId = uid()
+    const rounds = energy === "low" ? 1 : 2
+    update(
+      (current) => ({
+        ...current,
+        gymSessionPlans: [
+          {
+            id: sessionId,
+            title: `${goal} gym session`,
+            createdAt: new Date().toISOString(),
+            goal,
+            note: note.trim() || undefined,
+            exercises: preview,
+          },
+          ...(current.gymSessionPlans ?? []),
+        ],
+        movementNotes: note.trim()
+          ? [
+              {
+                id: uid(),
+                text: note.trim(),
+                createdAt: new Date().toISOString(),
+              },
+              ...(current.movementNotes ?? []),
+            ]
+          : current.movementNotes,
+        workout: {
+          active: false,
+          current: 0,
+          sets: preview.flatMap((exercise) =>
+            Array.from({ length: rounds }, (_, index) => ({
+              id: `${sessionId}-${exercise}-${index}`,
+              exercise,
+              reps: energy === "open" ? 10 : 8,
+              complete: false,
+            })),
+          ),
+        },
+        plan: [
+          ...current.plan,
+          {
+            id: uid(),
+            title: `${goal} gym session`,
+            area: "move",
+            date: today(),
+            duration: energy === "low" ? 25 : 40,
+            mode: "flexible",
+            status: "planned",
+            note: "Reviewed and saved from the simulated Studio coach",
+          },
+        ],
+      }),
+      "Your reviewed gym session is on Today.",
+    )
+    onBack()
+  }
+
+  return (
+    <Modal
+      title="Plan a gym session"
+      eyebrow="Studio coach · review before saving"
+      onClose={close}
+      wide
+    >
+      <button type="button" className="back-link" onClick={onBack}>
+        <ArrowLeft size={17} /> Movement
+      </button>
+      <div className="coach-layout">
+        <section className="coach-companion">
+          <img src="/assets/samoyed.png" alt="" />
+          <div>
+            <p className="eyebrow">Your friendly organiser</p>
+            <h3>Let’s make the gym feel simpler.</h3>
+            <p>
+              Tell me what this session should support. I’ll suggest a gentle
+              structure for you to edit—not a medical prescription.
+            </p>
+          </div>
+        </section>
+
+        <form
+          className="coach-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            buildPreview()
+          }}
+        >
+          <label>
+            <span>What should this session support?</span>
+            <select
+              value={goal}
+              onChange={(event) => setGoal(event.target.value)}
+            >
+              {movementGoals.map((item) => (
+                <option value={item.title} key={item.id}>
+                  {item.title}
+                </option>
+              ))}
+              <option>Everyday strength</option>
+              <option>Return to the gym gently</option>
+            </select>
+          </label>
+          <fieldset className="coach-energy">
+            <legend>How much energy is available?</legend>
+            {[
+              ["low", "Keep it small"],
+              ["steady", "Steady"],
+              ["open", "Room for more"],
+            ].map(([value, label]) => (
+              <button
+                type="button"
+                className={energy === value ? "is-selected" : ""}
+                aria-pressed={energy === value}
+                onClick={() => setEnergy(value as CheckIn)}
+                key={value}
+              >
+                {label}
+              </button>
+            ))}
+          </fieldset>
+          <label>
+            <span>What equipment is available?</span>
+            <select
+              value={equipment}
+              onChange={(event) => setEquipment(event.target.value)}
+            >
+              <option>Gym machines and free weights</option>
+              <option>Mostly machines</option>
+              <option>Dumbbells and a bench</option>
+              <option>Minimal equipment</option>
+            </select>
+          </label>
+          <label>
+            <span>Anything to remember today?</span>
+            <textarea
+              rows={4}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Something that felt good last time, equipment preferences, or a reason to keep it especially gentle…"
+            />
+          </label>
+          <div className="coach-boundary">
+            <ShieldCheck size={19} />
+            <p>
+              If you have pain, an injury, concerning symptoms, or health
+              restrictions, pause and seek qualified professional guidance.
+            </p>
+          </div>
+          <Button type="submit" icon={WandSparkles}>
+            Suggest a session
+          </Button>
+        </form>
+
+        {preview.length > 0 && (
+          <section className="coach-preview">
+            <div>
+              <p className="eyebrow">Simulated coaching proposal</p>
+              <h3>
+                {energy === "low"
+                  ? "A shorter supportive session"
+                  : "A steady full-body session"}
+              </h3>
+              <p>
+                {energy === "low" ? "One" : "Two"} comfortable set
+                {energy === "low" ? "" : "s"} each. Finish with energy left.
+              </p>
+            </div>
+            <ol>
+              {preview.map((exercise) => (
+                <li key={exercise}>
+                  <span>{preview.indexOf(exercise) + 1}</span>
+                  <div>
+                    <strong>{exercise}</strong>
+                    <small>
+                      8–10 comfortable reps · editable in the player
+                    </small>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <div className="inline-actions">
+              <Button icon={Check} onClick={savePlan}>
+                Save to Today
+              </Button>
+              <Button variant="secondary" onClick={buildPreview}>
+                Make another suggestion
+              </Button>
+            </div>
+            <p className="capture-disclaimer">
+              General educational guidance only. The simulated coach does not
+              diagnose, treat, or replace a qualified health or fitness
+              professional.
+            </p>
+          </section>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function StrengthPlayer({
+  state,
+  update,
+  onBack,
+  close,
+}: SpaceProps & { onBack: () => void }) {
+  const template = [
+    ["Sit to stand", 10],
+    ["Supported row", 10],
+    ["Wall push", 8],
+    ["Calf raise", 12],
+  ] as const
+  const sets =
+    state.workout.sets.length > 0
+      ? state.workout.sets
+      : template.flatMap(([exercise, reps]) =>
+          [1, 2].map((number) => ({
+            id: `${exercise}-${number}`,
+            exercise,
+            reps,
+            complete: false,
+          })),
+        )
+  const current = sets[Math.min(state.workout.current, sets.length - 1)]
+  const [rest, setRest] = useState(0)
+
+  useEffect(() => {
+    if (rest <= 0) return
+    const timer = window.setInterval(
+      () => setRest((value) => Math.max(0, value - 1)),
+      1000,
+    )
+    return () => window.clearInterval(timer)
+  }, [rest])
+
+  const completeSet = () => {
+    const index = sets.findIndex((set) => set.id === current.id)
+    update((value) => ({
+      ...value,
+      workout: {
+        active: index < sets.length - 1,
+        startedAt: value.workout.startedAt ?? Date.now(),
+        current: Math.min(index + 1, sets.length - 1),
+        sets: sets.map((set) =>
+          set.id === current.id ? { ...set, complete: true } : set,
+        ),
+      },
+    }))
+    if (index < sets.length - 1) setRest(45)
+  }
+
+  return (
+    <Modal
+      title="Gentle strength"
+      eyebrow="Example plan — review before using"
+      onClose={close}
+      wide
+    >
+      <button type="button" className="back-link" onClick={onBack}>
+        <ArrowLeft size={17} /> Movement
+      </button>
+      <div className="workout-layout">
+        <aside className="workout-list">
+          <p className="eyebrow">Today’s session</p>
+          <h3>Full-body return</h3>
+          <p>Two comfortable rounds. Stop if something does not feel right.</p>
+          <div>
+            {sets.map((set, index) => (
+              <button
+                type="button"
+                className={`${set.complete ? "is-complete" : ""} ${
+                  set.id === current.id ? "is-current" : ""
+                }`}
+                onClick={() =>
+                  update((value) => ({
+                    ...value,
+                    workout: {
+                      ...value.workout,
+                      sets,
+                      current: index,
+                      active: true,
+                    },
+                  }))
+                }
+                key={set.id}
+              >
+                <span>{set.complete ? <Check size={15} /> : index + 1}</span>
+                <span>
+                  <strong>{set.exercise}</strong>
+                  <small>{set.reps} comfortable reps</small>
+                </span>
+              </button>
+            ))}
+          </div>
+        </aside>
+        <section className="workout-player">
+          {rest > 0 ? (
+            <div className="rest-state">
+              <p className="eyebrow">Rest is part of the set</p>
+              <div className="rest-clock">{rest}</div>
+              <h3>Let your breath settle.</h3>
+              <p>The next exercise is {current.exercise}.</p>
+              <div className="inline-actions">
+                <Button variant="secondary" onClick={() => setRest(rest + 30)}>
+                  +30 seconds
+                </Button>
+                <Button onClick={() => setRest(0)}>I’m ready</Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="exercise-illustration">
+                <Dumbbell size={48} strokeWidth={1.3} />
+              </div>
+              <p className="eyebrow">
+                Set {state.workout.current + 1} of {sets.length}
+              </p>
+              <h2>{current.exercise}</h2>
+              <p className="exercise-cue">
+                Move slowly and keep the range comfortable. Finish with a little
+                energy left.
+              </p>
+              <div className="set-fields">
+                <label>
+                  <span>Reps</span>
+                  <input type="number" defaultValue={current.reps} min="1" />
+                </label>
+                <label>
+                  <span>Weight, optional</span>
+                  <div className="input-suffix">
+                    <input type="number" min="0" step="0.5" placeholder="—" />
+                    <span>kg</span>
+                  </div>
+                </label>
+              </div>
+              <Button
+                className="button--large"
+                icon={Check}
+                onClick={completeSet}
+              >
+                Complete set
+              </Button>
+              <div className="player-links">
+                <button
+                  type="button"
+                  onClick={() =>
+                    update(
+                      (value) => ({
+                        ...value,
+                        workout: {
+                          ...value.workout,
+                          active: true,
+                          sets: sets.map((set) =>
+                            set.id === current.id
+                              ? {
+                                  ...set,
+                                  exercise: "Comfortable alternative",
+                                }
+                              : set,
+                          ),
+                        },
+                      }),
+                      "Swapped for a comfortable alternative.",
+                    )
+                  }
+                >
+                  Swap exercise
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const index = sets.findIndex((set) => set.id === current.id)
+                    update(
+                      (value) => ({
+                        ...value,
+                        workout: {
+                          ...value.workout,
+                          active: index < sets.length - 1,
+                          sets,
+                          current: Math.min(index + 1, sets.length - 1),
+                        },
+                      }),
+                      "Skipped without marking it complete.",
+                    )
+                  }}
+                >
+                  Skip this set
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    </Modal>
+  )
+}
+
+function RunPlayer({
+  onBack,
+  close,
+  update,
+}: {
+  onBack: () => void
+  close: () => void
+  update: SpaceProps["update"]
+}) {
+  const [seconds, setSeconds] = useState(60)
+  const [running, setRunning] = useState(false)
+  const [round, setRound] = useState(1)
+
+  useEffect(() => {
+    if (!running) return
+    const timer = window.setInterval(() => {
+      setSeconds((value) => {
+        if (value > 1) return value - 1
+        setRound((current) => current + 1)
+        return round % 2 ? 90 : 60
+      })
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [running, round])
+
+  return (
+    <Modal
+      title="Run / walk"
+      eyebrow="Foreground timer · no GPS"
+      onClose={close}
+    >
+      <button type="button" className="back-link" onClick={onBack}>
+        <ArrowLeft size={17} /> Movement
+      </button>
+      <div className="run-player">
+        <p className="eyebrow">
+          Round {round} · {round % 2 ? "Easy walk" : "Gentle run"}
+        </p>
+        <div className="run-clock">
+          {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}
+        </div>
+        <h3>
+          {round % 2
+            ? "Walk and let your breath settle."
+            : "Easy enough to speak."}
+        </h3>
+        <p>Next: {round % 2 ? "90 sec gentle run" : "60 sec easy walk"}</p>
+        <Button
+          className="button--round"
+          icon={running ? Pause : Play}
+          onClick={() => setRunning(!running)}
+        >
+          {running ? "Pause" : "Start"}
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            setRunning(false)
+            update(
+              (current) => ({
+                ...current,
+                plan: [
+                  ...current.plan,
+                  {
+                    id: uid(),
+                    title: "Run / walk recorded",
+                    area: "move",
+                    date: today(),
+                    mode: "flexible",
+                    status: "complete",
+                    duration: 20,
+                  },
+                ],
+              }),
+              "Run / walk saved as it happened.",
+            )
+            onBack()
+          }}
+        >
+          Finish and save
+        </Button>
+        <p className="safety-note">
+          This is general guidance, not a prescription. Stop if you feel pain or
+          unwell.
+        </p>
+      </div>
+    </Modal>
+  )
+}
+
+function DanceLogger({
+  onBack,
+  close,
+  update,
+}: {
+  onBack: () => void
+  close: () => void
+  update: SpaceProps["update"]
+}) {
+  return (
+    <Modal
+      title="Log dance"
+      eyebrow="Class or flexible practice"
+      onClose={close}
+    >
+      <button type="button" className="back-link" onClick={onBack}>
+        <ArrowLeft size={17} /> Movement
+      </button>
+      <form
+        className="dance-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const data = new FormData(event.currentTarget)
+          update(
+            (current) => ({
+              ...current,
+              plan: [
+                ...current.plan,
+                {
+                  id: uid(),
+                  title: `${data.get("style") || "Dance"} practice`,
+                  area: "move",
+                  date: today(),
+                  mode: "flexible",
+                  status: "complete",
+                  duration: Number(data.get("duration") || 45),
+                  note: String(data.get("focus") || ""),
+                },
+              ],
+            }),
+            "Dance saved as meaningful movement.",
+          )
+          onBack()
+        }}
+      >
+        <label>
+          <span>Style or class</span>
+          <input
+            name="style"
+            placeholder="Contemporary, house, open practice…"
+          />
+        </label>
+        <div className="form-row">
+          <label>
+            <span>Actual minutes</span>
+            <input name="duration" type="number" defaultValue="45" />
+          </label>
+          <label>
+            <span>How did it feel?</span>
+            <select name="effort">
+              <option>Light and playful</option>
+              <option>About right</option>
+              <option>More demanding</option>
+            </select>
+          </label>
+        </div>
+        <label>
+          <span>What did you work on?</span>
+          <textarea
+            name="focus"
+            rows={4}
+            placeholder="A phrase, quality, or moment to remember…"
+          />
+        </label>
+        <Button type="submit" icon={Music2}>
+          Save dance
+        </Button>
+      </form>
+    </Modal>
+  )
+}
+
+function PreferencesSpace({ state, update, close, reset }: SpaceProps) {
+  const [name, setName] = useState(state.name)
+  const togglePriority = (area: Area) =>
+    update(
+      (current) => ({
+        ...current,
+        priorities: current.priorities.includes(area)
+          ? current.priorities.filter((item) => item !== area)
+          : [...current.priorities, area].slice(-3),
+      }),
+      "What appears first has been updated.",
+    )
+
+  return (
+    <Modal
+      title="My Studio"
+      eyebrow="Shape the app around your life"
+      onClose={close}
+      wide
+    >
+      <div className="settings-list">
+        <section>
+          <div>
+            <h3>What should the studio call you?</h3>
+            <p>This is just for your greeting and companion.</p>
+          </div>
+          <form
+            className="name-setting"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (!name.trim()) return
+              update(
+                (current) => ({ ...current, name: name.trim() }),
+                "Your studio feels a little more yours.",
+              )
+            }}
+          >
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              aria-label="Your name"
+            />
+            <Button type="submit" variant="secondary">
+              Save
+            </Button>
+          </form>
+        </section>
+        <section>
+          <div>
+            <h3>Today’s density</h3>
+            <p>Choose how much the home screen offers at once.</p>
+          </div>
+          <div className="segmented">
+            {(["one", "few", "full"] as const).map((density) => (
+              <button
+                type="button"
+                className={state.density === density ? "is-active" : ""}
+                aria-pressed={state.density === density}
+                onClick={() =>
+                  update(
+                    (current) => ({ ...current, density }),
+                    "Today’s shape updated.",
+                  )
+                }
+                key={density}
+              >
+                {density === "one"
+                  ? "One focus"
+                  : density === "few"
+                    ? "A few"
+                    : "Fuller"}
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="priority-setting">
+          <div>
+            <h3>What matters in this season?</h3>
+            <p>
+              Choose up to three areas. They influence suggestions, not what
+              counts.
+            </p>
+          </div>
+          <div className="studio-priority-grid">
+            {(Object.keys(areaMeta) as Area[]).map((area) => {
+              const Icon = areaIcon[area]
+              const active = state.priorities.includes(area)
+              return (
+                <button
+                  type="button"
+                  className={active ? "is-active" : ""}
+                  aria-pressed={active}
+                  onClick={() => togglePriority(area)}
+                  key={area}
+                >
+                  <Icon size={17} />
+                  {areaMeta[area].label}
+                </button>
+              )
+            })}
+          </div>
+        </section>
+        <section>
+          <div>
+            <h3>Your Studio companion</h3>
+            <p>
+              Ask for help planning, organising, learning, reflecting, or
+              shaping a gentle next step. Voice recording is real; AI responses
+              are simulated in this prototype and always previewed.
+            </p>
+          </div>
+          <div className="settings-companion">
+            <img src="/assets/samoyed.png" alt="" />
+          </div>
+        </section>
+        <details className="backup-settings">
+          <summary>Backup or start fresh</summary>
+          <p>
+            You probably won’t need this day to day. It is here only so your
+            personal journey can be copied or reset when you choose.
+          </p>
+          <div className="inline-actions">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const blob = new Blob([JSON.stringify(state, null, 2)], {
+                  type: "application/json",
+                })
+                const url = URL.createObjectURL(blob)
+                const anchor = document.createElement("a")
+                anchor.href = url
+                anchor.download = "avika-life-studio-backup.json"
+                anchor.click()
+                URL.revokeObjectURL(url)
+              }}
+            >
+              Download a backup
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() =>
+                window.confirm(
+                  "Start a fresh studio? This clears this journey.",
+                ) && reset?.("empty")
+              }
+            >
+              Start fresh
+            </Button>
+          </div>
+        </details>
+      </div>
+    </Modal>
+  )
+}
+
+function AddPlanModal({
+  date,
+  goals,
+  onClose,
+  onSave,
+}: {
+  date: string
+  goals: Goal[]
+  onClose: () => void
+  onSave: (item: PlanItem) => void
+}) {
+  return (
+    <Modal
+      title="Add something"
+      eyebrow="A plan, not a promise"
+      onClose={onClose}
+    >
+      <form
+        className="plan-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const data = new FormData(event.currentTarget)
+          const steps = String(data.get("steps") || "")
+            .split("\n")
+            .map((step) => step.trim())
+            .filter(Boolean)
+          onSave({
+            id: uid(),
+            title: String(data.get("title")),
+            area: String(data.get("area")) as Area,
+            date: String(data.get("date")),
+            time: String(data.get("time")) || undefined,
+            duration: Number(data.get("duration") || 0) || undefined,
+            mode: String(data.get("mode")) as PlanItem["mode"],
+            status: "planned",
+            goalId: String(data.get("goalId") || "") || undefined,
+            steps: steps.map((title) => ({
+              id: uid(),
+              title,
+              complete: false,
+            })),
+          })
+        }}
+      >
+        <label>
+          <span>What would you like to make room for?</span>
+          <input name="title" required autoFocus placeholder="Name it simply" />
+        </label>
+        <div className="form-row">
+          <label>
+            <span>Part of life</span>
+            <select name="area" defaultValue="create">
+              {(Object.keys(areaMeta) as Area[]).map((area) => (
+                <option value={area} key={area}>
+                  {areaMeta[area].label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>How fixed is it?</span>
+            <select name="mode" defaultValue="flexible">
+              <option value="fixed">Fixed commitment</option>
+              <option value="flexible">Flexible intention</option>
+              <option value="maybe">Maybe</option>
+            </select>
+          </label>
+        </div>
+        <div className="form-row form-row--three">
+          <label>
+            <span>Date</span>
+            <input name="date" type="date" defaultValue={date} required />
+          </label>
+          <label>
+            <span>Time</span>
+            <input name="time" type="time" />
+          </label>
+          <label>
+            <span>Minutes</span>
+            <input
+              name="duration"
+              type="number"
+              min="5"
+              step="5"
+              placeholder="25"
+            />
+          </label>
+        </div>
+        <label>
+          <span>Link to a goal, optional</span>
+          <select name="goalId" defaultValue="">
+            <option value="">No linked goal</option>
+            {goals
+              .filter((goal) => goal.status === "tending")
+              .map((goal) => (
+                <option value={goal.id} key={goal.id}>
+                  {goal.title}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label>
+          <span>Starting steps, optional</span>
+          <textarea
+            name="steps"
+            rows={4}
+            placeholder={"One small step per line\nAnother manageable step"}
+          />
+        </label>
+        <div className="modal-actions">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" icon={Plus}>
+            Add to plan
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+type CaptureMode = "choose" | "recording" | "review" | "processing" | "proposal" | "error"
+type RecordingPurpose = "assistant" | "note"
+
+function VoiceCapture({
+  state,
+  onClose,
+  update,
+}: {
+  state: AppState
+  onClose: () => void
+  update: SpaceProps["update"]
+}) {
+  const [mode, setMode] = useState<CaptureMode>("choose")
+  const [purpose, setPurpose] = useState<RecordingPurpose>("assistant")
+  const [text, setText] = useState("")
+  const [noteTitle, setNoteTitle] = useState("")
+  const [elapsed, setElapsed] = useState(0)
+  const [level, setLevel] = useState(0)
+  const [audioUrl, setAudioUrl] = useState("")
+  const [playingUrl, setPlayingUrl] = useState("")
+  const recorder = useRef<MediaRecorder | null>(null)
+  const stream = useRef<MediaStream | null>(null)
+  const recordedBlob = useRef<Blob | null>(null)
+  const chunks = useRef<Blob[]>([])
+  const analyserFrame = useRef<number | null>(null)
+
+  const stopTracks = () => {
+    stream.current?.getTracks().forEach((track) => track.stop())
+    stream.current = null
+    if (analyserFrame.current) cancelAnimationFrame(analyserFrame.current)
+  }
+
+  useEffect(() => {
+    if (mode !== "recording") return
+    const timer = window.setInterval(
+      () => setElapsed((value) => value + 1),
+      1000,
+    )
+    return () => window.clearInterval(timer)
+  }, [mode])
+
+  useEffect(
+    () => () => {
+      stopTracks()
+      if (audioUrl) URL.revokeObjectURL(audioUrl)
+      if (playingUrl) URL.revokeObjectURL(playingUrl)
+    },
+    [audioUrl, playingUrl],
+  )
+
+  const startRecording = async (nextPurpose: RecordingPurpose = purpose) => {
+    setPurpose(nextPurpose)
+    if (
+      !navigator.mediaDevices?.getUserMedia ||
+      typeof MediaRecorder === "undefined"
+    ) {
+      setMode("error")
+      return
+    }
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      })
+      stream.current = mediaStream
+      const mediaRecorder = new MediaRecorder(mediaStream)
+      recorder.current = mediaRecorder
+      chunks.current = []
+      mediaRecorder.ondataavailable = (event) =>
+        event.data.size && chunks.current.push(event.data)
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks.current, { type: mediaRecorder.mimeType })
+        recordedBlob.current = blob
+        setAudioUrl(URL.createObjectURL(blob))
+        stopTracks()
+        setMode("review")
+      }
+      mediaRecorder.start()
+      setElapsed(0)
+      setMode("recording")
+
+      const audioContext = new AudioContext()
+      const source = audioContext.createMediaStreamSource(mediaStream)
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 64
+      source.connect(analyser)
+      const data = new Uint8Array(analyser.frequencyBinCount)
+      const sample = () => {
+        analyser.getByteFrequencyData(data)
+        setLevel(
+          data.reduce((sum, value) => sum + value, 0) / data.length / 255,
+        )
+        analyserFrame.current = requestAnimationFrame(sample)
+      }
+      sample()
+    } catch {
+      setMode("error")
+    }
+  }
+
+  const useDemoTranscript = () => {
+    setMode("processing")
+    window.setTimeout(() => {
+      setText("Move my next flexible plan to tomorrow afternoon.")
+      setMode("proposal")
+    }, 900)
+  }
+
+  const promptAssistant = (prompt: string) => {
+    setText(prompt)
+    setMode("proposal")
+  }
+
+  const proposalKind = () => {
+    const lower = text.toLowerCase()
+    if (lower.includes("gym") || lower.includes("workout")) return "gym"
+    if (lower.includes("plan my") || lower.includes("balanced day"))
+      return "plan"
+    if (lower.includes("move") || lower.includes("reschedule")) return "move"
+    if (lower.includes("goal")) return "goal"
+    if (lower.includes("inspir")) return "inspiration"
+    if (lower.includes("spent") || lower.includes("£")) return "money"
+    if (lower.startsWith("journal")) return "journal"
+    return "idea"
+  }
+
+  const proposalLabel: Record<ReturnType<typeof proposalKind>, string> = {
+    gym: "Create a gentle gym-session starting point",
+    plan: "Create a gentle shape for today",
+    move: "Move the next flexible plan to tomorrow",
+    goal: "Add a goal you can shape with milestones",
+    inspiration: "Save a creative inspiration",
+    money: "Add a manual transaction",
+    journal: "Save a journal entry",
+    idea: "Capture a project idea",
+  }
+
+  const saveProposal = () => {
+    const lower = text.toLowerCase()
+    const kind = proposalKind()
+    if (kind === "gym") {
+      const exercises = lower.includes("dance")
+        ? ["Supported split squat", "Cable row", "Incline push"]
+        : ["Sit to stand or leg press", "Supported row", "Calf raise"]
+      const sessionId = uid()
+      update(
+        (current) => ({
+          ...current,
+          gymSessionPlans: [
+            {
+              id: sessionId,
+              title: "Gentle gym session",
+              createdAt: new Date().toISOString(),
+              goal: lower.includes("hackney")
+                ? "Hackney Half Marathon"
+                : lower.includes("dance")
+                  ? "Dance support"
+                  : "Everyday strength",
+              exercises,
+            },
+            ...(current.gymSessionPlans ?? []),
+          ],
+          workout: {
+            active: false,
+            current: 0,
+            sets: exercises.flatMap((exercise) =>
+              [1, 2].map((round) => ({
+                id: `${sessionId}-${exercise}-${round}`,
+                exercise,
+                reps: 8,
+                complete: false,
+              })),
+            ),
+          },
+          plan: [
+            ...current.plan,
+            {
+              id: uid(),
+              title: "Gentle gym session",
+              area: "move",
+              date: today(),
+              duration: 35,
+              mode: "flexible",
+              status: "planned",
+              note: "Review and edit this simulated coaching suggestion before use",
+            },
+          ],
+        }),
+        "A gentle gym-session starting point is on Today.",
+      )
+    } else if (kind === "plan") {
+      update(
+        (current) => ({
+          ...current,
+          plan: [
+            ...current.plan,
+            {
+              id: uid(),
+              title: "Choose one thing that would make today feel mine",
+              area: current.priorities[0] ?? "home",
+              date: today(),
+              duration: 20,
+              mode: "flexible",
+              status: "planned",
+              note: "Suggested by the simulated Studio assistant",
+            },
+          ],
+        }),
+        "A gentle focus was added to Today.",
+      )
+    } else if (kind === "move") {
+      update((current) => {
+        const item = current.plan.find(
+          (candidate) =>
+            candidate.status === "planned" && candidate.mode !== "fixed",
+        )
+        if (!item) return current
+        const date = new Date(`${item.date}T12:00:00`)
+        date.setDate(date.getDate() + 1)
+        return {
+          ...current,
+          plan: current.plan.map((candidate) =>
+            candidate.id === item.id
+              ? { ...candidate, date: date.toISOString().slice(0, 10) }
+              : candidate,
+          ),
+        }
+      }, "Your next flexible plan moved to tomorrow.")
+    } else if (kind === "goal") {
+      const title =
+        text.split(":").slice(1).join(":").trim() ||
+        "A new goal to shape over time"
+      update(
+        (current) => ({
+          ...current,
+          goals: [
+            {
+              id: uid(),
+              title,
+              area: current.priorities[0] ?? "create",
+              scale: lower.includes("big") ? "big" : "small",
+              status: "tending",
+              nextStep: "Choose the smallest meaningful first step",
+              milestones: lower.includes("big")
+                ? [
+                    {
+                      id: uid(),
+                      title: "Name what a good beginning looks like",
+                    },
+                  ]
+                : [],
+            },
+            ...current.goals,
+          ],
+        }),
+        "Your new goal is ready to shape.",
+      )
+    } else if (kind === "money") {
+      const amount = Number(text.match(/£(\d+(?:\.\d{1,2})?)/)?.[1] ?? 0)
+      update(
+        (current) => ({
+          ...current,
+          transactions: [
+            {
+              id: uid(),
+              title:
+                text.replace(/spent|£\d+(?:\.\d{1,2})?/gi, "").trim() ||
+                "Captured expense",
+              amount: Math.round(amount * 100),
+              date: today(),
+              category: "Captured",
+            },
+            ...current.transactions,
+          ],
+        }),
+        "Expense saved after your confirmation.",
+      )
+    } else if (kind === "journal") {
+      update(
+        (current) => ({
+          ...current,
+          journal: [
+            {
+              id: uid(),
+              title: "Captured reflection",
+              body: text.replace(/^journal:\s*/i, ""),
+              date: today(),
+            },
+            ...current.journal,
+          ],
+        }),
+        "Reflection saved after your confirmation.",
+      )
+    } else {
+      const inspiration =
+        kind === "inspiration"
+          ? "Take one familiar London route at a different hour and collect three details you usually miss."
+          : text.replace(/^idea:\s*/i, "")
+      update(
+        (current) => ({
+          ...current,
+          projects: [
+            {
+              id: uid(),
+              title:
+                kind === "inspiration"
+                  ? "Three details from a familiar route"
+                  : "A captured idea",
+              note: inspiration,
+              stage: "Seed",
+              nextAction: "Give it twenty curious minutes",
+            },
+            ...current.projects,
+          ],
+        }),
+        kind === "inspiration"
+          ? "Inspiration saved as a project seed."
+          : "Idea saved after your confirmation.",
+      )
+    }
+    onClose()
+  }
+
+  const saveRecordedNote = async () => {
+    if (!recordedBlob.current) return
+    const id = uid()
+    try {
+      await storeVoiceNote(id, recordedBlob.current)
+      update(
+        (current) => ({
+          ...current,
+          voiceNotes: [
+            {
+              id,
+              title: noteTitle.trim() || "Voice note",
+              createdAt: new Date().toISOString(),
+              duration: elapsed,
+            },
+            ...(current.voiceNotes ?? []),
+          ],
+        }),
+        "Voice note saved privately on this device.",
+      )
+      onClose()
+    } catch {
+      setMode("error")
+    }
+  }
+
+  const playSavedNote = async (id: string) => {
+    const blob = await getVoiceNote(id)
+    if (!blob) return
+    if (playingUrl) URL.revokeObjectURL(playingUrl)
+    setPlayingUrl(URL.createObjectURL(blob))
+  }
+
+  return (
+    <Modal
+      title="Studio assistant"
+      eyebrow="Plan, capture, and shape what’s next"
+      onClose={onClose}
+    >
+      <div className="capture assistant">
+        {mode === "choose" && (
+          <>
+            <div className="assistant-welcome">
+              <span className="assistant-welcome__pet">
+                <img src="/assets/samoyed.png" alt="" />
+              </span>
+              <div>
+                <h3>Your Studio companion is here.</h3>
+                <p>
+                  A gentle coach and organiser for the next manageable step.
+                </p>
+              </div>
+            </div>
+            <div className="assistant-actions">
+              <button
+                type="button"
+                onClick={() =>
+                  promptAssistant(
+                    "Help me plan a balanced day with what I already have.",
+                  )
+                }
+              >
+                <CalendarRange size={20} />
+                <span>
+                  <strong>Plan my day</strong>
+                  <small>Find a manageable shape</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  promptAssistant(
+                    "Move my next flexible plan to tomorrow afternoon.",
+                  )
+                }
+              >
+                <ArrowRight size={20} />
+                <span>
+                  <strong>Move something</strong>
+                  <small>Reschedule without the guilt</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  promptAssistant(
+                    "Add a bigger goal: Create something I am proud to share",
+                  )
+                }
+              >
+                <Sparkles size={20} />
+                <span>
+                  <strong>Add a goal</strong>
+                  <small>Break it into milestones</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  promptAssistant(
+                    "Give me one creative inspiration for this week.",
+                  )
+                }
+              >
+                <Lightbulb size={20} />
+                <span>
+                  <strong>Find inspiration</strong>
+                  <small>A small prompt, not homework</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  promptAssistant(
+                    "Plan a gentle gym session to support my Hackney Half goal.",
+                  )
+                }
+              >
+                <Dumbbell size={20} />
+                <span>
+                  <strong>Plan a gym session</strong>
+                  <small>Start from a goal, then edit</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => promptAssistant("Journal: Today I feel…")}
+              >
+                <Heart size={20} />
+                <span>
+                  <strong>Check in gently</strong>
+                  <small>Notice, don’t diagnose</small>
+                </span>
+              </button>
+            </div>
+            <div className="assistant-inputs">
+              <button type="button" onClick={() => startRecording("assistant")}>
+                <span>
+                  <Mic size={23} />
+                </span>
+                <div>
+                  <strong>Talk to Studio</strong>
+                  <small>Speak a request or thought</small>
+                </div>
+                <ChevronRight size={18} />
+              </button>
+              <button type="button" onClick={() => setMode("proposal")}>
+                <span>
+                  <PenLine size={21} />
+                </span>
+                <div>
+                  <strong>Type to Studio</strong>
+                  <small>Ask, plan, move, or capture</small>
+                </div>
+                <ChevronRight size={18} />
+              </button>
+              <button type="button" onClick={() => startRecording("note")}>
+                <span>
+                  <AudioLines size={22} />
+                </span>
+                <div>
+                  <strong>Save a voice note</strong>
+                  <small>Keep the audio without AI</small>
+                </div>
+                <ChevronRight size={18} />
+              </button>
+            </div>
+            {(state.voiceNotes ?? []).length > 0 && (
+              <div className="recent-voice-notes">
+                <p className="eyebrow">Recent voice notes</p>
+                {(state.voiceNotes ?? []).slice(0, 2).map((note) => (
+                  <button
+                    type="button"
+                    onClick={() => playSavedNote(note.id)}
+                    key={note.id}
+                  >
+                    <Play size={15} />
+                    <span>
+                      <strong>{note.title}</strong>
+                      <small>
+                        {formatDate(note.createdAt.slice(0, 10))} ·{" "}
+                        {note.duration}s
+                      </small>
+                    </span>
+                  </button>
+                ))}
+                {playingUrl && <audio src={playingUrl} autoPlay controls />}
+              </div>
+            )}
+            <div className="prototype-note">
+              <Sparkles size={19} />
+              <p>
+                Recording and voice notes are real and local. AI planning and
+                transcription are simulated in this prototype; every change is
+                previewed before saving.
+              </p>
+            </div>
+            <div className="assistant-boundary">
+              <ShieldCheck size={17} />
+              <p>
+                Your companion can organise, encourage, and explain. It is not a
+                therapist or clinician and does not diagnose or treat health
+                conditions.
+              </p>
+            </div>
+          </>
+        )}
+        {mode === "recording" && (
+          <div className="recording-state">
+            <div className="recording-orb">
+              <span style={{ transform: `scale(${1 + level * 0.6})` }} />
+              {purpose === "assistant" ? (
+                <Mic size={31} />
+              ) : (
+                <AudioLines size={31} />
+              )}
+            </div>
+            <p className="eyebrow">
+              {purpose === "assistant"
+                ? "Talking to Studio · audio stays local"
+                : "Recording a private voice note"}
+            </p>
+            <div className="recording-time">
+              {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}
+            </div>
+            <div className="level-bars" aria-label="Live microphone level">
+              {Array.from({ length: 12 }, (_, index) => (
+                <span
+                  className={index / 12 < level ? "is-active" : ""}
+                  key={index}
+                />
+              ))}
+            </div>
+            <Button icon={Square} onClick={() => recorder.current?.stop()}>
+              Stop recording
+            </Button>
+            <Button
+              variant="ghost"
+              icon={Trash2}
+              onClick={() => {
+                recorder.current?.stop()
+                stopTracks()
+                setMode("choose")
+              }}
+            >
+              Discard
+            </Button>
+          </div>
+        )}
+        {mode === "review" && (
+          <div className="audio-review">
+            <p className="eyebrow">Recording complete · {elapsed} seconds</p>
+            <h3>
+              {purpose === "note"
+                ? "Keep this thought as a voice note."
+                : "Your request is ready."}
+            </h3>
+            <audio src={audioUrl} controls />
+            {purpose === "note" ? (
+              <div className="voice-note-save">
+                <label>
+                  <span>Give it a short title</span>
+                  <input
+                    value={noteTitle}
+                    onChange={(event) => setNoteTitle(event.target.value)}
+                    placeholder="A thought after the walk"
+                    autoFocus
+                  />
+                </label>
+                <Button icon={AudioLines} onClick={saveRecordedNote}>
+                  Save voice note
+                </Button>
+                <p>
+                  The recording is stored privately in this browser and is not
+                  sent to AI.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="prototype-note">
+                  <Sparkles size={19} />
+                  <p>
+                    Real transcription is not connected. Use an editable demo
+                    transcript to preview how Studio would help.
+                  </p>
+                </div>
+                <Button icon={Sparkles} onClick={useDemoTranscript}>
+                  Use demo transcript
+                </Button>
+                <Button variant="ghost" onClick={() => setMode("proposal")}>
+                  Type my request instead
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+        {mode === "processing" && (
+          <div className="processing">
+            <span className="processing__ring" />
+            <p className="eyebrow">Simulated AI planning</p>
+            <h3>Preparing an editable proposal…</h3>
+          </div>
+        )}
+        {mode === "proposal" && (
+          <div className="proposal">
+            <button
+              type="button"
+              className="back-link"
+              onClick={() => {
+                setText("")
+                setMode("choose")
+              }}
+            >
+              <ArrowLeft size={17} /> Assistant home
+            </button>
+            <label>
+              <span>
+                {audioUrl
+                  ? "Editable demo transcript"
+                  : "What would you like Studio to help with?"}
+              </span>
+              <textarea
+                autoFocus
+                rows={5}
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                placeholder="Help me plan today, move Friday’s admin, add a goal, or save an idea…"
+              />
+            </label>
+            {text && (
+              <div className="proposal-preview">
+                <p className="eyebrow">
+                  Studio proposes · review before saving
+                </p>
+                <div>
+                  <WandSparkles size={20} />
+                  <span>
+                    <strong>{proposalLabel[proposalKind()]}</strong>
+                    <small>Nothing changes until you confirm.</small>
+                  </span>
+                </div>
+              </div>
+            )}
+            <Button disabled={!text.trim()} icon={Check} onClick={saveProposal}>
+              Confirm this action
+            </Button>
+            <p className="capture-disclaimer">
+              This proposal is simulated and deterministic. You stay in control
+              of every change.
+            </p>
+          </div>
+        )}
+        {mode === "error" && (
+          <div className="capture-error">
+            <span>
+              <MicOff size={28} />
+            </span>
+            <h3>The microphone or local audio store is not available.</h3>
+            <p>
+              Permission may be off, or this browser may not support local
+              recording. Studio still works by typing.
+            </p>
+            <Button onClick={() => setMode("proposal")}>Type to Studio</Button>
+            <Button
+              variant="ghost"
+              icon={RotateCcw}
+              onClick={() => startRecording(purpose)}
+            >
+              Try recording again
+            </Button>
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+export default function App() {
+  const { state, update, notice, reset } = useLifeStudioState()
+  const [route, setRoute] = useState<Route>(routeFromPath)
+  const [space, setSpace] = useState<SpaceKey | null>(null)
+  const [capture, setCapture] = useState(false)
+  const [addDate, setAddDate] = useState<string | null>(null)
+
+  useEffect(() => {
+    const onPopState = () => setRoute(routeFromPath())
+    window.addEventListener("popstate", onPopState)
+    return () => window.removeEventListener("popstate", onPopState)
+  }, [])
+
+  useEffect(() => {
+    if ("serviceWorker" in navigator && import.meta.env.PROD) {
+      navigator.serviceWorker.register("/sw.js").catch(() => undefined)
+    }
+  }, [])
+
+  const navigate = (next: Route) => {
+    setRoute(next)
+    window.history.pushState({}, "", routePath[next])
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const finishSetup = (
+    priorities: Area[],
+    density: AppState["density"],
+    examples: boolean,
+  ) => {
+    update(
+      () => ({
+        ...(examples
+          ? demoState
+          : {
+              ...demoState,
+              plan: [],
+              journal: [],
+              projects: [],
+              people: [],
+              transactions: [],
+              routines: [],
+              goals: demoState.goals,
+            }),
+        onboarded: true,
+        priorities,
+        density,
+      }),
+      "Your Life Studio is ready.",
+    )
+  }
+
+  if (!state.onboarded) {
+    return <Onboarding onFinish={finishSetup} />
+  }
+
+  return (
+    <div className="app-shell">
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
+      <aside className="desktop-rail">
+        <div className="wordmark">
+          <LogoMark />
+          <strong>Life Studio</strong>
+        </div>
+        <nav aria-label="Main navigation">
+          {navItems.map(({ key, label, icon: Icon }) => (
+            <button
+              type="button"
+              className={route === key ? "is-active" : ""}
+              aria-current={route === key ? "page" : undefined}
+              onClick={() => navigate(key)}
+              key={key}
+            >
+              <Icon size={20} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+        <button
+          type="button"
+          className="rail-capture"
+          onClick={() => setCapture(true)}
+        >
+          <WandSparkles size={20} />
+          <span>Studio assistant</span>
+        </button>
+        <div className="rail-footer">
+          <span>{state.name}’s Life Studio</span>
+          <small>One life, shaped gently</small>
+        </div>
+      </aside>
+
+      <main id="main-content" className="app-content">
+        <header className="mobile-topbar">
+          <button
+            type="button"
+            className="mobile-wordmark"
+            onClick={() => navigate("today")}
+          >
+            <LogoMark />
+            <strong>Life Studio</strong>
+          </button>
+          <IconButton
+            label="Open preferences"
+            icon={Menu}
+            onClick={() => setSpace("preferences")}
+          />
+        </header>
+
+        {route === "today" && (
+          <TodayView
+            state={state}
+            update={update}
+            onAdd={() => setAddDate(today())}
+            onOpenSpace={(key) => setSpace(key)}
+          />
+        )}
+        {route === "plan" && (
+          <PlanView
+            state={state}
+            update={update}
+            onAdd={(date) => setAddDate(date ?? today())}
+          />
+        )}
+        {route === "progress" && <ProgressView state={state} update={update} />}
+        {route === "space" && (
+          <MySpaceView state={state} openSpace={(key) => setSpace(key)} />
+        )}
+      </main>
+
+      <nav className="bottom-nav" aria-label="Main navigation">
+        {navItems.map(({ key, label, icon: Icon }) => (
+          <button
+            type="button"
+            className={route === key ? "is-active" : ""}
+            aria-current={route === key ? "page" : undefined}
+            onClick={() => navigate(key)}
+            key={key}
+          >
+            <Icon size={21} strokeWidth={route === key ? 2.3 : 1.8} />
+            <span>{label}</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          className="bottom-nav__capture"
+          aria-label="Open Studio assistant by voice or typing"
+          onClick={() => setCapture(true)}
+        >
+          <span className="assistant-glyph" aria-hidden="true">
+            <Mic size={24} strokeWidth={1.8} />
+            <Sparkles size={12} strokeWidth={2} />
+          </span>
+        </button>
+      </nav>
+
+      {notice && (
+        <div className="toast" role="status">
+          <Check size={17} />
+          {notice}
+        </div>
+      )}
+
+      {addDate && (
+        <AddPlanModal
+          date={addDate}
+          goals={state.goals}
+          onClose={() => setAddDate(null)}
+          onSave={(item) => {
+            update(
+              (current) => ({ ...current, plan: [...current.plan, item] }),
+              "Added to your plan.",
+            )
+            setAddDate(null)
+          }}
+        />
+      )}
+      {capture && (
+        <VoiceCapture
+          state={state}
+          onClose={() => setCapture(false)}
+          update={update}
+        />
+      )}
+      {space === "reflect" && (
+        <JournalSpace
+          state={state}
+          update={update}
+          close={() => setSpace(null)}
+        />
+      )}
+      {space === "breathe" && (
+        <BreatheSpace
+          state={state}
+          update={update}
+          close={() => setSpace(null)}
+        />
+      )}
+      {space === "create" && (
+        <ProjectsSpace
+          state={state}
+          update={update}
+          close={() => setSpace(null)}
+        />
+      )}
+      {space === "connect" && (
+        <PeopleSpace
+          state={state}
+          update={update}
+          close={() => setSpace(null)}
+        />
+      )}
+      {space === "move" && (
+        <MovementSpace
+          state={state}
+          update={update}
+          close={() => setSpace(null)}
+        />
+      )}
+      {space === "money" && (
+        <MoneySpace
+          state={state}
+          update={update}
+          close={() => setSpace(null)}
+        />
+      )}
+      {space === "home" && (
+        <HomeSpace state={state} update={update} close={() => setSpace(null)} />
+      )}
+      {space === "preferences" && (
+        <PreferencesSpace
+          state={state}
+          update={update}
+          close={() => setSpace(null)}
+          reset={reset}
+        />
+      )}
+    </div>
+  )
+}

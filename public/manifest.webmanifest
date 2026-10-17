@@ -1,0 +1,18 @@
+{
+  "name": "Life Studio",
+  "short_name": "Life Studio",
+  "description": "A private, local place to shape the life you are building.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f6f0e4",
+  "theme_color": "#34543f",
+  "icons": [
+    {
+      "src": "/life-studio-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

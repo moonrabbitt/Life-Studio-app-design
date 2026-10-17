@@ -1,0 +1,14 @@
+{
+  "title": "Life Studio",
+  "description": "A warm, private place to shape daily rhythms, reflection, creativity, connection, movement, money, and home life.",
+  "icons": {
+    "icon": "/life-studio-icon.svg"
+  },
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": true,
+    "ignoreReducedMotion": false
+  }
+}
