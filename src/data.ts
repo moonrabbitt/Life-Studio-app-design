@@ -63,6 +63,8 @@ export const emptyState: AppState = {
   movementNotes: [],
   gymSessionPlans: [],
   breatheSessions: [],
+  workoutHistory: [],
+  weeklyReviews: [],
 }
 
 export const demoState: AppState = {

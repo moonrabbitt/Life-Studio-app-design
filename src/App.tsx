@@ -63,7 +63,9 @@ import { getVoiceNote, saveVoiceNote as storeVoiceNote } from "./audioStore"
 import { listen, speechSupported } from "./speech"
 import { downloadVoice, getPasscode } from "./sync"
 import { areaMeta, demoState } from "./data"
+import { checkPlacement } from "./training"
 import type {
+  ActivityKind,
   AppState,
   Area,
   CheckIn,
@@ -72,18 +74,25 @@ import type {
   PlanItem,
   Project,
 } from "./types"
+import {
+  ActivityButtons,
+  ActivityFlow,
+  ActivityHistory,
+  GymIntake,
+  NextActionCard,
+  RestartSetup,
+  Roadmap,
+  skipItem,
+  StatusBadge,
+  WeekAcceptBanner,
+  type ActivityMode,
+} from "./TrainingViews"
+import { Button, formatDate, IconButton, Modal, today, uid } from "./ui"
 import { useLifeStudioState, type SyncStatus } from "./useLifeStudioState"
 
 type Route = "today" | "plan" | "progress" | "space"
 type SpaceKey = Area | "breathe" | "preferences"
 
-const today = () => localDate()
-const uid = () => crypto.randomUUID()
-const formatDate = (value: string, options?: Intl.DateTimeFormatOptions) =>
-  new Intl.DateTimeFormat(
-    "en-GB",
-    options ?? { day: "numeric", month: "short" },
-  ).format(new Date(`${value}T12:00:00`))
 const formatMoney = (pence: number) =>
   new Intl.NumberFormat("en-GB", {
     style: "currency",
@@ -119,60 +128,6 @@ function routeFromPath(): Route {
   if (value.endsWith("/progress")) return "progress"
   if (value.endsWith("/space")) return "space"
   return "today"
-}
-
-function Button({
-  children,
-  onClick,
-  variant = "primary",
-  icon: Icon,
-  type = "button",
-  disabled,
-  className = "",
-}: {
-  children: ReactNode
-  onClick?: () => void
-  variant?: "primary" | "secondary" | "ghost" | "danger"
-  icon?: LucideIcon
-  type?: "button" | "submit"
-  disabled?: boolean
-  className?: string
-}) {
-  return (
-    <button
-      className={`button button--${variant} ${className}`}
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-    >
-      {Icon && <Icon size={18} strokeWidth={1.8} />}
-      <span>{children}</span>
-    </button>
-  )
-}
-
-function IconButton({
-  label,
-  icon: Icon,
-  onClick,
-  active,
-}: {
-  label: string
-  icon: LucideIcon
-  onClick?: () => void
-  active?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      className={`icon-button ${active ? "is-active" : ""}`}
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-    >
-      <Icon size={20} strokeWidth={1.8} />
-    </button>
-  )
 }
 
 function AreaMark({ area, compact = false }: { area: Area; compact?: boolean }) {
@@ -219,85 +174,6 @@ function LogoMark() {
         fill="#9eae8d"
       />
     </svg>
-  )
-}
-
-function Modal({
-  title,
-  eyebrow,
-  children,
-  onClose,
-  wide = false,
-}: {
-  title: string
-  eyebrow?: string
-  children: ReactNode
-  onClose: () => void
-  wide?: boolean
-}) {
-  const dialogRef = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null
-    const focusable = () =>
-      Array.from(
-        dialogRef.current?.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), audio[controls], [href], [tabindex]:not([tabindex="-1"])',
-        ) ?? [],
-      )
-    const initialFocus =
-      dialogRef.current?.querySelector<HTMLElement>("[autofocus]") ??
-      focusable()[0]
-    initialFocus?.focus()
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose()
-        return
-      }
-      if (event.key !== "Tab") return
-      const elements = focusable()
-      const first = elements[0]
-      const last = elements[elements.length - 1]
-      if (!first || !last) return
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    window.addEventListener("keydown", handleKey)
-    return () => {
-      window.removeEventListener("keydown", handleKey)
-      document.body.style.overflow = previousOverflow
-      previouslyFocused?.focus()
-    }
-  }, [onClose])
-
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <section
-        ref={dialogRef}
-        className={`modal ${wide ? "modal--wide" : ""}`}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="modal__handle" />
-        <header className="modal__header">
-          <div>
-            {eyebrow && <p className="eyebrow">{eyebrow}</p>}
-            <h2>{title}</h2>
-          </div>
-          <IconButton icon={X} label="Close" onClick={onClose} />
-        </header>
-        <div className="modal__body">{children}</div>
-      </section>
-    </div>
   )
 }
 
@@ -520,14 +396,24 @@ function TodayView({
   update,
   onAdd,
   onOpenSpace,
+  onActivity,
+  onRoadmap,
+  onSetupRestart,
 }: {
   state: AppState
   update: (recipe: (current: AppState) => AppState, message?: string) => void
   onAdd: () => void
   onOpenSpace: (space: SpaceKey) => void
+  onActivity: (id: string, mode: ActivityMode) => void
+  onRoadmap: () => void
+  onSetupRestart: () => void
 }) {
   const currentItems = state.plan
-    .filter((item) => item.date === today() && item.status === "planned")
+    .filter(
+      (item) =>
+        item.date === today() &&
+        (item.status === "planned" || item.status === "proposed"),
+    )
     .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""))
   const max = state.density === "one" ? 1 : state.density === "few" ? 3 : 5
   const visibleItems = currentItems.slice(0, max)
@@ -575,7 +461,15 @@ function TodayView({
         </div>
       </section>
 
-      <section className="check-in floating-card">
+      <NextActionCard
+        state={state}
+        update={update}
+        onActivity={onActivity}
+        onRoadmap={onRoadmap}
+        onSetupRestart={onSetupRestart}
+      />
+
+      <section className="check-in today-check-in">
         <div>
           <p className="eyebrow">A small check-in</p>
           <h2>How much room is there today?</h2>
@@ -629,7 +523,10 @@ function TodayView({
                       {item.duration && <small>{item.duration} min</small>}
                     </div>
                     <div className="today-item__body">
-                      <AreaMark area={item.area} />
+                      <div className="today-item__marks">
+                        <AreaMark area={item.area} />
+                        {item.status === "proposed" && <StatusBadge item={item} />}
+                      </div>
                       <h3>{item.title}</h3>
                       <p>
                         {item.mode === "fixed"
@@ -638,17 +535,25 @@ function TodayView({
                             ? "Optional. Let it go if the space matters more."
                             : "Flexible. Move it until it fits."}
                       </p>
-                      <div className="inline-actions">
-                        <Button onClick={() => complete(item.id)} icon={Check}>
-                          Done
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          onClick={() => onOpenSpace(item.area)}
-                        >
-                          Open {areaMeta[item.area].label}
-                        </Button>
-                      </div>
+                      {item.kind ? (
+                        <ActivityButtons
+                          item={item}
+                          onActivity={onActivity}
+                          onSkip={(id) => skipItem(update, id)}
+                        />
+                      ) : (
+                        <div className="inline-actions">
+                          <Button onClick={() => complete(item.id)} icon={Check}>
+                            Done
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            onClick={() => onOpenSpace(item.area)}
+                          >
+                            Open {areaMeta[item.area].label}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </article>
                 ))}
@@ -705,14 +610,16 @@ function PlanView({
   state,
   update,
   onAdd,
+  onActivity,
 }: {
   state: AppState
   update: (recipe: (current: AppState) => AppState, message?: string) => void
   onAdd: (date?: string) => void
+  onActivity: (id: string, mode: ActivityMode) => void
 }) {
   const days = useMemo(
     () =>
-      Array.from({ length: 7 }, (_, index) => {
+      Array.from({ length: 14 }, (_, index) => {
         const date = new Date()
         date.setDate(date.getDate() + index)
         return localDate(date)
@@ -780,7 +687,9 @@ function PlanView({
             <strong>{formatDate(date, { day: "numeric" })}</strong>
             <small>
               {state.plan.filter(
-                (item) => item.date === date && item.status === "planned",
+                (item) =>
+                  item.date === date &&
+                  (item.status === "planned" || item.status === "proposed"),
               ).length || "—"}
             </small>
           </button>
@@ -798,11 +707,14 @@ function PlanView({
             </div>
             <span className="open-space-label">Open space is intentional</span>
           </div>
+          <WeekAcceptBanner state={state} date={selected} update={update} />
           {items.length ? (
             <div className="agenda__timeline">
               {items.map((item) => (
                 <article
-                  className={`agenda-item area-border-${item.area}`}
+                  className={`agenda-item area-border-${item.area} ${
+                    item.status === "proposed" ? "is-proposed" : ""
+                  }`}
                   key={item.id}
                 >
                   <div className="agenda-item__time">
@@ -812,8 +724,17 @@ function PlanView({
                     </span>
                   </div>
                   <div className="agenda-item__content">
-                    <AreaMark area={item.area} />
+                    <div className="today-item__marks">
+                      <AreaMark area={item.area} />
+                      {item.kind && <StatusBadge item={item} />}
+                    </div>
                     <h3>{item.title}</h3>
+                    {item.log && (
+                      <small className="agenda-item__log">
+                        {item.log.summary}
+                        {item.log.duration ? ` · ${item.log.duration} min` : ""}
+                      </small>
+                    )}
                     <p>
                       {item.status === "complete"
                         ? "Complete"
@@ -831,7 +752,17 @@ function PlanView({
                       </span>
                     )}
                   </div>
-                  {item.status === "planned" && (
+                  {item.kind &&
+                    (item.status === "planned" || item.status === "proposed") && (
+                      <div className="agenda-item__actions">
+                        <ActivityButtons
+                          item={item}
+                          onActivity={onActivity}
+                          onSkip={(id) => skipItem(update, id)}
+                        />
+                      </div>
+                    )}
+                  {!item.kind && item.status === "planned" && (
                     <div className="agenda-item__actions">
                       <Button
                         variant="secondary"
@@ -884,7 +815,7 @@ function PlanView({
                       />
                     </div>
                   )}
-                  {item.status !== "planned" && (
+                  {(item.status === "complete" || item.status === "let-go") && (
                     <div className="agenda-item__actions">
                       <Button
                         variant="ghost"
@@ -1368,6 +1299,8 @@ function ProgressView({
             )}
           </div>
         </section>
+
+        <ActivityHistory state={state} />
 
         <aside className="week-note">
           <p className="eyebrow">A factual glance</p>
@@ -2652,7 +2585,7 @@ function MoneySpace({ state, update, close }: SpaceProps) {
           className="back-link"
           onClick={() => setSelectedLesson(null)}
         >
-          <ArrowLeft size={17} /> Money studio
+          <ArrowLeft size={17} /> Investing Lab
         </button>
         <article className="money-lesson">
           <div className="money-lesson__visual">
@@ -2728,7 +2661,7 @@ function MoneySpace({ state, update, close }: SpaceProps) {
 
   return (
     <Modal
-      title="Money studio"
+      title="Investing Lab"
       eyebrow="Learn, reflect, and grow with intention"
       onClose={close}
       wide
@@ -4115,14 +4048,38 @@ function PreferencesSpace({
 function AddPlanModal({
   date,
   goals,
+  plan,
   onClose,
   onSave,
 }: {
   date: string
   goals: Goal[]
+  plan: PlanItem[]
   onClose: () => void
   onSave: (item: PlanItem) => void
 }) {
+  const [draft, setDraft] = useState<{
+    date: string
+    time?: string
+    duration?: number
+    kind?: ActivityKind
+  }>({ date })
+  const preview = checkPlacement(
+    plan,
+    {
+      id: "new",
+      title: "",
+      area: "move",
+      date: draft.date,
+      mode: "flexible",
+      status: "planned",
+      duration: draft.duration,
+      kind: draft.kind,
+      intensity: draft.kind === "walk" ? "light" : undefined,
+    },
+    draft.date,
+    draft.time,
+  )
   return (
     <Modal
       title="Add something"
@@ -4131,6 +4088,17 @@ function AddPlanModal({
     >
       <form
         className="plan-form"
+        onChange={(event) => {
+          const data = new FormData(event.currentTarget)
+          setDraft({
+            date: String(data.get("date") || date),
+            time: String(data.get("time")) || undefined,
+            duration: Number(data.get("duration") || 0) || undefined,
+            kind: (String(data.get("kind")) || undefined) as
+              | ActivityKind
+              | undefined,
+          })
+        }}
         onSubmit={(event) => {
           event.preventDefault()
           const data = new FormData(event.currentTarget)
@@ -4138,10 +4106,15 @@ function AddPlanModal({
             .split("\n")
             .map((step) => step.trim())
             .filter(Boolean)
+          const kind = (String(data.get("kind")) || undefined) as
+            | ActivityKind
+            | undefined
           onSave({
             id: uid(),
             title: String(data.get("title")),
-            area: String(data.get("area")) as Area,
+            kind,
+            intensity: kind === "walk" ? "light" : undefined,
+            area: kind ? "move" : (String(data.get("area")) as Area),
             date: String(data.get("date")),
             time: String(data.get("time")) || undefined,
             duration: Number(data.get("duration") || 0) || undefined,
@@ -4201,6 +4174,31 @@ function AddPlanModal({
           </label>
         </div>
         <label>
+          <span>Movement session, optional</span>
+          <select name="kind" defaultValue="">
+            <option value="">Not a movement session</option>
+            <option value="gym">Gym / strength</option>
+            <option value="walk">Walk</option>
+            <option value="run">Run</option>
+            <option value="dance">Dance</option>
+          </select>
+        </label>
+        {(preview.conflicts.length > 0 || preview.warnings.length > 0) && (
+          <div className="move-sheet__preview" role="status">
+            <p className="eyebrow">Before you add it</p>
+            {preview.conflicts.map((other) => (
+              <p className="move-sheet__warn" key={other.id}>
+                Overlaps {other.title} at {other.time}
+              </p>
+            ))}
+            {preview.warnings.map((warning) => (
+              <p className="move-sheet__warn" key={warning}>
+                {warning}
+              </p>
+            ))}
+          </div>
+        )}
+        <label>
           <span>Link to a goal, optional</span>
           <select name="goalId" defaultValue="">
             <option value="">No linked goal</option>
@@ -4226,7 +4224,9 @@ function AddPlanModal({
             Cancel
           </Button>
           <Button type="submit" icon={Plus}>
-            Add to plan
+            {preview.conflicts.length || preview.warnings.length
+              ? "Add anyway"
+              : "Add to plan"}
           </Button>
         </div>
       </form>
@@ -4280,6 +4280,8 @@ const blankAction = (
   milestones: null,
   exercises: null,
   nextAction: null,
+  effort: null,
+  concern: null,
 })
 
 // Offline fallback: a small keyword parser used when the AI service is unreachable.
@@ -4487,6 +4489,41 @@ function applyAction(current: AppState, action: StudioAction): AppState {
           ...current.transactions,
         ],
       }
+    case "log_activity": {
+      const log = {
+        completedAt: new Date().toISOString(),
+        summary: title || "Activity",
+        duration: action.duration ?? undefined,
+        effort: action.effort ?? undefined,
+        note: action.body ?? undefined,
+        concern: action.concern ?? undefined,
+      }
+      const target = current.plan.find((item) => item.id === action.planId)
+      if (target?.status === "complete") return current
+      if (target)
+        return {
+          ...current,
+          plan: current.plan.map((item) =>
+            item.id === target.id ? { ...item, status: "complete", log } : item,
+          ),
+        }
+      return {
+        ...current,
+        plan: [
+          ...current.plan,
+          {
+            id: uid(),
+            title: title || "Activity",
+            area: area ?? "move",
+            date,
+            duration: action.duration ?? undefined,
+            mode: "flexible",
+            status: "complete",
+            log,
+          },
+        ],
+      }
+    }
     case "add_gym_session": {
       const sessionId = uid()
       const exercises = action.exercises?.length
@@ -4536,6 +4573,30 @@ function applyAction(current: AppState, action: StudioAction): AppState {
   }
 }
 
+const DRAFT_KEY = "life-studio:assistant-draft"
+// Your own words are kept if the AI fails, so nothing you said or typed is lost.
+function readDraft() {
+  try {
+    return localStorage.getItem(DRAFT_KEY) ?? ""
+  } catch {
+    return ""
+  }
+}
+function saveDraft(value: string) {
+  try {
+    localStorage.setItem(DRAFT_KEY, value)
+  } catch {
+    // Storage unavailable; the text stays in the box for this visit.
+  }
+}
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY)
+  } catch {
+    // Nothing to clear.
+  }
+}
+
 function VoiceCapture({
   state,
   onClose,
@@ -4560,6 +4621,10 @@ function VoiceCapture({
     "mic",
   )
   const [heard, setHeard] = useState("")
+  const [askedLabel, setAskedLabel] = useState("")
+  const [hint, setHint] = useState("")
+  const [draft, setDraft] = useState(readDraft)
+  const lastRequest = useRef("")
   const listener = useRef<ReturnType<typeof listen> | null>(null)
   const recorder = useRef<MediaRecorder | null>(null)
   const stream = useRef<MediaStream | null>(null)
@@ -4620,10 +4685,13 @@ function VoiceCapture({
     [playingUrl],
   )
 
-  const runAssistant = async (request: string) => {
+  // Quick actions run without filling the box, so it stays empty for your own words.
+  const runAssistant = async (request: string, label = "") => {
     const input = request.trim()
     if (!input) return
-    setText(input)
+    lastRequest.current = input
+    setAskedLabel(label)
+    setText(label ? "" : input)
     setProposal(null)
     setAiError("")
     setProcessingLabel("Studio is thinking…")
@@ -4635,6 +4703,7 @@ function VoiceCapture({
       setSelected(actions.map(() => true))
     } catch (error) {
       setAiError((error as Error).message)
+      if (!label) saveDraft(input)
     }
     setMode("compose")
   }
@@ -4757,6 +4826,8 @@ function VoiceCapture({
 
   const openComposer = (prefill = "") => {
     setHeard("")
+    setHint("")
+    setAskedLabel("")
     setText(prefill)
     setProposal(null)
     setAiError("")
@@ -4764,16 +4835,23 @@ function VoiceCapture({
   }
 
   const useOffline = () => {
-    const result = offlineProposal(text, state)
+    const result = offlineProposal(text.trim() || lastRequest.current, state)
     setAiError("")
     setProposal(result)
     setSelected(result.actions.map(() => true))
   }
 
-  const isValidAction = (action: StudioAction) =>
-    action.type === "move_plan" || action.type === "complete_plan"
-      ? state.plan.some((item) => item.id === action.planId)
-      : true
+  const isValidAction = (action: StudioAction) => {
+    if (action.type === "move_plan" || action.type === "complete_plan")
+      return state.plan.some(
+        (item) => item.id === action.planId && item.status !== "complete",
+      )
+    if (action.type === "log_activity" && action.planId)
+      return state.plan.some(
+        (item) => item.id === action.planId && item.status !== "complete",
+      )
+    return true
+  }
 
   const confirmProposal = () => {
     if (!proposal) return
@@ -4787,6 +4865,7 @@ function VoiceCapture({
         ? "Saved after your confirmation."
         : `${chosen.length} changes saved after your confirmation.`,
     )
+    clearDraft()
     onClose()
   }
 
@@ -4882,11 +4961,37 @@ function VoiceCapture({
                 </p>
               </div>
             </div>
+            {draft && (
+              <div className="draft-restore">
+                <p>
+                  <strong>Unsent request saved</strong>
+                  <small>{draft.length > 70 ? `${draft.slice(0, 70)}…` : draft}</small>
+                </p>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    openComposer(draft)
+                    clearDraft()
+                    setDraft("")
+                  }}
+                >
+                  Restore
+                </Button>
+                <IconButton
+                  label="Discard saved request"
+                  icon={X}
+                  onClick={() => {
+                    clearDraft()
+                    setDraft("")
+                  }}
+                />
+              </div>
+            )}
             <div className="assistant-actions">
               {quickActions.map(({ icon: Icon, title, hint, prompt }) => (
                 <button
                   type="button"
-                  onClick={() => runAssistant(prompt)}
+                  onClick={() => runAssistant(prompt, title)}
                   key={title}
                 >
                   <Icon size={20} />
@@ -4898,7 +5003,10 @@ function VoiceCapture({
               ))}
               <button
                 type="button"
-                onClick={() => openComposer("Journal: Today I feel ")}
+                onClick={() => {
+                  openComposer()
+                  setHint("Today I feel… (Studio can save it as a journal entry)")
+                }}
               >
                 <Heart size={20} />
                 <span>
@@ -5075,6 +5183,9 @@ function VoiceCapture({
                 runAssistant(text)
               }}
             >
+              {askedLabel && (
+                <p className="asked-label">You asked: {askedLabel}</p>
+              )}
               <label>
                 <span>
                   {heard
@@ -5086,16 +5197,21 @@ function VoiceCapture({
                   rows={4}
                   value={text}
                   onChange={(event) => setText(event.target.value)}
-                  placeholder="Help me plan today, move Friday’s admin, add a goal, or save an idea…"
+                  placeholder={
+                    hint ||
+                    (askedLabel
+                      ? "Ask something else, or tweak the request…"
+                      : "Help me plan today, move Friday’s admin, add a goal, or save an idea…")
+                  }
                 />
               </label>
               <Button
                 type="submit"
-                variant={proposal ? "secondary" : "primary"}
+                variant={proposal && !text.trim() ? "secondary" : "primary"}
                 disabled={!text.trim()}
                 icon={WandSparkles}
               >
-                {proposal ? "Ask again" : "Ask Studio"}
+                Ask Studio
               </Button>
             </form>
             {aiError && (
@@ -5103,7 +5219,7 @@ function VoiceCapture({
                 <Sparkles size={19} />
                 <p>
                   {aiError}{" "}
-                  {text.trim() && (
+                  {(text.trim() || lastRequest.current) && (
                     <button
                       type="button"
                       className="text-link"
@@ -5144,7 +5260,7 @@ function VoiceCapture({
                           isDate(action.date) && formatDate(action.date),
                           action.time,
                           action.amount != null && `£${action.amount}`,
-                          !isValidAction(action) && "Plan not found",
+                          !isValidAction(action) && "Already done or not found",
                         ]
                           .filter(Boolean)
                           .join(" · ")}
@@ -5213,6 +5329,15 @@ export default function App() {
   const [space, setSpace] = useState<SpaceKey | null>(null)
   const [capture, setCapture] = useState(false)
   const [addDate, setAddDate] = useState<string | null>(null)
+  const [activity, setActivity] = useState<{
+    id: string
+    mode: ActivityMode
+  } | null>(null)
+  const [roadmap, setRoadmap] = useState(false)
+  const [restartSetup, setRestartSetup] = useState(false)
+  const [editProfile, setEditProfile] = useState(false)
+  const openActivity = (id: string, mode: ActivityMode) =>
+    setActivity({ id, mode })
 
   useEffect(() => {
     const onPopState = () => setRoute(routeFromPath())
@@ -5324,6 +5449,9 @@ export default function App() {
             update={update}
             onAdd={() => setAddDate(today())}
             onOpenSpace={(key) => setSpace(key)}
+            onActivity={openActivity}
+            onRoadmap={() => setRoadmap(true)}
+            onSetupRestart={() => setRestartSetup(true)}
           />
         )}
         {route === "plan" && (
@@ -5331,6 +5459,7 @@ export default function App() {
             state={state}
             update={update}
             onAdd={(date) => setAddDate(date ?? today())}
+            onActivity={openActivity}
           />
         )}
         {route === "progress" && <ProgressView state={state} update={update} />}
@@ -5376,6 +5505,7 @@ export default function App() {
         <AddPlanModal
           date={addDate}
           goals={state.goals}
+          plan={state.plan}
           onClose={() => setAddDate(null)}
           onSave={(item) => {
             update(
@@ -5385,6 +5515,57 @@ export default function App() {
             setAddDate(null)
           }}
         />
+      )}
+      {activity && (
+        <ActivityFlow
+          key={`${activity.id}-${activity.mode}`}
+          itemId={activity.id}
+          mode={activity.mode}
+          state={state}
+          update={update}
+          onClose={() => setActivity(null)}
+          onOpenSpace={(key) => setSpace(key)}
+        />
+      )}
+      {roadmap && (
+        <Roadmap
+          state={state}
+          update={update}
+          onClose={() => setRoadmap(false)}
+          onSetupRestart={() => {
+            setRoadmap(false)
+            setRestartSetup(true)
+          }}
+          onEditProfile={() => {
+            setRoadmap(false)
+            setEditProfile(true)
+          }}
+        />
+      )}
+      {restartSetup && (
+        <RestartSetup
+          state={state}
+          update={update}
+          onClose={() => setRestartSetup(false)}
+        />
+      )}
+      {editProfile && (
+        <Modal
+          title="Your training answers"
+          eyebrow="They shape your gym session"
+          onClose={() => setEditProfile(false)}
+        >
+          <GymIntake
+            initial={state.trainingProfile}
+            onSave={(profile) => {
+              update(
+                (current) => ({ ...current, trainingProfile: profile }),
+                "Training answers saved.",
+              )
+              setEditProfile(false)
+            }}
+          />
+        </Modal>
       )}
       {capture && (
         <VoiceCapture

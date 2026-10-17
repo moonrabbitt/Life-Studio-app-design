@@ -45,6 +45,8 @@ const assistSchema = {
             "milestones",
             "exercises",
             "nextAction",
+            "effort",
+            "concern",
           ],
           properties: {
             type: {
@@ -58,6 +60,7 @@ const assistSchema = {
                 "add_goal",
                 "add_transaction",
                 "add_gym_session",
+                "log_activity",
               ],
             },
             summary: { type: "string" },
@@ -81,6 +84,11 @@ const assistSchema = {
             milestones: { type: ["array", "null"], items: { type: "string" } },
             exercises: { type: ["array", "null"], items: { type: "string" } },
             nextAction: nullable("string"),
+            effort: {
+              type: ["string", "null"],
+              enum: ["easy", "comfortable", "hard", "very-hard", null],
+            },
+            concern: nullable("boolean"),
           },
         },
       },
@@ -103,6 +111,13 @@ their plan items (with ids), and goals. Rules:
 - add_goal: title, area, scale, nextStep in nextAction, 0-4 milestone titles.
 - add_transaction: amount in pounds as a positive number for money spent, title, category, date.
 - add_gym_session: title, 3-5 gentle beginner-friendly exercise names, duration.
+- log_activity: the user says they DID something ("I walked 20 minutes, it felt easy"). Set planId to
+  the matching open item in context.plan (same day and kind, status planned or proposed) or null if none
+  fits. Never point at an item whose status is complete. Include title (what they actually did),
+  duration, effort (easy|comfortable|hard|very-hard) if stated, body = their note, and concern = true
+  only if they mention pain, injury or feeling unwell. Never invent numbers they did not say.
+- Plans with status "proposed" are suggestions the user has not accepted yet. Never pile missed or
+  skipped sessions onto other days.
 - "summary" is a one-line human description of the action shown to the user.
 - Set every field that does not apply to null.`
 

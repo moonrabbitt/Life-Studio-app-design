@@ -11,6 +11,7 @@ export type StudioAction = {
     | "add_goal"
     | "add_transaction"
     | "add_gym_session"
+    | "log_activity"
   summary: string
   title: string | null
   body: string | null
@@ -26,6 +27,8 @@ export type StudioAction = {
   milestones: string[] | null
   exercises: string[] | null
   nextAction: string | null
+  effort?: "easy" | "comfortable" | "hard" | "very-hard" | null
+  concern?: boolean | null
 }
 
 export type StudioProposal = { reply: string; actions: StudioAction[] }
@@ -92,7 +95,7 @@ function studioContext(state: AppState) {
     plan: state.plan
       .filter((item) => item.date >= start && item.date <= end)
       .slice(0, 60)
-      .map(({ id, title, date, time, duration, mode, status, area }) => ({
+      .map(({ id, title, date, time, duration, mode, status, area, kind }) => ({
         id,
         title,
         date,
@@ -101,6 +104,7 @@ function studioContext(state: AppState) {
         mode,
         status,
         area,
+        kind,
       })),
     goals: state.goals.map(({ id, title, area, status, date, dateLabel }) => ({
       id,
