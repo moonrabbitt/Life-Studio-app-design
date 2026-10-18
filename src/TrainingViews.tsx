@@ -9,6 +9,7 @@ import {
   Mic,
   MoveRight,
   PenLine,
+  Pencil,
   Pause,
   Play,
   Plus,
@@ -18,6 +19,7 @@ import {
   Sparkles,
   Square,
   TriangleAlert,
+  Trash2,
   Zap,
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
@@ -626,13 +628,38 @@ export function JourneyGoals({
 }: {
   state: AppState
   update: Update
-  onOpenGoal: (id: string) => void
+  onOpenGoal: (id: string, edit?: boolean) => void
   onNewGoal: () => void
 }) {
   const [eventsOpen, setEventsOpen] = useState(false)
   const [showReached, setShowReached] = useState(false)
+  const [showResting, setShowResting] = useState(false)
+  // Tidy up: a deliberate mode for editing, resting and deleting goals.
+  const [tidying, setTidying] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const setStatus = (id: string, status: AppState["goals"][number]["status"], message: string) =>
+    update((current) => ({ ...current, goals: current.goals.map((goal) => (goal.id === id ? { ...goal, status } : goal)) }), message)
+  const deleteGoal = (id: string) => {
+    update(
+      (current) => {
+        const goal = current.goals.find((item) => item.id === id)
+        const entries = new Set((goal?.milestones ?? []).map((milestone) => milestone.event?.planItemId).filter(Boolean))
+        return {
+          ...current,
+          goals: current.goals.filter((item) => item.id !== id),
+          plan: current.plan
+            .filter((item) => !entries.has(item.id))
+            .map((item) => (item.goalId === id ? { ...item, goalId: undefined, milestoneId: undefined } : item)),
+          projects: current.projects.map((project) => (project.goalId === id ? { ...project, goalId: undefined } : project)),
+        }
+      },
+      "Goal deleted.",
+    )
+    setConfirmDelete(null)
+  }
+  const resting = state.goals.filter((goal) => goal.status === "paused")
   const active = state.goals
-    .filter((goal) => goal.status !== "complete")
+    .filter((goal) => goal.status === "tending")
     .sort((a, b) => {
       const da = goalDate(a) ?? "9999"
       const db = goalDate(b) ?? "9999"
@@ -649,10 +676,31 @@ export function JourneyGoals({
     <section className="journey-block">
       <div className="journey-block__head">
         <h2>Heading towards</h2>
-        <button type="button" className="text-link" onClick={onNewGoal}>
-          <Plus size={14} /> New goal
-        </button>
+        {tidying ? (
+          <Button
+            variant="secondary"
+            icon={Check}
+            onClick={() => {
+              setTidying(false)
+              setConfirmDelete(null)
+            }}
+          >
+            Done
+          </Button>
+        ) : (
+          <div className="journey-block__head-actions">
+            <button type="button" className="text-link" onClick={onNewGoal}>
+              <Plus size={14} /> New goal
+            </button>
+            {(active.length > 0 || resting.length > 0) && (
+              <button type="button" className="text-link" onClick={() => setTidying(true)}>
+                <Pencil size={14} /> Tidy up
+              </button>
+            )}
+          </div>
+        )}
       </div>
+      {tidying && <p className="journey-tidy__hint">Edit, rest or delete goals. Resting keeps a goal out of sight without losing it.</p>}
       {active.length === 0 && loose.length === 0 && (
         <p className="capture-disclaimer">Nothing yet. Add a goal, or something with a date coming up.</p>
       )}
@@ -665,6 +713,44 @@ export function JourneyGoals({
           const next = goal.milestones.find((milestone) => !milestone.completedAt)
           return (
             <li key={goal.id}>
+              {tidying ? (
+                <div className="journey-row journey-row--tidy">
+                  <span className="journey-row__main">
+                    <strong>{goal.title}</strong>
+                    <small>
+                      {goal.scale === "big" ? "Bigger goal" : "Smaller goal"} · {goal.milestones.length} milestone{goal.milestones.length === 1 ? "" : "s"}
+                    </small>
+                  </span>
+                  {confirmDelete === goal.id ? (
+                    <div className="journey-tidy__confirm">
+                      <p>Delete for good, including its milestones?</p>
+                      <div className="inline-actions">
+                        <Button variant="danger" icon={Trash2} onClick={() => deleteGoal(goal.id)}>
+                          Delete for good
+                        </Button>
+                        <Button variant="secondary" onClick={() => { setStatus(goal.id, "paused", "Resting. It’s in your Resting list."); setConfirmDelete(null) }}>
+                          Rest it instead
+                        </Button>
+                        <Button variant="ghost" onClick={() => setConfirmDelete(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="journey-tidy__actions">
+                      <button type="button" className="text-link" onClick={() => onOpenGoal(goal.id, true)}>
+                        <Pencil size={14} /> Edit
+                      </button>
+                      <button type="button" className="text-link" onClick={() => setStatus(goal.id, "paused", "Resting. It’s in your Resting list.")}>
+                        Rest
+                      </button>
+                      <button type="button" className="text-link plan-edit__delete-link" onClick={() => setConfirmDelete(goal.id)}>
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
               <button type="button" className="journey-row" onClick={() => onOpenGoal(goal.id)}>
                 <span className="journey-row__main">
                   <strong>{goal.title}</strong>
@@ -683,6 +769,7 @@ export function JourneyGoals({
                   <ChevronRight size={18} className="journey-row__chevron" />
                 )}
               </button>
+              )}
             </li>
           )
         })}
@@ -711,7 +798,40 @@ export function JourneyGoals({
             <Sparkles size={14} /> {reached.length} reached
           </button>
         )}
+        {resting.length > 0 && (
+          <button type="button" className="text-link" onClick={() => setShowResting(!showResting)}>
+            {resting.length} resting
+          </button>
+        )}
       </div>
+      {showResting && (
+        <ul className="journey-resting">
+          {resting.map((goal) => (
+            <li key={goal.id}>
+              <span>
+                <strong>{goal.title}</strong>
+                <small>Resting · kept with its milestones</small>
+              </span>
+              <div className="inline-actions">
+                <button type="button" className="text-link" onClick={() => setStatus(goal.id, "tending", "Welcome back. It’s in Heading towards.")}>
+                  Wake up
+                </button>
+                {tidying && (
+                  confirmDelete === goal.id ? (
+                    <Button variant="danger" icon={Trash2} onClick={() => deleteGoal(goal.id)}>
+                      Delete for good
+                    </Button>
+                  ) : (
+                    <button type="button" className="text-link plan-edit__delete-link" onClick={() => setConfirmDelete(goal.id)}>
+                      <Trash2 size={14} /> Delete
+                    </button>
+                  )
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
       {showReached && (
         <div className="finished-shelf">
           <ul>

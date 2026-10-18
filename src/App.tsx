@@ -1017,6 +1017,7 @@ function ProgressView({
   const [editLogId, setEditLogId] = useState<string | null>(null)
   const [addingGoal, setAddingGoal] = useState(false)
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null)
+  const [editGoal, setEditGoal] = useState(false)
   const [celebration, setCelebration] = useState("")
   const completeItems = state.plan.filter((item) => item.status === "complete")
   const activeAreas = Array.from(
@@ -1094,7 +1095,10 @@ function ProgressView({
         <JourneyGoals
           state={state}
           update={update}
-          onOpenGoal={setSelectedGoalId}
+          onOpenGoal={(id, edit) => {
+            setEditGoal(!!edit)
+            setSelectedGoalId(id)
+          }}
           onNewGoal={() => setAddingGoal(true)}
         />
         <JourneyPhase state={state} onOpenPlan={onJourney} />
@@ -1120,10 +1124,15 @@ function ProgressView({
       )}
       {selectedGoal && (
         <GoalDetail
+          key={`${selectedGoal.id}-${editGoal}`}
           goal={selectedGoal}
           state={state}
           update={update}
-          onClose={() => setSelectedGoalId(null)}
+          startEditing={editGoal}
+          onClose={() => {
+            setSelectedGoalId(null)
+            setEditGoal(false)
+          }}
         />
       )}
       {addingGoal && (

@@ -8555,3 +8555,67 @@ label.proposal-action .planned-workout li {
 .journal-voice {
   margin-top: 1rem;
 }
+
+/* Tidy up mode */
+.journey-tidy__hint {
+  margin: 0;
+  border-radius: 0.9rem;
+  padding: 0.55rem 0.8rem;
+  background: var(--peach-soft);
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+
+.journey-row--tidy {
+  flex-wrap: wrap;
+  border-style: dashed;
+  cursor: default;
+}
+
+.journey-tidy__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.9rem;
+}
+
+.journey-tidy__confirm {
+  display: grid;
+  flex: 1 1 100%;
+  gap: 0.4rem;
+}
+
+.journey-tidy__confirm p {
+  margin: 0;
+  color: var(--terracotta);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.journey-resting {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.journey-resting li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  border: 1px dashed var(--line);
+  border-radius: 1rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--surface-soft);
+}
+
+.journey-resting li > span {
+  display: grid;
+}
+
+.journey-resting small {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}

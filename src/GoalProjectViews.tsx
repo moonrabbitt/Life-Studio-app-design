@@ -965,14 +965,16 @@ export function GoalDetail({
   state,
   update,
   onClose,
+  startEditing = false,
 }: {
   goal: Goal
   state: AppState
   update: Update
   onClose: () => void
+  startEditing?: boolean
 }) {
   const [celebration, setCelebration] = useState<CelebrationMessage | null>(null)
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState(startEditing)
   const big = goal.scale === "big"
   const steps: StepRow[] = goal.milestones.map((milestone) => ({
     id: milestone.id,
