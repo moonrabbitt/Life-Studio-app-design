@@ -467,6 +467,53 @@ export function RestartSetup({
 // Roadmap and "Why this plan?"
 // ---------------------------------------------------------------------------
 
+type JourneyEntry = { date: string; title: string; detail?: string; kind: string }
+
+const weeksUntil = (date: string) => {
+  const days = Math.round((new Date(`${date}T12:00:00`).getTime() - new Date(`${today()}T12:00:00`).getTime()) / 86400000)
+  if (days < 0) return "passed"
+  if (days < 14) return `${days} day${days === 1 ? "" : "s"} to go`
+  return `${Math.round(days / 7)} weeks to go`
+}
+
+// Everything that happened, in one story: milestones, reviews, finished projects, reflections…
+function journeyEntries(state: AppState): JourneyEntry[] {
+  const entries: JourneyEntry[] = []
+  for (const goal of state.goals) {
+    for (const milestone of goal.milestones)
+      if (milestone.completedAt)
+        entries.push({ date: milestone.completedAt.slice(0, 10), title: milestone.title, detail: goal.title, kind: "Milestone" })
+    if (goal.reachedAt) entries.push({ date: goal.reachedAt.slice(0, 10), title: `Reached: ${goal.title}`, kind: "Goal reached" })
+  }
+  for (const project of state.projects)
+    if (project.finishedAt)
+      entries.push({ date: project.finishedAt.slice(0, 10), title: `Finished: ${project.title}`, detail: project.madeNote, kind: "Project" })
+  for (const review of state.weeklyReviews ?? [])
+    entries.push({
+      date: review.date,
+      title: review.decision === "next-phase" ? "Review: ready for the next phase" : review.decision ? `Review: ${review.decision} the fortnight` : "Weekly review",
+      detail: [review.energy && `Energy ${review.energy}`, review.recovery && `Recovery ${review.recovery.replace("-", " ")}`, review.barriers].filter(Boolean).join(" · "),
+      kind: "Review",
+    })
+  for (const record of state.workoutHistory ?? [])
+    entries.push({
+      date: record.date,
+      title: record.title,
+      detail: record.exercises
+        .filter((exercise) => exercise.sets.some((set) => set.done))
+        .map((exercise) => exercise.name)
+        .join(", "),
+      kind: "Workout",
+    })
+  for (const item of state.plan)
+    if (item.log?.wasClass) entries.push({ date: item.date, title: item.log.summary, detail: item.log.note, kind: "Dance" })
+  for (const reflection of state.roadmap?.reflections ?? [])
+    entries.push({ date: reflection.date, title: reflection.text, detail: `Phase ${reflection.phase}`, kind: "Reflection" })
+  for (const change of state.roadmap?.phaseLog ?? [])
+    entries.push({ date: change.date, title: `Started phase ${change.phase}: ${PHASES.find((phase) => phase.id === change.phase)?.title ?? ""}`, kind: "Phase" })
+  return entries.sort((a, b) => b.date.localeCompare(a.date))
+}
+
 export function Roadmap({
   state,
   update,
@@ -480,8 +527,14 @@ export function Roadmap({
   onSetupRestart: () => void
   onEditProfile: () => void
 }) {
+  const [tab, setTab] = useState<"journey" | "phases" | "why">("journey")
+  const [reflection, setReflection] = useState("")
+  const [showAll, setShowAll] = useState(false)
   const phase = state.trainingPhase ?? 1
   const events = state.events ?? {}
+  const phaseDates = state.roadmap?.phaseDates ?? {}
+  const setRoadmap = (recipe: (roadmap: NonNullable<AppState["roadmap"]>) => NonNullable<AppState["roadmap"]>, message?: string) =>
+    update((current) => ({ ...current, roadmap: recipe(current.roadmap ?? {}) }), message)
   const setEvents = (patch: Partial<NonNullable<AppState["events"]>>, message: string) =>
     update((current) => {
       const next = { ...current.events, ...patch }
@@ -490,20 +543,13 @@ export function Roadmap({
         events: next,
         goals: current.goals.map((goal) =>
           goal.id === "goal-race"
-            ? {
-                ...goal,
-                dateLabel: next.hackneyBooked
-                  ? "Sun 16 May 2027 · entry booked"
-                  : HACKNEY_LABEL,
-              }
+            ? { ...goal, dateLabel: next.hackneyBooked ? "Sun 16 May 2027 · entry booked" : HACKNEY_LABEL }
             : goal.id === "goal-dance"
               ? {
                   ...goal,
-                  date: next.fairplayConfirmed ? "2027-08-01" : undefined,
+                  date: next.fairplayConfirmed ? "2027-08-01" : goal.date === "2027-08-01" ? undefined : goal.date,
                   dateLabel: next.fairplayConfirmed
-                    ? `1–8 Aug 2027, Kraków · dates confirmed by you · ${
-                        next.fairplayBooked ? "booked" : "not booked"
-                      }`
+                    ? `1–8 Aug 2027, Kraków · dates confirmed by you · ${next.fairplayBooked ? "booked" : "not booked"}`
                     : FAIRPLAY_REPORTED,
                 }
               : goal,
@@ -511,110 +557,276 @@ export function Roadmap({
       }
     }, message)
 
+  const ahead = state.goals
+    .filter((goal) => goal.status !== "complete" && goal.date && goal.date >= today())
+    .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
+  const undated = state.goals.filter((goal) => goal.status !== "complete" && goal.scale === "big" && !goal.date)
+  const story = journeyEntries(state)
+
   return (
-    <Modal title="Your roadmap" eyebrow="Running, gym and dance as one programme" onClose={onClose} wide>
+    <Modal title="Your journey" eyebrow="Goals, training and everything you’re building" onClose={onClose} wide>
       <div className="roadmap">
         <Art className="roadmap__art" src="/assets/movement-path.jpg" />
-        <ol className="roadmap__phases">
-          {PHASES.map((item) => (
-            <li
-              key={item.id}
-              className={item.id === phase ? "is-current" : item.id < phase ? "is-done" : ""}
-            >
-              <span>{item.id}</span>
-              <div>
-                <strong>
-                  {item.title}
-                  {item.id === phase ? " · now" : ""}
-                </strong>
-                <p>{item.body}</p>
-                <small>{item.ready}</small>
-              </div>
-            </li>
+        <div className="segmented roadmap__tabs" role="tablist">
+          {(
+            [
+              ["journey", "Journey"],
+              ["phases", "Phases"],
+              ["why", "Why this plan"],
+            ] as const
+          ).map(([key, label]) => (
+            <button type="button" role="tab" aria-selected={tab === key} className={tab === key ? "is-active" : ""} onClick={() => setTab(key)} key={key}>
+              {label}
+            </button>
           ))}
-        </ol>
-        <p className="capture-disclaimer">
-          Workload changes only when your logs (what you did, effort, pain,
-          fatigue and recovery) support it, never just because another week has
-          passed. Missed sessions are never piled onto the next week.
-        </p>
-        {!state.plan.some((item) => item.phase === "restart") && (
-          <Button variant="secondary" icon={CalendarCheck} onClick={onSetupRestart}>
-            Set up the starter fortnight
-          </Button>
+        </div>
+
+        {tab === "journey" && (
+          <>
+            <section className="roadmap__ahead">
+              <h3>Ahead</h3>
+              {ahead.length === 0 && <p className="capture-disclaimer">No dated goals yet. Add a date to any goal below.</p>}
+              <ul>
+                {ahead.map((goal) => {
+                  const done = goal.milestones.filter((milestone) => milestone.completedAt).length
+                  return (
+                    <li key={goal.id}>
+                      <div>
+                        <strong>{goal.title}</strong>
+                        <small>{goal.dateLabel ?? formatDate(goal.date!, { day: "numeric", month: "long", year: "numeric" })}</small>
+                        {goal.milestones.length > 0 && (
+                          <small>
+                            {done} of {goal.milestones.length} milestones · next: {goal.milestones.find((milestone) => !milestone.completedAt)?.title ?? "reach it"}
+                          </small>
+                        )}
+                      </div>
+                      <span className="roadmap__countdown">{weeksUntil(goal.date!)}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+              {undated.length > 0 && (
+                <div className="roadmap__undated">
+                  <p className="eyebrow">Bigger goals without a date</p>
+                  {undated.map((goal) => (
+                    <label key={goal.id}>
+                      <span>{goal.title}</span>
+                      <input
+                        type="date"
+                        min={today()}
+                        onChange={(event) =>
+                          event.target.value &&
+                          update(
+                            (current) => ({
+                              ...current,
+                              goals: current.goals.map((item) =>
+                                item.id === goal.id
+                                  ? {
+                                      ...item,
+                                      date: event.target.value,
+                                      dateLabel: formatDate(event.target.value, { weekday: "short", day: "numeric", month: "long", year: "numeric" }),
+                                    }
+                                  : item,
+                              ),
+                            }),
+                            "Date added to your journey.",
+                          )
+                        }
+                        aria-label={`Target date for ${goal.title}`}
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="roadmap__events">
+              <h3>Events</h3>
+              <article>
+                <strong>Hackney Half Marathon</strong>
+                <p>{events.hackneyBooked ? "Sun 16 May 2027 · entry booked" : HACKNEY_LABEL}</p>
+                <a href="https://www.hackneymoves.com/2027" target="_blank" rel="noreferrer">
+                  Official site <ExternalLink size={13} />
+                </a>
+                <label className="sync-replace">
+                  <input type="checkbox" checked={!!events.hackneyBooked} onChange={(event) => setEvents({ hackneyBooked: event.target.checked }, "Hackney Half updated.")} />
+                  <span>I have an entry</span>
+                </label>
+              </article>
+              <article>
+                <strong>FairPlay Dance Camp 2027</strong>
+                <p>
+                  {events.fairplayConfirmed
+                    ? "1–8 Aug 2027, Kraków · confirmed by you"
+                    : "Dates TBC. Reported as 1–8 Aug 2027 in Kraków, but not yet verified on the official site."}
+                </p>
+                <a href="https://fpdancecamp.com/en/" target="_blank" rel="noreferrer">
+                  Official site <ExternalLink size={13} />
+                </a>
+                <label className="sync-replace">
+                  <input
+                    type="checkbox"
+                    checked={!!events.fairplayConfirmed}
+                    onChange={(event) =>
+                      setEvents({ fairplayConfirmed: event.target.checked }, event.target.checked ? "Dance camp dates confirmed." : "Dance camp dates back to TBC.")
+                    }
+                  />
+                  <span>I’ve checked the official site and these dates are right</span>
+                </label>
+                {events.fairplayConfirmed && (
+                  <label className="sync-replace">
+                    <input type="checkbox" checked={!!events.fairplayBooked} onChange={(event) => setEvents({ fairplayBooked: event.target.checked }, "Dance camp updated.")} />
+                    <span>I have a ticket</span>
+                  </label>
+                )}
+              </article>
+            </section>
+
+            <form
+              className="roadmap__reflect"
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (!reflection.trim()) return
+                setRoadmap(
+                  (roadmap) => ({
+                    ...roadmap,
+                    reflections: [{ id: uid(), date: today(), text: reflection.trim(), phase }, ...(roadmap.reflections ?? [])],
+                  }),
+                  "Reflection added to your journey.",
+                )
+                setReflection("")
+              }}
+            >
+              <h3>Reflect on the journey</h3>
+              <textarea
+                rows={3}
+                value={reflection}
+                onChange={(event) => setReflection(event.target.value)}
+                placeholder="How is it going? What’s getting easier, what feels hard, what do you want to change?"
+              />
+              <DictateButton onText={(text) => setReflection((current) => (current ? `${current} ${text}` : text))} />
+              <Button type="submit" variant="secondary" icon={Plus} disabled={!reflection.trim()}>
+                Add to my journey
+              </Button>
+            </form>
+
+            <section className="roadmap__story">
+              <h3>Your story so far</h3>
+              {story.length === 0 ? (
+                <p className="capture-disclaimer">
+                  Milestones, workouts, reviews, finished projects and reflections will gather here as you go.
+                </p>
+              ) : (
+                <ol>
+                  {(showAll ? story : story.slice(0, 12)).map((entry, index) => (
+                    <li key={`${entry.date}-${index}`}>
+                      <span className="roadmap__story-date">{formatDate(entry.date, { day: "numeric", month: "short" })}</span>
+                      <div>
+                        <small className="roadmap__story-kind">{entry.kind}</small>
+                        <strong>{entry.title}</strong>
+                        {entry.detail && <small>{entry.detail}</small>}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {story.length > 12 && !showAll && (
+                <button type="button" className="text-link" onClick={() => setShowAll(true)}>
+                  Show all {story.length}
+                </button>
+              )}
+            </section>
+          </>
         )}
 
-        <section className="roadmap__events">
-          <h3>Events</h3>
-          <article>
-            <strong>Hackney Half Marathon</strong>
-            <p>{events.hackneyBooked ? "Sun 16 May 2027 · entry booked" : HACKNEY_LABEL}</p>
-            <a href="https://www.hackneymoves.com/2027" target="_blank" rel="noreferrer">
-              Official site <ExternalLink size={13} />
-            </a>
-            <label className="sync-replace">
-              <input
-                type="checkbox"
-                checked={!!events.hackneyBooked}
-                onChange={(event) =>
-                  setEvents({ hackneyBooked: event.target.checked }, "Hackney Half updated.")
-                }
-              />
-              <span>I have an entry</span>
-            </label>
-          </article>
-          <article>
-            <strong>FairPlay Dance Camp 2027</strong>
-            <p>
-              {events.fairplayConfirmed
-                ? `1–8 Aug 2027, Kraków · confirmed by you`
-                : "Dates TBC. Reported as 1–8 Aug 2027 in Kraków, but not yet verified on the official site."}
+        {tab === "phases" && (
+          <>
+            <p className="capture-disclaimer">
+              Running, gym and dance as one programme. Move to the next phase when your logs say you’re
+              ready, not because a week has passed. Missed sessions are never piled onto the next week.
             </p>
-            <a href="https://fpdancecamp.com/en/" target="_blank" rel="noreferrer">
-              Official site <ExternalLink size={13} />
-            </a>
-            <label className="sync-replace">
-              <input
-                type="checkbox"
-                checked={!!events.fairplayConfirmed}
-                onChange={(event) =>
-                  setEvents(
-                    { fairplayConfirmed: event.target.checked },
-                    event.target.checked ? "Dance camp dates confirmed." : "Dance camp dates back to TBC.",
-                  )
-                }
-              />
-              <span>I’ve checked the official site and these dates are right</span>
-            </label>
-            {events.fairplayConfirmed && (
-              <label className="sync-replace">
-                <input
-                  type="checkbox"
-                  checked={!!events.fairplayBooked}
-                  onChange={(event) =>
-                    setEvents({ fairplayBooked: event.target.checked }, "Dance camp updated.")
-                  }
-                />
-                <span>I have a ticket</span>
-              </label>
+            <ol className="roadmap__phases">
+              {PHASES.map((item) => (
+                <li key={item.id} className={item.id === phase ? "is-current" : item.id < phase ? "is-done" : ""}>
+                  <span>{item.id}</span>
+                  <div>
+                    <strong>
+                      {item.title}
+                      {item.id === phase ? " · now" : item.id < phase ? " · done" : ""}
+                    </strong>
+                    <p>{item.body}</p>
+                    <small>{item.ready}</small>
+                    <div className="roadmap__phase-tools">
+                      <label>
+                        <span>{item.id <= phase ? "Started" : "Aim to start by"} (optional)</span>
+                        <input
+                          type="date"
+                          value={phaseDates[String(item.id)] ?? ""}
+                          onChange={(event) =>
+                            setRoadmap((roadmap) => ({
+                              ...roadmap,
+                              phaseDates: { ...(roadmap.phaseDates ?? {}), [String(item.id)]: event.target.value },
+                            }))
+                          }
+                        />
+                      </label>
+                      {item.id !== phase && (
+                        <Button
+                          variant="ghost"
+                          onClick={() =>
+                            update(
+                              (current) => ({
+                                ...current,
+                                trainingPhase: item.id as AppState["trainingPhase"],
+                                roadmap: {
+                                  ...current.roadmap,
+                                  phaseLog: [...(current.roadmap?.phaseLog ?? []), { phase: item.id, date: today() }],
+                                },
+                              }),
+                              `${item.title} is now your current phase.`,
+                            )
+                          }
+                        >
+                          Make this my current phase
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            {!state.plan.some((item) => item.phase === "restart") && (
+              <Button variant="secondary" icon={CalendarCheck} onClick={onSetupRestart}>
+                Set up the starter fortnight
+              </Button>
             )}
-          </article>
-        </section>
+            <section className="roadmap__profile">
+              <h3>Your training answers</h3>
+              <p>
+                {state.trainingProfile
+                  ? `Saved ${formatDate(state.trainingProfile.completedAt.slice(0, 10))}. They shape your gym session.`
+                  : "Not answered yet. You’ll be asked before your first gym session."}
+              </p>
+              <Button variant="secondary" onClick={onEditProfile}>
+                {state.trainingProfile ? "Edit answers" : "Answer now"}
+              </Button>
+            </section>
+          </>
+        )}
 
-        <section className="roadmap__why">
-          <h3>Why this plan?</h3>
-          <ul>
-            {WHY_THIS_PLAN.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-          <p className="capture-disclaimer">
-            Thirty minutes of running isn’t necessarily 5 km. No calorie targets
-            or weigh-ins. This is general guidance; pain or injury should be
-            assessed by a qualified professional.
-          </p>
-          <details>
-            <summary>Sources</summary>
+        {tab === "why" && (
+          <section className="roadmap__why">
+            <h3>Why this plan?</h3>
+            <ul>
+              {WHY_THIS_PLAN.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            <p className="capture-disclaimer">
+              Thirty minutes of running isn’t necessarily 5 km. No calorie targets or weigh-ins. This is
+              general guidance; pain or injury should be assessed by a qualified professional.
+            </p>
+            <p className="eyebrow">Sources</p>
             <ul className="roadmap__sources">
               {SOURCES.map((source) => (
                 <li key={source.url}>
@@ -624,20 +836,8 @@ export function Roadmap({
                 </li>
               ))}
             </ul>
-          </details>
-        </section>
-
-        <section className="roadmap__profile">
-          <h3>Your training answers</h3>
-          <p>
-            {state.trainingProfile
-              ? `Saved ${formatDate(state.trainingProfile.completedAt.slice(0, 10))}. They shape your gym session.`
-              : "Not answered yet. You’ll be asked before your first gym session."}
-          </p>
-          <Button variant="secondary" onClick={onEditProfile}>
-            {state.trainingProfile ? "Edit answers" : "Answer now"}
-          </Button>
-        </section>
+          </section>
+        )}
       </div>
     </Modal>
   )

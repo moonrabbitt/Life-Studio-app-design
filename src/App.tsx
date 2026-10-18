@@ -64,11 +64,13 @@ import { getVoiceNote, saveVoiceNote as storeVoiceNote } from "./audioStore"
 import { listen, speechSupported } from "./speech"
 import { downloadVoice, getPasscode } from "./sync"
 import { areaMeta, demoState } from "./data"
+import { createSeries, REPEAT_LABELS } from "./series"
 import { checkPlacement } from "./training"
 import type {
   ActivityKind,
   AppState,
   PlannedExercise,
+  RepeatFrequency,
   Area,
   CheckIn,
   Goal,
@@ -98,6 +100,8 @@ import {
   ProjectsSpace,
   type CelebrationMessage,
 } from "./GoalProjectViews"
+import { HomeSpace } from "./HomeViews"
+import { PeopleSpace } from "./PeopleViews"
 import { PlanItemSheet } from "./PlanItemSheet"
 import { Art, Button, formatDate, IconButton, Modal, today, uid } from "./ui"
 import { useLifeStudioState, type SyncStatus } from "./useLifeStudioState"
@@ -746,6 +750,7 @@ function PlanView({
                     <span>
                       {item.duration ? `${item.duration} min` : item.mode}
                     </span>
+                    {item.seriesId && <small className="repeat-badge">↻ Repeats</small>}
                   </div>
                   <div className="agenda-item__content">
                     <div className="today-item__marks">
@@ -895,9 +900,11 @@ function PlanView({
 function ProgressView({
   state,
   update,
+  onJourney,
 }: {
   state: AppState
   update: (recipe: (current: AppState) => AppState, message?: string) => void
+  onJourney: () => void
 }) {
   const [reviewing, setReviewing] = useState(false)
   const [addingGoal, setAddingGoal] = useState(false)
@@ -975,9 +982,14 @@ function ProgressView({
             No life score. Just goals, moments, and what you want to tend next.
           </p>
         </div>
-        <Button icon={PenLine} onClick={() => setReviewing(true)}>
-          Weekly reflection
-        </Button>
+        <div className="inline-actions">
+          <Button icon={Sparkles} onClick={onJourney}>
+            Your journey
+          </Button>
+          <Button variant="secondary" icon={PenLine} onClick={() => setReviewing(true)}>
+            Weekly reflection
+          </Button>
+        </div>
       </header>
 
       <section className="moments-banner">
@@ -1269,6 +1281,15 @@ function NewGoalModal({
             area: String(data.get("area")) as Area,
             scale,
             status: "tending",
+            date: String(data.get("date") || "") || undefined,
+            dateLabel: String(data.get("date") || "")
+              ? formatDate(String(data.get("date")), {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })
+              : undefined,
             nextStep:
               String(data.get("nextStep")) ||
               "Choose the smallest meaningful first step",
@@ -1333,6 +1354,10 @@ function NewGoalModal({
               </option>
             ))}
           </select>
+        </label>
+        <label>
+          <span>Target date, optional</span>
+          <input name="date" type="date" min={today()} />
         </label>
         <label>
           <span>First gentle step, optional</span>
@@ -2016,96 +2041,6 @@ function BreatheSpace({ state, update, close }: SpaceProps) {
   )
 }
 
-function PeopleSpace({ state, update, close }: SpaceProps) {
-  const [name, setName] = useState("")
-  return (
-    <Modal title="People" eyebrow="Connect" onClose={close} wide>
-      <Art className="space-banner" src="/assets/friends-cafe.jpg" />
-      <div className="people-intro">
-        <div>
-          <h3>Connection without obligation.</h3>
-          <p>
-            Private notes and gentle intentions. No overdue friends, no
-            relationship score.
-          </p>
-        </div>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (!name.trim()) return
-            update(
-              (current) => ({
-                ...current,
-                people: [
-                  {
-                    id: uid(),
-                    name,
-                    note: "",
-                    nextTouch: "When it feels right",
-                  },
-                  ...current.people,
-                ],
-              }),
-              `${name} added privately.`,
-            )
-            setName("")
-          }}
-        >
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Add someone"
-          />
-          <Button type="submit" icon={Plus}>
-            Add
-          </Button>
-        </form>
-      </div>
-      <div className="people-grid">
-        {state.people.map((person) => (
-          <article className="person-card" key={person.id}>
-            <div className="person-card__avatar">{person.name.slice(0, 1)}</div>
-            <div>
-              <h3>{person.name}</h3>
-              <p>
-                {person.note ||
-                  "A private space for what you want to remember."}
-              </p>
-              <span>{person.nextTouch}</span>
-            </div>
-            <Button
-              variant="secondary"
-              icon={MessageCircle}
-              onClick={() =>
-                update(
-                  (current) => ({
-                    ...current,
-                    plan: [
-                      ...current.plan,
-                      {
-                        id: uid(),
-                        title: `Reach out to ${person.name}`,
-                        area: "connect",
-                        date: today(),
-                        mode: "maybe",
-                        status: "planned",
-                        duration: 10,
-                      },
-                    ],
-                  }),
-                  "A gentle connection intention is on Today.",
-                )
-              }
-            >
-              Plan a hello
-            </Button>
-          </article>
-        ))}
-      </div>
-    </Modal>
-  )
-}
-
 function MoneySpace({ state, update, close }: SpaceProps) {
   const lessons = [
     {
@@ -2494,142 +2429,6 @@ function MoneySpace({ state, update, close }: SpaceProps) {
           ))}
         </div>
       </section>
-    </Modal>
-  )
-}
-
-function HomeSpace({ state, update, close }: SpaceProps) {
-  return (
-    <Modal
-      title="Home & routine"
-      eyebrow="Tend to ordinary life"
-      onClose={close}
-      wide
-    >
-      <div className="home-banner">
-        <div>
-          <h3>Practical care, without a perfect routine.</h3>
-          <p>Complete, skip, or return later. There are no streaks here.</p>
-        </div>
-        <Button
-          icon={Plus}
-          onClick={() =>
-            update(
-              (current) => ({
-                ...current,
-                routines: [
-                  ...current.routines,
-                  {
-                    id: uid(),
-                    title: "A new gentle routine",
-                    cadence: "When it helps",
-                    completedDates: [],
-                  },
-                ],
-              }),
-              "A new editable routine is ready.",
-            )
-          }
-        >
-          Add routine
-        </Button>
-      </div>
-      <div className="routine-list">
-        {state.routines.map((routine) => {
-          const done = routine.completedDates.includes(today())
-          return (
-            <article className={done ? "is-complete" : ""} key={routine.id}>
-              <button
-                type="button"
-                className="routine-check"
-                aria-label={done ? "Mark not complete" : "Mark complete"}
-                aria-pressed={done}
-                onClick={() =>
-                  update(
-                    (current) => ({
-                      ...current,
-                      routines: current.routines.map((item) =>
-                        item.id === routine.id
-                          ? {
-                              ...item,
-                              completedDates: done
-                                ? item.completedDates.filter(
-                                    (date) => date !== today(),
-                                  )
-                                : [...item.completedDates, today()],
-                            }
-                          : item,
-                      ),
-                    }),
-                    done ? "Opened again." : "Tended to, for today.",
-                  )
-                }
-              >
-                {done && <Check size={18} />}
-              </button>
-              <div>
-                <h3>{routine.title}</h3>
-                <p>{routine.cadence}</p>
-              </div>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  const title = window.prompt(
-                    "Rename this routine",
-                    routine.title,
-                  )
-                  if (!title?.trim()) return
-                  update(
-                    (current) => ({
-                      ...current,
-                      routines: current.routines.map((item) =>
-                        item.id === routine.id
-                          ? { ...item, title: title.trim() }
-                          : item,
-                      ),
-                    }),
-                    "Routine updated.",
-                  )
-                }}
-              >
-                Edit
-              </Button>
-            </article>
-          )
-        })}
-      </div>
-      <div className="ten-minute-card">
-        <Clock3 size={24} />
-        <div>
-          <h3>Need a ten-minute reset?</h3>
-          <p>Clear one surface, collect what belongs elsewhere, then stop.</p>
-        </div>
-        <Button
-          variant="secondary"
-          onClick={() =>
-            update(
-              (current) => ({
-                ...current,
-                plan: [
-                  ...current.plan,
-                  {
-                    id: uid(),
-                    title: "Ten-minute home reset",
-                    area: "home",
-                    date: today(),
-                    mode: "maybe",
-                    duration: 10,
-                    status: "planned",
-                  },
-                ],
-              }),
-              "A ten-minute reset is on Today.",
-            )
-          }
-        >
-          Add to Today
-        </Button>
-      </div>
     </Modal>
   )
 }
@@ -3667,13 +3466,14 @@ function AddPlanModal({
   goals: Goal[]
   plan: PlanItem[]
   onClose: () => void
-  onSave: (item: PlanItem) => void
+  onSave: (item: PlanItem, repeat?: { frequency: RepeatFrequency; until?: string }) => void
 }) {
   const [draft, setDraft] = useState<{
     date: string
     time?: string
     duration?: number
     kind?: ActivityKind
+    repeat?: RepeatFrequency
   }>({ date })
   const preview = checkPlacement(
     plan,
@@ -3708,6 +3508,9 @@ function AddPlanModal({
             kind: (String(data.get("kind")) || undefined) as
               | ActivityKind
               | undefined,
+            repeat: (String(data.get("repeat") || "") || undefined) as
+              | RepeatFrequency
+              | undefined,
           })
         }}
         onSubmit={(event) => {
@@ -3737,7 +3540,12 @@ function AddPlanModal({
               title,
               complete: false,
             })),
-          })
+          }, String(data.get("repeat") || "")
+            ? {
+                frequency: String(data.get("repeat")) as RepeatFrequency,
+                until: String(data.get("until") || "") || undefined,
+              }
+            : undefined)
         }}
       >
         <label>
@@ -3783,6 +3591,25 @@ function AddPlanModal({
               placeholder="25"
             />
           </label>
+        </div>
+        <div className="form-row">
+          <label>
+            <span>Repeats</span>
+            <select name="repeat" defaultValue="">
+              <option value="">Doesn’t repeat</option>
+              {(Object.keys(REPEAT_LABELS) as RepeatFrequency[]).map((key) => (
+                <option value={key} key={key}>
+                  {REPEAT_LABELS[key]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {draft.repeat && (
+            <label>
+              <span>Until (optional)</span>
+              <input name="until" type="date" min={draft.date} />
+            </label>
+          )}
         </div>
         <label>
           <span>Movement session, optional</span>
@@ -5274,7 +5101,7 @@ export default function App() {
             onOpenItem={setOpenItemId}
           />
         )}
-        {route === "progress" && <ProgressView state={state} update={update} />}
+        {route === "progress" && <ProgressView state={state} update={update} onJourney={() => setRoadmap(true)} />}
         {route === "space" && (
           <MySpaceView state={state} openSpace={(key) => setSpace(key)} />
         )}
@@ -5319,11 +5146,19 @@ export default function App() {
           goals={state.goals}
           plan={state.plan}
           onClose={() => setAddDate(null)}
-          onSave={(item) => {
-            update(
-              (current) => ({ ...current, plan: [...current.plan, item] }),
-              "Added to your plan.",
-            )
+          onSave={(item, repeat) => {
+            if (repeat) {
+              const { id: _id, date, status: _status, ...template } = item
+              update(
+                (current) =>
+                  createSeries(current, template, repeat.frequency, date, repeat.until).state,
+                `Added, repeating ${REPEAT_LABELS[repeat.frequency].toLowerCase()}.`,
+              )
+            } else
+              update(
+                (current) => ({ ...current, plan: [...current.plan, item] }),
+                "Added to your plan.",
+              )
             setAddDate(null)
           }}
         />
@@ -5433,6 +5268,10 @@ export default function App() {
           state={state}
           update={update}
           close={() => setSpace(null)}
+          onGoPlan={(date) => {
+            setPlanFocus(date)
+            navigate("plan")
+          }}
         />
       )}
       {space === "move" && (

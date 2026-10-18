@@ -6,6 +6,7 @@ import {
   Check,
   ChevronRight,
   Music2,
+  Pencil,
   Plus,
   RotateCcw,
   Sparkles,
@@ -840,6 +841,110 @@ export function ProjectsSpace({ state, update, close }: { state: AppState; updat
 // Goals
 // ---------------------------------------------------------------------------
 
+const AREAS: [Goal["area"], string][] = [
+  ["move", "Move"],
+  ["create", "Create"],
+  ["connect", "Connect"],
+  ["reflect", "Reflect"],
+  ["money", "Money"],
+  ["home", "Home"],
+]
+
+function GoalEditForm({ goal, onSave, onCancel, onDelete }: {
+  goal: Goal
+  onSave: (changes: Partial<Goal>) => void
+  onCancel: () => void
+  onDelete: () => void
+}) {
+  const [title, setTitle] = useState(goal.title)
+  const [area, setArea] = useState(goal.area)
+  const [scale, setScale] = useState(goal.scale)
+  const [date, setDate] = useState(goal.date ?? "")
+  const [nextStep, setNextStep] = useState(goal.nextStep)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  return (
+    <form
+      className="plan-edit"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!title.trim()) return
+        const dateChanged = (goal.date ?? "") !== date
+        onSave({
+          title: title.trim(),
+          area,
+          scale,
+          nextStep: nextStep.trim() || goal.nextStep,
+          date: date || undefined,
+          dateLabel: !dateChanged
+            ? goal.dateLabel
+            : date
+              ? formatDate(date, { weekday: "short", day: "numeric", month: "long", year: "numeric" })
+              : undefined,
+        })
+      }}
+    >
+      <label>
+        <span>Goal</span>
+        <input value={title} onChange={(event) => setTitle(event.target.value)} required />
+      </label>
+      <fieldset className="chip-group">
+        <legend>Size</legend>
+        <div>
+          <button type="button" className={scale === "small" ? "is-selected" : ""} aria-pressed={scale === "small"} onClick={() => setScale("small")}>
+            Smaller · days or weeks
+          </button>
+          <button type="button" className={scale === "big" ? "is-selected" : ""} aria-pressed={scale === "big"} onClick={() => setScale("big")}>
+            Bigger · months
+          </button>
+        </div>
+      </fieldset>
+      <div className="plan-edit__row">
+        <label>
+          <span>Part of life</span>
+          <select value={area} onChange={(event) => setArea(event.target.value as Goal["area"])}>
+            {AREAS.map(([key, label]) => (
+              <option value={key} key={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Target date (optional)</span>
+          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        </label>
+      </div>
+      <label>
+        <span>Next gentle step</span>
+        <input value={nextStep} onChange={(event) => setNextStep(event.target.value)} />
+      </label>
+      <div className="inline-actions">
+        <Button type="submit" icon={Check}>
+          Save goal
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+      {confirmDelete ? (
+        <div className="plan-edit__delete">
+          <p>Delete “{goal.title}”? Plans and projects linked to it stay, just unlinked.</p>
+          <Button variant="danger" icon={Trash2} onClick={onDelete}>
+            Delete goal
+          </Button>
+          <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
+            Keep it
+          </Button>
+        </div>
+      ) : (
+        <button type="button" className="text-link plan-edit__delete-link" onClick={() => setConfirmDelete(true)}>
+          <Trash2 size={15} /> Delete goal
+        </button>
+      )}
+    </form>
+  )
+}
+
 export function GoalDetail({
   goal,
   state,
@@ -852,6 +957,7 @@ export function GoalDetail({
   onClose: () => void
 }) {
   const [celebration, setCelebration] = useState<CelebrationMessage | null>(null)
+  const [editing, setEditing] = useState(false)
   const big = goal.scale === "big"
   const steps: StepRow[] = goal.milestones.map((milestone) => ({
     id: milestone.id,
@@ -879,7 +985,44 @@ export function GoalDetail({
 
   return (
     <Modal title={goal.title} eyebrow={big ? "Bigger goal · months" : "Smaller goal · days or weeks"} onClose={onClose} wide>
+      {editing ? (
+        <GoalEditForm
+          goal={goal}
+          onCancel={() => setEditing(false)}
+          onSave={(changes) => {
+            update(
+              (current) => ({
+                ...current,
+                goals: current.goals.map((item) => (item.id === goal.id ? { ...item, ...changes } : item)),
+              }),
+              "Goal saved.",
+            )
+            setEditing(false)
+          }}
+          onDelete={() => {
+            update(
+              (current) => ({
+                ...current,
+                goals: current.goals.filter((item) => item.id !== goal.id),
+                plan: current.plan.map((item) =>
+                  item.goalId === goal.id ? { ...item, goalId: undefined, milestoneId: undefined } : item,
+                ),
+                projects: current.projects.map((project) =>
+                  project.goalId === goal.id ? { ...project, goalId: undefined } : project,
+                ),
+              }),
+              "Goal deleted.",
+            )
+            onClose()
+          }}
+        />
+      ) : (
       <div className="goal-detail">
+        <div className="goal-detail__toolbar">
+          <button type="button" className="text-link" onClick={() => setEditing(true)}>
+            <Pencil size={14} /> Edit goal
+          </button>
+        </div>
         <p className="goal-detail__purpose">
           {big
             ? "A bigger goal is a change you grow into over months. Milestones mark the way, and every session you log towards it counts."
@@ -995,7 +1138,9 @@ export function GoalDetail({
                   update(
                     (current) => ({
                       ...current,
-                      goals: current.goals.map((item) => (item.id === goal.id ? { ...item, status: "tending" } : item)),
+                      goals: current.goals.map((item) =>
+                        item.id === goal.id ? { ...item, status: "tending", reachedAt: undefined } : item,
+                      ),
                     }),
                     "Goal reopened.",
                   )
@@ -1011,7 +1156,9 @@ export function GoalDetail({
               onClick={() => {
                 update((current) => ({
                   ...current,
-                  goals: current.goals.map((item) => (item.id === goal.id ? { ...item, status: "complete" } : item)),
+                  goals: current.goals.map((item) =>
+                    item.id === goal.id ? { ...item, status: "complete", reachedAt: new Date().toISOString() } : item,
+                  ),
                 }))
                 setCelebration({ title: `${goal.title}: reached`, body: "It’s part of your story now, on your Reached shelf.", big: true })
               }}
@@ -1021,6 +1168,7 @@ export function GoalDetail({
           )}
         </div>
       </div>
+      )}
       {celebration && <Celebration message={celebration} onDone={() => setCelebration(null)} />}
     </Modal>
   )

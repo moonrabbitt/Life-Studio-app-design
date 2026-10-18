@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { getVoiceNote } from "./audioStore"
 import { demoState, emptyState } from "./data"
 import { reconcileProjects, tidyProjects } from "./projects"
+import { extendSeries } from "./series"
 import {
   getPasscode,
   pullState,
@@ -20,7 +21,7 @@ export type SyncStatus = "off" | "syncing" | "synced" | "offline" | "locked" | "
 
 function normalise(value: Partial<AppState> | null | undefined): AppState | null {
   if (!value || value.version !== 1 || !Array.isArray(value.plan)) return null
-  return tidyProjects({ ...demoState, ...value } as AppState)
+  return extendSeries(tidyProjects({ ...demoState, ...value } as AppState))
 }
 
 function loadState(): AppState {

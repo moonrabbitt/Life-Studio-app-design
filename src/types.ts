@@ -41,6 +41,26 @@ export type ActivityLog = {
   workoutId?: string
 }
 
+export type RepeatFrequency = "daily" | "weekdays" | "weekly" | "fortnightly" | "monthly"
+
+// A repeating plan: occurrences are real plan items generated a few weeks ahead.
+export type Series = {
+  id: string
+  template: Omit<PlanItem, "id" | "date" | "status" | "log" | "seriesId">
+  frequency: RepeatFrequency
+  start: string
+  until?: string
+  exceptions: string[]
+  routineId?: string
+}
+
+export type RoadmapReflection = {
+  id: string
+  date: string
+  text: string
+  phase: number
+}
+
 export type PlanStep = {
   id: string
   title: string
@@ -71,6 +91,7 @@ export type PlanItem = {
   stepId?: string
   milestoneId?: string
   personId?: string
+  seriesId?: string
   log?: ActivityLog
 }
 
@@ -124,6 +145,7 @@ export type Routine = {
   title: string
   cadence: string
   completedDates: string[]
+  seriesId?: string
 }
 
 export type Goal = {
@@ -134,6 +156,7 @@ export type Goal = {
   date?: string
   dateLabel?: string
   status: "tending" | "paused" | "complete"
+  reachedAt?: string
   nextStep: string
   milestones: {
     id: string
@@ -255,4 +278,10 @@ export type AppState = {
   restartOffer?: "dismissed" | "added"
   trainingPhase?: 1 | 2 | 3 | 4 | 5
   events?: { fairplayConfirmed?: boolean; hackneyBooked?: boolean; fairplayBooked?: boolean }
+  series?: Series[]
+  roadmap?: {
+    phaseDates?: Record<string, string>
+    reflections?: RoadmapReflection[]
+    phaseLog?: { phase: number; date: string }[]
+  }
 }

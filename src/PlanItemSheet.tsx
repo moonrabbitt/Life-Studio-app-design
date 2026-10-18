@@ -15,6 +15,14 @@ import { useState, type ReactNode } from "react"
 import { areaMeta } from "./data"
 import { celebrateDone } from "./GoalProjectViews"
 import { projectSteps } from "./projects"
+import {
+  createSeries,
+  editFuture,
+  endSeriesBefore,
+  REPEAT_LABELS,
+  seriesOf,
+  skipOccurrence,
+} from "./series"
 import { checkPlacement } from "./training"
 import {
   ActivityButtons,
@@ -24,7 +32,7 @@ import {
   StatusBadge,
   type ActivityMode,
 } from "./TrainingViews"
-import type { ActivityKind, AppState, Area, PlanItem } from "./types"
+import type { ActivityKind, AppState, Area, PlanItem, RepeatFrequency, Series } from "./types"
 import { Button, formatDate, Modal, today, uid } from "./ui"
 
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
@@ -40,13 +48,19 @@ const PURPOSE: Record<Area, string> = {
 
 const EXERCISE: ActivityKind[] = ["gym", "walk", "run", "dance"]
 
-function EditForm({ item, plan, onSave, onCancel, onDelete }: {
+type SaveOptions = { scope: "this" | "future"; repeat: RepeatFrequency | ""; until?: string }
+
+function EditForm({ item, plan, series, onSave, onCancel, onDelete }: {
   item: PlanItem
   plan: PlanItem[]
-  onSave: (patch: Partial<PlanItem>) => void
+  series?: Series
+  onSave: (patch: Partial<PlanItem>, options: SaveOptions) => void
   onCancel: () => void
-  onDelete: () => void
+  onDelete: (scope: "this" | "future") => void
 }) {
+  const [repeat, setRepeat] = useState<RepeatFrequency | "">(series?.frequency ?? "")
+  const [until, setUntil] = useState(series?.until ?? "")
+  const [scope, setScope] = useState<"this" | "future">("this")
   const [title, setTitle] = useState(item.title)
   const [date, setDate] = useState(item.date)
   const [time, setTime] = useState(item.time ?? "")
@@ -70,7 +84,7 @@ function EditForm({ item, plan, onSave, onCancel, onDelete }: {
           mode,
           area,
           note: note.trim() || undefined,
-        })
+        }, { scope, repeat, until: until || undefined })
       }}
     >
       <label>
@@ -117,6 +131,44 @@ function EditForm({ item, plan, onSave, onCancel, onDelete }: {
         <span>Notes</span>
         <textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} />
       </label>
+      <div className="plan-edit__row">
+        <label>
+          <span>Repeats</span>
+          <select
+            value={repeat}
+            onChange={(event) => {
+              setRepeat(event.target.value as RepeatFrequency | "")
+              if (series) setScope("future")
+            }}
+          >
+            <option value="">Doesn’t repeat</option>
+            {(Object.keys(REPEAT_LABELS) as RepeatFrequency[]).map((key) => (
+              <option value={key} key={key}>
+                {REPEAT_LABELS[key]}
+              </option>
+            ))}
+          </select>
+        </label>
+        {repeat && (
+          <label>
+            <span>Until (optional)</span>
+            <input type="date" min={date} value={until} onChange={(event) => setUntil(event.target.value)} />
+          </label>
+        )}
+      </div>
+      {series && (
+        <fieldset className="chip-group">
+          <legend>Apply changes to</legend>
+          <div>
+            <button type="button" className={scope === "this" ? "is-selected" : ""} aria-pressed={scope === "this"} onClick={() => setScope("this")}>
+              Only this one
+            </button>
+            <button type="button" className={scope === "future" ? "is-selected" : ""} aria-pressed={scope === "future"} onClick={() => setScope("future")}>
+              This and future
+            </button>
+          </div>
+        </fieldset>
+      )}
       {(preview.conflicts.length > 0 || preview.warnings.length > 0) && (
         <div className="move-sheet__preview">
           {preview.conflicts.map((other) => (
@@ -142,9 +194,20 @@ function EditForm({ item, plan, onSave, onCancel, onDelete }: {
       {confirmDelete ? (
         <div className="plan-edit__delete">
           <p>Delete “{item.title}” from your plan?</p>
-          <Button variant="danger" icon={Trash2} onClick={onDelete}>
-            Delete
-          </Button>
+          {series ? (
+            <>
+              <Button variant="danger" icon={Trash2} onClick={() => onDelete("this")}>
+                Only this one
+              </Button>
+              <Button variant="danger" icon={Trash2} onClick={() => onDelete("future")}>
+                This and all future
+              </Button>
+            </>
+          ) : (
+            <Button variant="danger" icon={Trash2} onClick={() => onDelete("this")}>
+              Delete
+            </Button>
+          )}
           <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
             Keep it
           </Button>
@@ -181,6 +244,7 @@ export function PlanItemSheet({
   if (!item) return null
 
   const open = item.status === "planned" || item.status === "proposed"
+  const series = seriesOf(state, item)
   const goal = state.goals.find((candidate) => candidate.id === item.goalId)
   const project = state.projects.find((candidate) => candidate.id === item.projectId)
   const person = state.people.find((candidate) => candidate.id === item.personId)
@@ -426,15 +490,59 @@ export function PlanItemSheet({
         <EditForm
           item={item}
           plan={state.plan}
+          series={series}
           onCancel={() => setEditing(false)}
-          onSave={(changes) => {
+          onSave={(changes, options) => {
+            const repeatChanged =
+              options.repeat !== (series?.frequency ?? "") || (options.until ?? "") !== (series?.until ?? "")
+            const template = (from: PlanItem) => {
+              const { id: _id, date: _date, status: _status, log: _log, seriesId: _seriesId, ...rest } = { ...from, ...changes }
+              return rest
+            }
+            const start = changes.date ?? item.date
+            if (!series && options.repeat) {
+              // Turn a one-off into a repeating plan starting from this one.
+              update(
+                (current) =>
+                  createSeries(
+                    { ...current, plan: current.plan.filter((candidate) => candidate.id !== item.id) },
+                    template(item),
+                    options.repeat as RepeatFrequency,
+                    start,
+                    options.until,
+                  ).state,
+                `Now repeats ${REPEAT_LABELS[options.repeat].toLowerCase()}.`,
+              )
+              onClose()
+              return
+            }
+            if (series && options.scope === "future") {
+              if (repeatChanged) {
+                update((current) => {
+                  const ended = endSeriesBefore(current, series.id, item.date)
+                  if (!options.repeat)
+                    return { ...ended, plan: [...ended.plan, { ...item, ...changes, seriesId: undefined, date: start }] }
+                  return createSeries(ended, template(item), options.repeat, start, options.until, { routineId: series.routineId }).state
+                }, options.repeat ? "Repeat updated from this one on." : "No longer repeats after this.")
+                onClose()
+                return
+              }
+              update((current) => editFuture(current, item, changes), "Updated this and future ones.")
+              setEditing(false)
+              return
+            }
             patch(changes, "Changes saved.")
             setEditing(false)
           }}
-          onDelete={() => {
+          onDelete={(scope) => {
             update(
-              (current) => ({ ...current, plan: current.plan.filter((candidate) => candidate.id !== item.id) }),
-              "Removed from your plan.",
+              (current) =>
+                series
+                  ? scope === "future"
+                    ? endSeriesBefore(current, series.id, item.date)
+                    : skipOccurrence(current, item)
+                  : { ...current, plan: current.plan.filter((candidate) => candidate.id !== item.id) },
+              scope === "future" ? "Removed this and future ones." : "Removed from your plan.",
             )
             onClose()
           }}
@@ -444,6 +552,7 @@ export function PlanItemSheet({
           <div className="plan-sheet__meta">
             <StatusBadge item={item} />
             {item.duration && <span>{item.duration} min</span>}
+            {series && <span className="repeat-badge">↻ {REPEAT_LABELS[series.frequency]}</span>}
             <span>{item.mode === "fixed" ? "Fixed" : item.mode === "maybe" ? "Optional" : "Flexible"}</span>
             <button type="button" className="text-link" onClick={() => setEditing(true)}>
               <Pencil size={14} /> Edit

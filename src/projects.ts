@@ -73,9 +73,28 @@ function reconcileGoals(state: AppState): AppState {
   return changed ? { ...state, goals } : state
 }
 
+// Completing a calendar entry made from a routine marks the routine done that day.
+function reconcileRoutines(state: AppState): AppState {
+  const linked = (state.series ?? []).filter((series) => series.routineId)
+  if (!linked.length) return state
+  let changed = false
+  const routines = state.routines.map((routine) => {
+    const ids = linked.filter((series) => series.routineId === routine.id).map((series) => series.id)
+    if (!ids.length) return routine
+    const dates = state.plan
+      .filter((item) => item.seriesId && ids.includes(item.seriesId) && item.status === "complete")
+      .map((item) => item.date)
+      .filter((date) => !routine.completedDates.includes(date))
+    if (!dates.length) return routine
+    changed = true
+    return { ...routine, completedDates: [...routine.completedDates, ...dates] }
+  })
+  return changed ? { ...state, routines } : state
+}
+
 // Completing a plan item that came from a project step ticks that step.
 export function reconcileProjects(input: AppState): AppState {
-  const state = reconcileGoals(input)
+  const state = reconcileRoutines(reconcileGoals(input))
   const done = new Map(
     state.plan
       .filter((item) => item.projectId && item.stepId && item.status === "complete")
