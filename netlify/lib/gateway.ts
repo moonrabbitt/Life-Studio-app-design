@@ -1,15 +1,17 @@
 // Shared helpers for talking to the Cloudflare AI Gateway from Netlify Functions.
 // The gateway key lives only in Netlify environment variables and never reaches the browser.
 
-// All three values come from Netlify environment variables; none are hard-coded,
-// so Netlify's secrets scanning never finds them in the repo.
+// OpenAI GPT models on Azure OpenAI, through the Cloudflare AI Gateway.
+// All values come from Netlify environment variables; none are hard-coded, so
+// Netlify's secrets scanning never finds them in the repo.
 export function gatewayConfig() {
   const key = process.env.CLOUDFLARE_KEY
   const url = process.env.CF_GATEWAY_URL
+  const resource = process.env.AZURE_OPENAI_RESOURCE
   const model = process.env.AI_MODEL
-  if (!key || !url || !model)
+  if (!key || !url || !resource || !model)
     throw new HttpError(503, "AI is not configured on the server yet.")
-  return { url: url.replace(/\/$/, ""), key, model }
+  return { url: url.replace(/\/+$/, ""), key, resource, model }
 }
 
 export class HttpError extends Error {
@@ -72,12 +74,12 @@ export async function callResponses({
   maxOutputTokens = 1500,
   schema,
 }: ResponsesOptions): Promise<string> {
-  const { url, key, model } = gatewayConfig()
-  const response = await fetch(`${url}/openai/responses`, {
+  const { url, key, resource, model } = gatewayConfig()
+  const response = await fetch(`${url}/azure-openai/${resource}/openai/v1/responses`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "cf-aig-authorization": `Bearer ${key}`,
+      "cf-aig-authorization": key,
     },
     body: JSON.stringify({
       model,
@@ -104,10 +106,10 @@ export async function callResponses({
     if (response.status === 402)
       throw new HttpError(
         402,
-        "The AI has run out of credits. Top up your Cloudflare AI Gateway balance, then try again.",
+        "The AI has run out of credits. Check the Cloudflare AI Gateway billing.",
       )
     if (response.status === 401 || response.status === 403)
-      throw new HttpError(502, "The AI key was rejected. Check CLOUDFLARE_KEY in Netlify.")
+      throw new HttpError(502, "The AI key was rejected. Check CLOUDFLARE_KEY and AZURE_OPENAI_RESOURCE in Netlify.")
     if (response.status === 429)
       throw new HttpError(429, "The AI is busy right now. Try again in a minute.")
     throw new HttpError(502, "The AI service returned an error. Please try again.")
