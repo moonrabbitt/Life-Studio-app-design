@@ -54,6 +54,24 @@ export type Series = {
   routineId?: string
 }
 
+// A pre-planned workout you can reuse and add to any day.
+export type WorkoutTemplate = {
+  id: string
+  name: string
+  exercises: PlannedExercise[]
+}
+
+export type ChatMessage = {
+  id: string
+  role: "user" | "studio"
+  text: string
+  at: string
+  // Suggested changes attached to a Studio reply, and what happened to them.
+  actions?: unknown[]
+  status?: "pending" | "saved" | "dismissed"
+  saved?: { summary: string; label: string; to: unknown }[]
+}
+
 export type RoadmapReflection = {
   id: string
   date: string
@@ -279,6 +297,8 @@ export type AppState = {
   trainingPhase?: 1 | 2 | 3 | 4 | 5
   events?: { fairplayConfirmed?: boolean; hackneyBooked?: boolean; fairplayBooked?: boolean }
   series?: Series[]
+  chat?: ChatMessage[]
+  workoutTemplates?: WorkoutTemplate[]
   roadmap?: {
     phaseDates?: Record<string, string>
     reflections?: RoadmapReflection[]

@@ -181,8 +181,11 @@ const assistSchema = {
 
 const ASSIST_INSTRUCTIONS = `${TONE}
 
-The user speaks or types a request. Turn it into a short friendly "reply" (1-3 sentences) and a list of
-concrete "actions" the app can apply after the user confirms. Use the JSON context for today's date,
+This is an ongoing chat. context.history holds the recent conversation (oldest first), including what
+you suggested and whether the user saved it. Use it to understand follow-ups like "make it Thursday
+instead" or "and add a walk too", and don't repeat suggestions they already saved.
+The user speaks or types a message. Reply conversationally in "reply" (1-3 sentences) and add concrete
+"actions" the app can apply after the user confirms, only when they help. Use the JSON context for today's date,
 their plan items (with ids), and goals. Rules:
 - Only propose actions the user asked for or that clearly help; 0-5 actions. For pure questions or
   chat, return an empty actions list and answer in "reply".

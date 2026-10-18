@@ -32,6 +32,9 @@ import {
   EXERCISES,
   FAIRPLAY_REPORTED,
   fromPlanned,
+  recordToExercises,
+  suggestDuration,
+  suggestNext,
   HACKNEY_LABEL,
   lastPerformance,
   mondayOf,
@@ -203,6 +206,77 @@ export function PlannedWorkoutList({ workout }: { workout: PlannedExercise[] }) 
   )
 }
 
+// Edit a suggested workout: every exercise, its sets, reps, rest and weight.
+export function WorkoutEditor({
+  workout,
+  onSave,
+  onCancel,
+}: {
+  workout: PlannedExercise[]
+  onSave: (workout: PlannedExercise[]) => void
+  onCancel: () => void
+}) {
+  const [rows, setRows] = useState<PlannedExercise[]>(workout)
+  const set = (index: number, patch: Partial<PlannedExercise>) =>
+    setRows((current) => current.map((row, position) => (position === index ? { ...row, ...patch } : row)))
+  return (
+    <div className="workout-editor">
+      {rows.map((row, index) => (
+        <fieldset key={index} className="workout-editor__row">
+          <legend>Exercise {index + 1}</legend>
+          <label>
+            <span>Exercise</span>
+            <input value={row.name} onChange={(event) => set(index, { name: event.target.value })} />
+          </label>
+          <div className="plan-edit__row">
+            <label>
+              <span>Sets</span>
+              <input type="number" min={1} max={10} inputMode="numeric" value={row.sets} onChange={(event) => set(index, { sets: Math.max(1, Number(event.target.value) || 1) })} />
+            </label>
+            <label>
+              <span>Reps or time</span>
+              <input value={row.reps} onChange={(event) => set(index, { reps: event.target.value })} />
+            </label>
+          </div>
+          <div className="plan-edit__row">
+            <label>
+              <span>Weight / load</span>
+              <input value={row.load} onChange={(event) => set(index, { load: event.target.value })} placeholder="e.g. 10 kg or bodyweight" />
+            </label>
+            <label>
+              <span>Rest</span>
+              <input value={row.rest} onChange={(event) => set(index, { rest: event.target.value })} />
+            </label>
+          </div>
+          <button type="button" className="text-link plan-edit__delete-link" onClick={() => setRows((current) => current.filter((_, position) => position !== index))}>
+            Remove exercise
+          </button>
+        </fieldset>
+      ))}
+      <Button
+        variant="secondary"
+        icon={Plus}
+        onClick={() =>
+          setRows((current) => [
+            ...current,
+            { name: "", sets: 2, reps: "8-10", rest: "60-90 seconds", load: "A weight you could lift 3-4 more times", why: "Added by you" },
+          ])
+        }
+      >
+        Add exercise
+      </Button>
+      <div className="inline-actions">
+        <Button icon={Check} onClick={() => onSave(rows.filter((row) => row.name.trim()))}>
+          Save exercises
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Activity buttons: Start · Short version · Move · Skip
 // ---------------------------------------------------------------------------
@@ -211,18 +285,26 @@ export function ActivityButtons({
   item,
   onActivity,
   onSkip,
+  preferShort = false,
 }: {
   item: PlanItem
   onActivity: (id: string, mode: ActivityMode) => void
   onSkip: (id: string) => void
+  preferShort?: boolean
 }) {
   if (item.status === "complete" || item.status === "let-go") return null
+  const shortFirst = preferShort && !!item.shortVersion
   return (
     <div className="activity-buttons">
-      <Button icon={Play} onClick={() => onActivity(item.id, "start")}>
-        Start
+      {shortFirst && (
+        <Button icon={Zap} onClick={() => onActivity(item.id, "short")}>
+          Short version
+        </Button>
+      )}
+      <Button variant={shortFirst ? "secondary" : "primary"} icon={Play} onClick={() => onActivity(item.id, "start")}>
+        {shortFirst ? "Full version" : "Start"}
       </Button>
-      {item.shortVersion && (
+      {item.shortVersion && !shortFirst && (
         <Button
           variant="secondary"
           icon={Zap}
@@ -249,7 +331,7 @@ export const skipItem = (update: Update, id: string) =>
         item.id === id ? { ...item, status: "let-go" } : item,
       ),
     }),
-    "Skipped. It won’t be added to another day.",
+    "Set aside. Nothing piles up; bring it back from Plan → Set aside if you want.",
   )
 
 // ---------------------------------------------------------------------------
@@ -335,10 +417,16 @@ export function NextActionCard({
         <Clock3 size={15} /> {timeLabel(item)}
       </p>
       {item.details?.[0] && <p>{item.details[0]}</p>}
+      {state.checkIn === "low" && item.shortVersion && (
+        <p className="energy-inline">
+          <Zap size={14} /> Keeping it small: {item.shortVersion.note}
+        </p>
+      )}
       <ActivityButtons
         item={item}
         onActivity={onActivity}
         onSkip={(id) => skipItem(update, id)}
+        preferShort={state.checkIn === "low"}
       />
       <div className="today-next__links">
         {item.status === "proposed" && item.batch && (
@@ -1069,7 +1157,20 @@ function ConcernNotice({ onEdit, onWalk }: { onEdit: () => void; onWalk: () => v
 // Workout session
 // ---------------------------------------------------------------------------
 
-type ExerciseState = { chosen: string; sets: LoggedSet[] }
+type ExerciseState = { chosen: string; sets: LoggedSet[]; suggestion?: string }
+
+const prefill = (exercise: Exercise, count: number, history: WorkoutRecord[]) => {
+  const next = suggestNext(history, exercise)
+  return {
+    suggestion: next?.note,
+    sets: Array.from({ length: count }, () => ({
+      done: false,
+      reps: next?.reps,
+      weight: next?.weight,
+      seconds: next?.seconds,
+    })),
+  }
+}
 
 function WorkoutSession({
   profile,
@@ -1099,46 +1200,55 @@ function WorkoutSession({
       setsLabel: short ? "1 comfortable set" : "Suggested sets",
       exercises,
       notes: [
-        "Weights come from your own logs; with no record, choose a weight you could lift 3–4 more times.",
+        "Numbers are pre-filled from your last log where there is one; change anything.",
         "Comfortable effort. Stop any exercise that causes pain.",
         "It’s fine to take longer than the estimated time.",
       ],
     }
   }, [profile, short, custom])
-  const catalog = useMemo(
-    () => ({
-      ...EXERCISES,
-      ...Object.fromEntries(plan.exercises.map((exercise) => [exercise.id, exercise])),
-    }),
-    [plan],
-  )
+  const [extra, setExtra] = useState<Record<string, Exercise>>({})
+  const catalog: Record<string, Exercise> = {
+    ...EXERCISES,
+    ...Object.fromEntries(plan.exercises.map((exercise) => [exercise.id, exercise])),
+    ...extra,
+  }
   const started = useRef(Date.now())
   const [warm, setWarm] = useState(false)
   const [rows, setRows] = useState<ExerciseState[]>(() =>
-    plan.exercises.map((exercise) => ({
-      chosen: exercise.id,
-      sets: Array.from({ length: exercise.sets ?? plan.sets }, () => ({ done: false })),
-    })),
+    plan.exercises.map((exercise) => ({ chosen: exercise.id, ...prefill(exercise, exercise.sets ?? plan.sets, history) })),
   )
+  const [renaming, setRenaming] = useState<number | null>(null)
+  const [renameText, setRenameText] = useState("")
+  const [adding, setAdding] = useState("")
+  const [addCustom, setAddCustom] = useState("")
+
+  const setRow = (index: number, recipe: (row: ExerciseState) => ExerciseState) =>
+    setRows((current) => current.map((row, position) => (position === index ? recipe(row) : row)))
   const updateSet = (row: number, index: number, patch: Partial<LoggedSet>) =>
-    setRows((current) =>
-      current.map((item, position) =>
-        position === row
-          ? {
-              ...item,
-              sets: item.sets.map((set, setIndex) =>
-                setIndex === index ? { ...set, ...patch } : set,
-              ),
-            }
-          : item,
-      ),
-    )
+    setRow(row, (item) => ({ ...item, sets: item.sets.map((set, setIndex) => (setIndex === index ? { ...set, ...patch } : set)) }))
   const number = (value: string) => (value === "" ? undefined : Math.max(0, Number(value)))
+  const customExercise = (name: string): Exercise => ({
+    id: `custom-${name.toLowerCase().replace(/[^a-z]+/g, "-")}-${Date.now()}`,
+    name,
+    category: "squat",
+    equipment: "",
+    track: "reps",
+    reps: "8-10 reps",
+    setup: [],
+    technique: [],
+    rest: "60-90 seconds",
+    alternatives: [],
+  })
+  const swapTo = (index: number, exercise: Exercise) => {
+    setExtra((current) => ({ ...current, [exercise.id]: exercise }))
+    setRow(index, (row) => ({ chosen: exercise.id, ...prefill(exercise, row.sets.length, history) }))
+  }
 
   return (
     <div className="workout">
       <p className="capture-disclaimer">
-        {custom?.length ? "Your suggested session" : `${plan.setsLabel} of each · built from your answers`} ·{" "}
+        {custom?.length ? "Your suggested session" : `${plan.setsLabel} of each · built from your answers`}. Change
+        anything: swap, rename, add or remove exercises and sets ·{" "}
         <button type="button" className="text-link" onClick={onEditProfile}>
           edit answers
         </button>
@@ -1161,66 +1271,92 @@ function WorkoutSession({
         const exercise: Exercise = catalog[row.chosen]
         const previous = lastPerformance(history, exercise)
         return (
-          <section className="workout__card" key={rowIndex}>
+          <section className="workout__card" key={`${row.chosen}-${rowIndex}`}>
             <div className="workout__head">
               <span>{rowIndex + 1}</span>
               <div>
-                <h3>{exercise.name}</h3>
+                {renaming === rowIndex ? (
+                  <form
+                    className="workout__rename"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      if (renameText.trim()) swapTo(rowIndex, customExercise(renameText.trim()))
+                      setRenaming(null)
+                    }}
+                  >
+                    <input value={renameText} onChange={(event) => setRenameText(event.target.value)} autoFocus aria-label="Exercise name" />
+                    <Button type="submit" variant="secondary">
+                      Save
+                    </Button>
+                  </form>
+                ) : (
+                  <h3>{exercise.name}</h3>
+                )}
                 <small>
-                  {[exercise.equipment, `${exercise.sets ?? plan.sets} × ${exercise.reps}`]
-                    .filter(Boolean)
-                    .join(" · ")}
+                  {[exercise.equipment, `${row.sets.length} × ${exercise.reps}`].filter(Boolean).join(" · ")}
                 </small>
                 {exercise.load && <small><b>Load:</b> {exercise.load}</small>}
                 {exercise.why && <small><b>Why:</b> {exercise.why}</small>}
-                {previous && <small className="workout__last">{previous}</small>}
+                {row.suggestion ? (
+                  <small className="workout__suggest">
+                    <Zap size={12} /> Suggested: {row.suggestion}
+                  </small>
+                ) : (
+                  previous && <small className="workout__last">{previous}</small>
+                )}
               </div>
             </div>
-            <details open={rowIndex === 0}>
-              <summary>How to do it</summary>
-              {exercise.setup.length > 0 && (
-                <>
-                  <p className="workout__label">Setup</p>
-                  <ul>
-                    {exercise.setup.map((line) => (
-                      <li key={line}>{line}</li>
-                    ))}
-                  </ul>
-                </>
-              )}
-              <p className="workout__label">Technique</p>
-              <ul>
-                {exercise.technique.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-              <p className="workout__label">Rest · {exercise.rest}</p>
-              {exercise.demo ? (
-                <a href={exercise.demo.url} target="_blank" rel="noreferrer">
-                  Demonstration: {exercise.demo.label} <ExternalLink size={13} />
-                </a>
-              ) : (
-                <p className="capture-disclaimer">
-                  No trusted demonstration link yet. Gym staff can show you the setup.
-                </p>
-              )}
-            </details>
+            <div className="workout__tools">
+              <button type="button" className="text-link" onClick={() => { setRenaming(rowIndex); setRenameText(exercise.name) }}>
+                Rename
+              </button>
+              <button
+                type="button"
+                className="text-link plan-edit__delete-link"
+                onClick={() => setRows((current) => current.filter((_, position) => position !== rowIndex))}
+              >
+                Remove exercise
+              </button>
+            </div>
+            {(exercise.setup.length > 0 || exercise.technique.length > 0 || exercise.demo) && (
+              <details open={rowIndex === 0}>
+                <summary>How to do it</summary>
+                {exercise.setup.length > 0 && (
+                  <>
+                    <p className="workout__label">Setup</p>
+                    <ul>
+                      {exercise.setup.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {exercise.technique.length > 0 && (
+                  <>
+                    <p className="workout__label">Technique</p>
+                    <ul>
+                      {exercise.technique.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                <p className="workout__label">Rest · {exercise.rest}</p>
+                {exercise.demo ? (
+                  <a href={exercise.demo.url} target="_blank" rel="noreferrer">
+                    Demonstration: {exercise.demo.label} <ExternalLink size={13} />
+                  </a>
+                ) : (
+                  <p className="capture-disclaimer">No trusted demonstration link yet. Gym staff can show you the setup.</p>
+                )}
+              </details>
+            )}
             {exercise.alternatives.length > 0 && (
               <div className="workout__swap">
                 <span>Swap for</span>
                 {exercise.alternatives.map((id) => (
-                  <button
-                    type="button"
-                    key={id}
-                    onClick={() =>
-                      setRows((current) =>
-                        current.map((item, position) =>
-                          position === rowIndex ? { ...item, chosen: id } : item,
-                        ),
-                      )
-                    }
-                  >
-                    {catalog[id].name}
+                  <button type="button" key={id} onClick={() => swapTo(rowIndex, EXERCISES[id])}>
+                    {EXERCISES[id].name}
                   </button>
                 ))}
               </div>
@@ -1231,77 +1367,84 @@ function WorkoutSession({
                   <span>Set {setIndex + 1}</span>
                   {exercise.track === "seconds" ? (
                     <label>
-                      <input
-                        inputMode="numeric"
-                        type="number"
-                        min={0}
-                        value={set.seconds ?? ""}
-                        onChange={(event) =>
-                          updateSet(rowIndex, setIndex, { seconds: number(event.target.value) })
-                        }
-                        aria-label={`${exercise.name} set ${setIndex + 1} seconds`}
-                      />
+                      <input inputMode="numeric" type="number" min={0} value={set.seconds ?? ""} onChange={(event) => updateSet(rowIndex, setIndex, { seconds: number(event.target.value) })} aria-label={`${exercise.name} set ${setIndex + 1} seconds`} />
                       sec
                     </label>
                   ) : (
                     <label>
-                      <input
-                        inputMode="numeric"
-                        type="number"
-                        min={0}
-                        value={set.reps ?? ""}
-                        onChange={(event) =>
-                          updateSet(rowIndex, setIndex, { reps: number(event.target.value) })
-                        }
-                        aria-label={`${exercise.name} set ${setIndex + 1} reps`}
-                      />
+                      <input inputMode="numeric" type="number" min={0} value={set.reps ?? ""} onChange={(event) => updateSet(rowIndex, setIndex, { reps: number(event.target.value) })} aria-label={`${exercise.name} set ${setIndex + 1} reps`} />
                       reps
                     </label>
                   )}
                   <label>
-                    <input
-                      inputMode="decimal"
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      value={set.weight ?? ""}
-                      onChange={(event) =>
-                        updateSet(rowIndex, setIndex, { weight: number(event.target.value) })
-                      }
-                      aria-label={`${exercise.name} set ${setIndex + 1} weight in kg`}
-                    />
+                    <input inputMode="decimal" type="number" min={0} step={0.5} value={set.weight ?? ""} onChange={(event) => updateSet(rowIndex, setIndex, { weight: number(event.target.value) })} aria-label={`${exercise.name} set ${setIndex + 1} weight in kg`} />
                     kg
                   </label>
-                  <button
-                    type="button"
-                    className="workout__done"
-                    aria-pressed={set.done}
-                    aria-label={`Mark set ${setIndex + 1} done`}
-                    onClick={() => updateSet(rowIndex, setIndex, { done: !set.done })}
-                  >
+                  <button type="button" className="workout__done" aria-pressed={set.done} aria-label={`Mark set ${setIndex + 1} done`} onClick={() => updateSet(rowIndex, setIndex, { done: !set.done })}>
                     <Check size={16} />
                   </button>
                 </div>
               ))}
-              <button
-                type="button"
-                className="text-link"
-                onClick={() =>
-                  setRows((current) =>
-                    current.map((item, position) =>
-                      position === rowIndex
-                        ? { ...item, sets: [...item.sets, { done: false }] }
-                        : item,
-                    ),
-                  )
-                }
-              >
-                <Plus size={15} /> Add a set
-              </button>
+              <div className="workout__set-tools">
+                <button
+                  type="button"
+                  className="text-link"
+                  onClick={() =>
+                    setRow(rowIndex, (item) => {
+                      const last = item.sets[item.sets.length - 1]
+                      return { ...item, sets: [...item.sets, { done: false, reps: last?.reps, weight: last?.weight, seconds: last?.seconds }] }
+                    })
+                  }
+                >
+                  <Plus size={15} /> Add a set
+                </button>
+                {row.sets.length > 1 && (
+                  <button type="button" className="text-link" onClick={() => setRow(rowIndex, (item) => ({ ...item, sets: item.sets.slice(0, -1) }))}>
+                    Remove last set
+                  </button>
+                )}
+              </div>
             </div>
           </section>
         )
       })}
+      <section className="workout__card workout__add">
+        <p className="workout__label">Add an exercise</p>
+        <select
+          value={adding}
+          onChange={(event) => {
+            const id = event.target.value
+            setAdding("")
+            if (!id) return
+            const exercise = EXERCISES[id]
+            setRows((current) => [...current, { chosen: id, ...prefill(exercise, 2, history) }])
+          }}
+          aria-label="Add an exercise from the list"
+        >
+          <option value="">Choose from the list…</option>
+          {Object.values(EXERCISES).map((exercise) => (
+            <option value={exercise.id} key={exercise.id}>
+              {exercise.name}
+            </option>
+          ))}
+        </select>
+        <form
+          className="workout__rename"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!addCustom.trim()) return
+            const exercise = customExercise(addCustom.trim())
+            setExtra((current) => ({ ...current, [exercise.id]: exercise }))
+            setRows((current) => [...current, { chosen: exercise.id, ...prefill(exercise, 2, history) }])
+            setAddCustom("")
+          }}
+        >
+          <input value={addCustom} onChange={(event) => setAddCustom(event.target.value)} placeholder="…or type your own" aria-label="Custom exercise name" />
+          <Button type="submit" variant="secondary" icon={Plus}>
+            Add
+          </Button>
+        </form>
+      </section>
       <ul className="workout__notes">
         {plan.notes.map((note) => (
           <li key={note}>{note}</li>
@@ -1311,11 +1454,7 @@ function WorkoutSession({
         icon={Check}
         onClick={() =>
           onFinish(
-            rows.map((row) => ({
-              id: row.chosen,
-              name: catalog[row.chosen].name,
-              sets: row.sets,
-            })),
+            rows.map((row) => ({ id: row.chosen, name: catalog[row.chosen].name, sets: row.sets })),
             Math.max(1, Math.round((Date.now() - started.current) / 60000)),
           )
         }
@@ -1335,14 +1474,18 @@ function QuickLog({
   short,
   minutes,
   hasProfile,
+  canSaveTemplate = false,
   onSave,
 }: {
   item: PlanItem
   short: boolean
   minutes?: number
   hasProfile: boolean
-  onSave: (log: ActivityLog, pauseTraining: boolean) => void
+  canSaveTemplate?: boolean
+  onSave: (log: ActivityLog, pauseTraining: boolean, templateName?: string) => void
 }) {
+  const [saveTemplate, setSaveTemplate] = useState(false)
+  const [templateName, setTemplateName] = useState(item.title)
   const [summary, setSummary] = useState(
     short ? `${item.title} (short version)` : item.title,
   )
@@ -1373,6 +1516,7 @@ function QuickLog({
             wasClass: wasClass || undefined,
           },
           concern && pause,
+          canSaveTemplate && saveTemplate && templateName.trim() ? templateName.trim() : undefined,
         )
       }}
     >
@@ -1446,6 +1590,23 @@ function QuickLog({
           </div>
         </div>
       )}
+      {canSaveTemplate && (
+        <>
+          <label className="sync-replace">
+            <input type="checkbox" checked={saveTemplate} onChange={(event) => setSaveTemplate(event.target.checked)} />
+            <span>
+              Save as one of my workouts
+              <small>Reuse it any day from Movement → My workouts, with today’s numbers.</small>
+            </span>
+          </label>
+          {saveTemplate && (
+            <label>
+              <span>Workout name</span>
+              <input value={templateName} onChange={(event) => setTemplateName(event.target.value)} />
+            </label>
+          )}
+        </>
+      )}
       <Button type="submit" icon={Check}>
         Save log
       </Button>
@@ -1457,7 +1618,7 @@ function QuickLog({
 // Simple timer for walks, dance, creative time
 // ---------------------------------------------------------------------------
 
-function DoTimer({ item, short, onFinish }: { item: PlanItem; short: boolean; onFinish: (minutes?: number) => void }) {
+function DoTimer({ item, short, plan, onFinish }: { item: PlanItem; short: boolean; plan: PlanItem[]; onFinish: (minutes?: number) => void }) {
   const [seconds, setSeconds] = useState(0)
   const [running, setRunning] = useState(false)
   useEffect(() => {
@@ -1465,7 +1626,11 @@ function DoTimer({ item, short, onFinish }: { item: PlanItem; short: boolean; on
     const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000)
     return () => window.clearInterval(timer)
   }, [running])
-  const target = (short ? item.shortVersion?.duration : item.duration) ?? 0
+  // Walks and runs: suggest a slightly longer time only if the last one felt easy; always editable.
+  const suggestion = !short && (item.kind === "walk" || item.kind === "run") ? suggestDuration(plan, item) : null
+  const [target, setTarget] = useState(
+    suggestion?.minutes ?? (short ? item.shortVersion?.duration : item.duration) ?? 0,
+  )
 
   return (
     <div className="do-timer">
@@ -1480,6 +1645,17 @@ function DoTimer({ item, short, onFinish }: { item: PlanItem; short: boolean; on
           <li key={line}>{line}</li>
         ))}
       </ul>
+      {suggestion && (
+        <p className="workout__suggest">
+          <Zap size={13} /> Suggested: {suggestion.note}
+        </p>
+      )}
+      {(item.kind === "walk" || item.kind === "run" || item.kind === "dance" || target > 0) && (
+        <label className="do-timer__target">
+          <span>Target minutes</span>
+          <input type="number" min={1} inputMode="numeric" value={target || ""} onChange={(event) => setTarget(Number(event.target.value) || 0)} />
+        </label>
+      )}
       {target > 0 && (
         <>
           <div className="recording-time" aria-live="off">
@@ -1787,7 +1963,7 @@ export function ActivityFlow({
       return extra ? extra(next) : next
     }, message)
 
-  const saveLog = (log: ActivityLog, pauseTraining: boolean) => {
+  const saveLog = (log: ActivityLog, pauseTraining: boolean, templateName?: string) => {
     const workoutId = workout ? uid() : undefined
     if (!log.concern)
       celebrate({
@@ -1807,6 +1983,10 @@ export function ActivityFlow({
           : "Logged. That’s real progress.",
       (current) => ({
         ...current,
+        workoutTemplates:
+          templateName && workout
+            ? [...(current.workoutTemplates ?? []), { id: uid(), name: templateName, exercises: recordToExercises(workout) }]
+            : current.workoutTemplates,
         trainingProfile:
           pauseTraining && current.trainingProfile
             ? { ...current.trainingProfile, concern: "yes" }
@@ -1890,6 +2070,7 @@ export function ActivityFlow({
         short={short}
         minutes={minutes}
         hasProfile={!!state.trainingProfile}
+        canSaveTemplate={!!workout}
         onSave={saveLog}
       />
     )
@@ -2081,6 +2262,7 @@ export function ActivityFlow({
       <DoTimer
         item={item}
         short={short}
+        plan={state.plan}
         onFinish={(elapsed) => {
           setMinutes(elapsed)
           setStep("log")
@@ -2131,7 +2313,7 @@ export function WeekAcceptBanner({ state, date, update }: { state: AppState; dat
 // Progress: what actually happened
 // ---------------------------------------------------------------------------
 
-export function ActivityHistory({ state }: { state: AppState }) {
+export function ActivityHistory({ state, onEditLog }: { state: AppState; onEditLog?: (id: string) => void }) {
   const restart = state.plan.filter((item) => item.phase === "restart")
   const counts = {
     proposed: restart.filter((item) => item.status === "proposed").length,
@@ -2191,11 +2373,18 @@ export function ActivityHistory({ state }: { state: AppState }) {
                   )}
                   {item.log?.note && <p>{item.log.note}</p>}
                 </div>
-                {item.log?.concern && (
-                  <span className="status-badge is-concern">
-                    <TriangleAlert size={12} /> Concern
-                  </span>
-                )}
+                <div className="activity-history__tools">
+                  {item.log?.concern && (
+                    <span className="status-badge is-concern">
+                      <TriangleAlert size={12} /> Concern
+                    </span>
+                  )}
+                  {onEditLog && (
+                    <button type="button" className="text-link" onClick={() => onEditLog(item.id)}>
+                      Edit
+                    </button>
+                  )}
+                </div>
               </li>
             )
           })}

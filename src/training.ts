@@ -930,3 +930,111 @@ export const SOURCES = [
     url: "https://pubmed.ncbi.nlm.nih.gov/26479070/",
   },
 ]
+
+// ---------------------------------------------------------------------------
+// Progression: suggest next time's numbers from your own logs (always editable)
+// ---------------------------------------------------------------------------
+
+export type Suggestion = {
+  reps?: number
+  weight?: number
+  seconds?: number
+  note: string
+}
+
+const range = (reps: string) => {
+  const numbers = (reps.match(/\d+/g) ?? []).map(Number)
+  return { low: numbers[0], high: numbers[1] ?? numbers[0] }
+}
+
+const weightStep = (equipment: string) => (/dumbbell|kettlebell/i.test(equipment) ? 1 : 2.5)
+
+export function suggestNext(
+  history: WorkoutRecord[],
+  exercise: { id: string; name: string; reps: string; equipment: string; track: "reps" | "seconds" },
+): Suggestion | null {
+  const name = exercise.name.toLowerCase()
+  const record = history.find((item) =>
+    item.exercises.some(
+      (candidate) => (candidate.id === exercise.id || candidate.name.toLowerCase() === name) && candidate.sets.some((set) => set.done),
+    ),
+  )
+  if (!record) return null
+  const last = record.exercises.find((candidate) => candidate.id === exercise.id || candidate.name.toLowerCase() === name)!
+  const done = last.sets.filter((set) => set.done)
+  const top = done[done.length - 1]
+  const felt = record.effort ?? "comfortable"
+  const lastText = top.seconds
+    ? `${top.seconds}s`
+    : `${top.weight ? `${top.weight} kg × ` : ""}${top.reps ?? "?"}`
+  const since = `last time ${lastText}${record.effort ? `, felt ${record.effort.replace("-", " ")}` : ""}`
+
+  if (record.concern) return { reps: top.reps, weight: top.weight, seconds: top.seconds, note: `Same as ${since}, after the concern you noted` }
+  if (felt === "hard" || felt === "very-hard") return { reps: top.reps, weight: top.weight, seconds: top.seconds, note: `Same again: ${since}` }
+
+  if (exercise.track === "seconds" || top.seconds) {
+    const seconds = (top.seconds ?? 15) + 5
+    return { seconds, note: `${seconds}s, a little longer than ${since}` }
+  }
+  const { low, high } = range(exercise.reps)
+  const reps = top.reps ?? low
+  const allAtTop = high !== undefined && done.every((set) => (set.reps ?? 0) >= high)
+  if (top.weight && allAtTop) {
+    const weight = Math.round((top.weight + weightStep(exercise.equipment)) * 2) / 2
+    return { reps: low ?? reps, weight, note: `${weight} kg × ${low ?? reps}: a small step up from ${since}` }
+  }
+  if (!top.weight && allAtTop) {
+    return { reps: reps + 2, note: `${reps + 2} reps: you hit the top of the range (${since}). A harder variation could be next.` }
+  }
+  const nextReps = high ? Math.min(high, reps + 1) : reps + 1
+  return { reps: nextReps, weight: top.weight, note: `${top.weight ? `${top.weight} kg × ` : ""}${nextReps}: one more rep than ${since}` }
+}
+
+// Walks and runs: suggest a slightly longer time only when the last one felt easy or comfortable.
+export function suggestDuration(plan: PlanItem[], item: PlanItem) {
+  const last = plan
+    .filter((other) => other.id !== item.id && other.kind === item.kind && other.status === "complete" && other.log?.duration)
+    .sort((a, b) => (b.log?.completedAt ?? "").localeCompare(a.log?.completedAt ?? ""))[0]
+  if (!last?.log?.duration) return null
+  const minutes = last.log.duration
+  const felt = last.log.effort
+  if (last.log.concern || felt === "hard" || felt === "very-hard")
+    return { minutes, note: `Same as last time (${minutes} min${felt ? `, felt ${felt.replace("-", " ")}` : ""})` }
+  const next = Math.min(minutes + 5, Math.max(minutes + 2, Math.round(minutes * 1.1)))
+  return { minutes: next, note: `${next} min: a little longer than last time (${minutes} min${felt ? `, ${felt}` : ""})` }
+}
+
+// Best set per session for each exercise, newest first, for the progress view.
+export function strengthHistory(history: WorkoutRecord[]) {
+  const map = new Map<string, { date: string; text: string }[]>()
+  for (const record of history)
+    for (const exercise of record.exercises) {
+      const done = exercise.sets.filter((set) => set.done)
+      if (!done.length) continue
+      const best = done.reduce((a, b) => ((b.weight ?? 0) * 100 + (b.reps ?? b.seconds ?? 0) > (a.weight ?? 0) * 100 + (a.reps ?? a.seconds ?? 0) ? b : a))
+      const text = best.seconds ? `${best.seconds}s` : `${best.weight ? `${best.weight} kg × ` : ""}${best.reps ?? "?"}`
+      const list = map.get(exercise.name) ?? []
+      list.push({ date: record.date, text })
+      map.set(exercise.name, list)
+    }
+  return [...map.entries()].map(([name, sessions]) => ({ name, sessions: sessions.slice(0, 5) }))
+}
+
+// A logged workout becomes a reusable template, using the numbers you actually did.
+export function recordToExercises(exercises: WorkoutRecord["exercises"]): PlannedExercise[] {
+  return exercises
+    .filter((exercise) => exercise.sets.length)
+    .map((exercise) => {
+      const done = exercise.sets.filter((set) => set.done)
+      const last = done[done.length - 1] ?? exercise.sets[exercise.sets.length - 1]
+      return {
+        name: exercise.name,
+        sets: Math.max(1, done.length || exercise.sets.length),
+        reps: last?.seconds ? `${last.seconds} seconds` : `${last?.reps ?? 8}`,
+        rest: "60-90 seconds",
+        load: last?.weight ? `${last.weight} kg` : "bodyweight or your choice",
+        why: "From a workout you logged",
+      }
+    })
+}
+

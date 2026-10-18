@@ -86,6 +86,7 @@ import {
   NextActionCard,
   PlannedWorkoutList,
   RestartSetup,
+  WorkoutEditor,
   Roadmap,
   skipItem,
   StatusBadge,
@@ -98,16 +99,30 @@ import {
   GoalDetail,
   GOAL_VS_PROJECT,
   ProjectsSpace,
+  SetAsideShelf,
   type CelebrationMessage,
 } from "./GoalProjectViews"
 import { HomeSpace } from "./HomeViews"
+import { LogEditor, MyWorkouts, StrengthProgress } from "./GymViews"
+import {
+  actionWarnings as checkActionWarnings,
+  applyAction,
+  areaKeys,
+  blankAction,
+  destinationOf,
+  isDate,
+  isTime,
+  offlineProposal,
+  type Destination,
+  type SpaceKey,
+} from "./assistant"
 import { PeopleSpace } from "./PeopleViews"
 import { PlanItemSheet } from "./PlanItemSheet"
+import { StudioChat } from "./StudioChat"
 import { Art, Button, formatDate, IconButton, Modal, today, uid } from "./ui"
 import { useLifeStudioState, type SyncStatus } from "./useLifeStudioState"
 
 type Route = "today" | "plan" | "progress" | "space"
-type SpaceKey = Area | "breathe" | "preferences"
 
 const formatMoney = (pence: number) =>
   new Intl.NumberFormat("en-GB", {
@@ -433,8 +448,32 @@ function TodayView({
         (item.status === "planned" || item.status === "proposed"),
     )
     .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""))
-  const max = state.density === "one" ? 1 : state.density === "few" ? 3 : 5
-  const visibleItems = currentItems.slice(0, max)
+  // The check-in shapes today: small hides optional plans, explore adds room for one more idea.
+  const energy = state.checkIn
+  const [showTucked, setShowTucked] = useState(false)
+  const isOptional = (item: PlanItem) => item.optional || item.mode === "maybe"
+  const tucked = energy === "low" ? currentItems.filter(isOptional) : []
+  const shown =
+    energy === "low" && !showTucked ? currentItems.filter((item) => !isOptional(item)) : currentItems
+  const baseMax = state.density === "one" ? 1 : state.density === "few" ? 3 : 5
+  const max = energy === "low" ? Math.min(baseMax, 2) : energy === "open" ? baseMax + 2 : baseMax
+  const visibleItems = shown.slice(0, energy === "low" && showTucked ? shown.length : max)
+  const exploreIdea = (() => {
+    if (energy !== "open") return null
+    for (const project of state.projects) {
+      if (project.stage === "Complete") continue
+      const step = (project.steps ?? []).find((candidate) => !candidate.done)
+      if (step && !state.plan.some((item) => item.stepId === step.id && item.status !== "complete"))
+        return { title: step.title, from: project.title, projectId: project.id, stepId: step.id }
+    }
+    for (const goal of state.goals) {
+      if (goal.status === "complete") continue
+      const milestone = goal.milestones.find((candidate) => !candidate.completedAt)
+      if (milestone && !state.plan.some((item) => item.milestoneId === milestone.id && item.status !== "complete"))
+        return { title: milestone.title, from: goal.title, goalId: goal.id, milestoneId: milestone.id }
+    }
+    return null
+  })()
   const hour = new Date().getHours()
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
@@ -442,7 +481,11 @@ function TodayView({
   const setCheckIn = (value: CheckIn) =>
     update(
       (current) => ({ ...current, checkIn: value }),
-      "Today has been softened to fit.",
+      value === "low"
+        ? "Keeping it small: optional plans are tucked away and short versions come first."
+        : value === "open"
+          ? "Room to explore: everything is showing, plus one extra idea."
+          : "Steady: your plan as it is.",
     )
   const complete = (id: string) => {
     const done = state.plan.find((item) => item.id === id)
@@ -533,6 +576,53 @@ function TodayView({
                 Add
               </Button>
             </div>
+            {tucked.length > 0 && (
+              <button type="button" className="energy-note" onClick={() => setShowTucked(!showTucked)}>
+                {showTucked
+                  ? "Hide optional plans again"
+                  : `Keeping it small: ${tucked.length} optional plan${tucked.length === 1 ? "" : "s"} tucked away. Show`}
+              </button>
+            )}
+            {exploreIdea && (
+              <div className="energy-explore">
+                <div>
+                  <p className="eyebrow">Room to explore</p>
+                  <strong>{exploreIdea.title}</strong>
+                  <small>Next step of {exploreIdea.from}</small>
+                </div>
+                <Button
+                  variant="secondary"
+                  icon={Plus}
+                  onClick={() =>
+                    update(
+                      (current) => ({
+                        ...current,
+                        plan: [
+                          ...current.plan,
+                          {
+                            id: uid(),
+                            title: exploreIdea.title,
+                            area: exploreIdea.projectId ? "create" : (current.goals.find((goal) => goal.id === exploreIdea.goalId)?.area ?? "create"),
+                            kind: exploreIdea.projectId ? "create" : undefined,
+                            date: today(),
+                            duration: 25,
+                            mode: "maybe",
+                            status: "planned",
+                            projectId: exploreIdea.projectId,
+                            stepId: exploreIdea.stepId,
+                            goalId: exploreIdea.goalId,
+                            milestoneId: exploreIdea.milestoneId,
+                          },
+                        ],
+                      }),
+                      "Added to today, as optional.",
+                    )
+                  }
+                >
+                  Add to today
+                </Button>
+              </div>
+            )}
             {visibleItems.length ? (
               <div className="today-list">
                 {visibleItems.map((item, index) => (
@@ -844,7 +934,7 @@ function PlanView({
                                   : candidate,
                               ),
                             }),
-                            "Let go. Nothing needs to be made up.",
+                            "Set aside. It’s under Plan → Set aside if you want it back.",
                           )
                         }
                       />
@@ -884,6 +974,7 @@ function PlanView({
           )}
         </section>
 
+        <SetAsideShelf state={state} update={update} />
         <aside className="plan-note">
           <CalendarDays size={23} />
           <h3>Plans, not promises</h3>
@@ -907,6 +998,7 @@ function ProgressView({
   onJourney: () => void
 }) {
   const [reviewing, setReviewing] = useState(false)
+  const [editLogId, setEditLogId] = useState<string | null>(null)
   const [addingGoal, setAddingGoal] = useState(false)
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null)
   const [celebration, setCelebration] = useState("")
@@ -1163,7 +1255,10 @@ function ProgressView({
           )}
         </section>
 
-        <ActivityHistory state={state} />
+        <div className="progress-stack">
+          <ActivityHistory state={state} onEditLog={setEditLogId} />
+          <StrengthProgress state={state} />
+        </div>
 
         <aside className="week-note">
           <p className="eyebrow">A factual glance</p>
@@ -1231,6 +1326,9 @@ function ProgressView({
         />
       )}
       {celebration && <MilestoneCelebration title={celebration} />}
+      {editLogId && (
+        <LogEditor itemId={editLogId} state={state} update={update} onClose={() => setEditLogId(null)} />
+      )}
     </div>
   )
 }
@@ -2554,6 +2652,7 @@ function MovementSpace({ state, update, close }: SpaceProps) {
           <ChevronRight size={18} />
         </button>
       </div>
+      <MyWorkouts state={state} update={update} />
       <section className="movement-notes">
         <div className="section-heading">
           <div>
@@ -2641,6 +2740,7 @@ function GymCoach({
   const [equipment, setEquipment] = useState("Gym machines and free weights")
   const [note, setNote] = useState("")
   const [planned, setPlanned] = useState<PlannedExercise[]>([])
+  const [editingPlanned, setEditingPlanned] = useState(false)
   const preview = planned.map((item) => item.name)
   const [headline, setHeadline] = useState({
     title: "",
@@ -2903,7 +3003,23 @@ function GymCoach({
                 {state.goals.find((item) => item.id === headline.goalId)?.title}
               </p>
             )}
-            <PlannedWorkoutList workout={planned} />
+            {editingPlanned ? (
+              <WorkoutEditor
+                workout={planned}
+                onCancel={() => setEditingPlanned(false)}
+                onSave={(workout) => {
+                  setPlanned(workout)
+                  setEditingPlanned(false)
+                }}
+              />
+            ) : (
+              <>
+                <PlannedWorkoutList workout={planned} />
+                <button type="button" className="text-link" onClick={() => setEditingPlanned(true)}>
+                  <PenLine size={14} /> Edit exercises before saving
+                </button>
+              </>
+            )}
             <div className="inline-actions">
               <Button icon={Check} onClick={savePlan}>
                 Save to Today
@@ -3684,12 +3800,6 @@ type CaptureMode =
 
 const MAX_RECORDING_SECONDS = 180
 const MAX_LISTENING_SECONDS = 120
-const areaKeys = Object.keys(areaMeta) as Area[]
-const isDate = (value: string | null): value is string =>
-  !!value && /^\d{4}-\d{2}-\d{2}$/.test(value)
-const isTime = (value: string | null): value is string =>
-  !!value && /^\d{2}:\d{2}$/.test(value)
-
 function preferredAudioType() {
   if (typeof MediaRecorder === "undefined") return ""
   return (
@@ -3697,387 +3807,6 @@ function preferredAudioType() {
       (type) => MediaRecorder.isTypeSupported?.(type),
     ) ?? ""
   )
-}
-
-const blankAction = (
-  type: StudioAction["type"],
-  summary: string,
-): StudioAction => ({
-  type,
-  summary,
-  title: null,
-  body: null,
-  date: null,
-  time: null,
-  duration: null,
-  area: null,
-  mode: null,
-  planId: null,
-  amount: null,
-  category: null,
-  scale: null,
-  milestones: null,
-  exercises: null,
-  nextAction: null,
-  effort: null,
-  concern: null,
-  kind: null,
-  goalId: null,
-  why: null,
-  details: null,
-  workout: null,
-})
-
-// Offline fallback: a small keyword parser used when the AI service is unreachable.
-function offlineProposal(text: string, state: AppState): StudioProposal {
-  const lower = text.toLowerCase()
-  const reply = "Studio is offline, so here is a simple suggestion to review."
-  if (lower.includes("gym") || lower.includes("workout")) {
-    return {
-      reply,
-      actions: [
-        {
-          ...blankAction("add_gym_session", "Add a gentle gym session to Today"),
-          title: "Gentle gym session",
-          duration: 35,
-          exercises: lower.includes("dance")
-            ? ["Supported split squat", "Cable row", "Incline push"]
-            : ["Sit to stand or leg press", "Supported row", "Calf raise"],
-        },
-      ],
-    }
-  }
-  if (lower.includes("move") || lower.includes("reschedule")) {
-    const item = state.plan.find(
-      (candidate) =>
-        candidate.status === "planned" && candidate.mode !== "fixed",
-    )
-    if (!item) return { reply: "There is no flexible plan to move.", actions: [] }
-    const date = new Date(`${item.date}T12:00:00`)
-    date.setDate(date.getDate() + 1)
-    return {
-      reply,
-      actions: [
-        {
-          ...blankAction("move_plan", `Move “${item.title}” to tomorrow`),
-          planId: item.id,
-          date: localDate(date),
-        },
-      ],
-    }
-  }
-  if (lower.includes("spent") || lower.includes("£")) {
-    const amount = Number(text.match(/£(\d+(?:\.\d{1,2})?)/)?.[1] ?? 0)
-    return {
-      reply,
-      actions: [
-        {
-          ...blankAction("add_transaction", `Add a £${amount} expense`),
-          title:
-            text.replace(/spent|£\d+(?:\.\d{1,2})?/gi, "").trim() ||
-            "Captured expense",
-          amount,
-          category: "Captured",
-        },
-      ],
-    }
-  }
-  if (lower.startsWith("journal")) {
-    return {
-      reply,
-      actions: [
-        {
-          ...blankAction("add_journal", "Save a journal entry"),
-          title: "Captured reflection",
-          body: text.replace(/^journal:\s*/i, ""),
-        },
-      ],
-    }
-  }
-  if (lower.includes("goal")) {
-    return {
-      reply,
-      actions: [
-        {
-          ...blankAction("add_goal", "Add a goal to shape with milestones"),
-          title:
-            text.split(":").slice(1).join(":").trim() ||
-            "A new goal to shape over time",
-          scale: lower.includes("big") ? "big" : "small",
-        },
-      ],
-    }
-  }
-  if (lower.includes("plan my") || lower.includes("balanced day")) {
-    return {
-      reply,
-      actions: [
-        {
-          ...blankAction("add_plan", "Add a gentle focus to Today"),
-          title: "Choose one thing that would make today feel mine",
-          duration: 20,
-        },
-      ],
-    }
-  }
-  return {
-    reply,
-    actions: [
-      {
-        ...blankAction("add_project", "Capture this as a project idea"),
-        title: "A captured idea",
-        body: text.replace(/^idea:\s*/i, ""),
-      },
-    ],
-  }
-}
-
-const EXERCISE_KINDS: ActivityKind[] = ["gym", "walk", "run", "dance"]
-
-// The planning details the AI attached: why, how, linked goal and exact workout.
-function plannedExtras(current: AppState, action: StudioAction) {
-  const kind = action.kind ?? undefined
-  const workout = action.workout?.filter((item) => item?.name?.trim()) ?? []
-  return {
-    kind,
-    intensity:
-      kind === "walk" ? ("light" as const) : kind && EXERCISE_KINDS.includes(kind) ? ("moderate" as const) : undefined,
-    goalId: current.goals.some((goal) => goal.id === action.goalId)
-      ? (action.goalId ?? undefined)
-      : undefined,
-    details: [action.why ?? "", ...(action.details ?? [])].filter((line) => line.trim()),
-    workout: workout.length ? workout : undefined,
-  }
-}
-
-function applyAction(current: AppState, action: StudioAction): AppState {
-  const area =
-    action.area && areaKeys.includes(action.area) ? action.area : undefined
-  const date = isDate(action.date) ? action.date : today()
-  const title = action.title?.trim()
-  switch (action.type) {
-    case "add_plan": {
-      const extras = plannedExtras(current, action)
-      return {
-        ...current,
-        plan: [
-          ...current.plan,
-          {
-            id: uid(),
-            title: title || "A new plan",
-            area:
-              extras.kind && EXERCISE_KINDS.includes(extras.kind)
-                ? "move"
-                : (area ?? current.priorities[0] ?? "home"),
-            date,
-            time: isTime(action.time) ? action.time : undefined,
-            duration: action.duration ?? undefined,
-            mode: action.mode ?? "flexible",
-            status: "planned",
-            note: action.body ?? undefined,
-            ...extras,
-          },
-        ],
-      }
-    }
-    case "move_plan":
-    case "complete_plan":
-      return {
-        ...current,
-        plan: current.plan.map((item) =>
-          item.id !== action.planId
-            ? item
-            : action.type === "complete_plan"
-              ? { ...item, status: "complete" }
-              : {
-                  ...item,
-                  date,
-                  time: isTime(action.time) ? action.time : item.time,
-                },
-        ),
-      }
-    case "add_journal":
-      return {
-        ...current,
-        journal: [
-          {
-            id: uid(),
-            title: title || "Captured reflection",
-            body: action.body ?? "",
-            date,
-          },
-          ...current.journal,
-        ],
-      }
-    case "add_project":
-      return {
-        ...current,
-        projects: [
-          {
-            id: uid(),
-            title: title || "A captured idea",
-            note: action.body ?? "",
-            stage: "Seed",
-            nextAction: action.nextAction ?? "Give it twenty curious minutes",
-          },
-          ...current.projects,
-        ],
-      }
-    case "add_goal":
-      return {
-        ...current,
-        goals: [
-          {
-            id: uid(),
-            title: title || "A new goal to shape over time",
-            area: area ?? current.priorities[0] ?? "create",
-            scale: action.scale ?? "small",
-            status: "tending",
-            nextStep:
-              action.nextAction ?? "Choose the smallest meaningful first step",
-            milestones: (action.milestones ?? []).map((milestone) => ({
-              id: uid(),
-              title: milestone,
-            })),
-          },
-          ...current.goals,
-        ],
-      }
-    case "add_transaction":
-      return {
-        ...current,
-        transactions: [
-          {
-            id: uid(),
-            title: title || "Captured expense",
-            amount: Math.round(Math.abs(action.amount ?? 0) * 100),
-            date,
-            category: action.category ?? "Captured",
-          },
-          ...current.transactions,
-        ],
-      }
-    case "log_activity": {
-      const log = {
-        completedAt: new Date().toISOString(),
-        summary: title || "Activity",
-        duration: action.duration ?? undefined,
-        effort: action.effort ?? undefined,
-        note: action.body ?? undefined,
-        concern: action.concern ?? undefined,
-      }
-      const target = current.plan.find((item) => item.id === action.planId)
-      if (target?.status === "complete") return current
-      if (target)
-        return {
-          ...current,
-          plan: current.plan.map((item) =>
-            item.id === target.id ? { ...item, status: "complete", log } : item,
-          ),
-        }
-      return {
-        ...current,
-        plan: [
-          ...current.plan,
-          {
-            id: uid(),
-            title: title || "Activity",
-            area: area ?? "move",
-            date,
-            duration: action.duration ?? undefined,
-            mode: "flexible",
-            status: "complete",
-            log,
-          },
-        ],
-      }
-    }
-    case "add_gym_session": {
-      const sessionId = uid()
-      const extras = plannedExtras(current, { ...action, kind: "gym" })
-      const exercises = extras.workout?.length
-        ? extras.workout.map((item) => item.name)
-        : action.exercises?.length
-          ? action.exercises
-          : ["Sit to stand or leg press", "Supported row", "Calf raise"]
-      return {
-        ...current,
-        gymSessionPlans: [
-          {
-            id: sessionId,
-            title: title || "Gentle gym session",
-            createdAt: new Date().toISOString(),
-            goal: "Studio suggestion",
-            exercises,
-          },
-          ...(current.gymSessionPlans ?? []),
-        ],
-        workout: {
-          active: false,
-          current: 0,
-          sets: exercises.flatMap((exercise) =>
-            [1, 2].map((round) => ({
-              id: `${sessionId}-${exercise}-${round}`,
-              exercise,
-              reps: 8,
-              complete: false,
-            })),
-          ),
-        },
-        plan: [
-          ...current.plan,
-          {
-            id: uid(),
-            title: title || "Gentle gym session",
-            area: "move",
-            date,
-            time: isTime(action.time) ? action.time : undefined,
-            duration: action.duration ?? 35,
-            mode: "flexible",
-            status: "planned",
-            note: "Suggested by Studio. Edit it to suit you.",
-            ...extras,
-          },
-        ],
-      }
-    }
-    default:
-      return current
-  }
-}
-
-type Destination =
-  | { kind: "plan"; date: string }
-  | { kind: "space"; space: SpaceKey }
-  | { kind: "progress" }
-
-// Where each confirmed change lives, so the assistant can say "go there".
-function destinationOf(action: StudioAction, state: AppState): { label: string; to: Destination } {
-  const date = isDate(action.date) ? action.date : today()
-  const day = date === today() ? "today" : formatDate(date, { weekday: "long", day: "numeric", month: "short" })
-  switch (action.type) {
-    case "add_journal":
-      return { label: "Saved in your Journal", to: { kind: "space", space: "reflect" } }
-    case "add_project":
-      return { label: "New project in Projects", to: { kind: "space", space: "create" } }
-    case "add_goal":
-      return { label: "New goal in Progress", to: { kind: "progress" } }
-    case "add_transaction":
-      return { label: "Added to Money", to: { kind: "space", space: "money" } }
-    case "move_plan":
-    case "complete_plan": {
-      const item = state.plan.find((candidate) => candidate.id === action.planId)
-      const target = action.type === "move_plan" ? date : (item?.date ?? date)
-      return {
-        label: action.type === "move_plan" ? `Moved in your Plan to ${target === today() ? "today" : formatDate(target, { weekday: "long" })}` : "Marked done in your Plan",
-        to: { kind: "plan", date: target },
-      }
-    }
-    case "log_activity":
-      return { label: "Logged in your Plan and Progress", to: { kind: "plan", date } }
-    default:
-      return { label: `Added to your Plan · ${day}`, to: { kind: "plan", date } }
-  }
 }
 
 const DRAFT_KEY = "life-studio:assistant-draft"
@@ -4109,11 +3838,13 @@ function VoiceCapture({
   onClose,
   update,
   onGo,
+  notesOnly = false,
 }: {
   state: AppState
   onClose: () => void
   update: SpaceProps["update"]
   onGo: (to: Destination) => void
+  notesOnly?: boolean
 }) {
   const [mode, setMode] = useState<CaptureMode>("choose")
   const [saved, setSaved] = useState<{ summary: string; label: string; to: Destination }[]>([])
@@ -4493,7 +4224,7 @@ function VoiceCapture({
 
   return (
     <Modal
-      title="Studio assistant"
+      title={notesOnly ? "Voice notes" : "Studio assistant"}
       eyebrow="Plan, capture, and shape what’s next"
       onClose={onClose}
     >
@@ -4554,7 +4285,7 @@ function VoiceCapture({
                 </p>
               </div>
             </div>
-            {draft && (
+            {!notesOnly && draft && (
               <div className="draft-restore">
                 <p>
                   <strong>Unsent request saved</strong>
@@ -4580,6 +4311,7 @@ function VoiceCapture({
                 />
               </div>
             )}
+            {!notesOnly && (
             <div className="assistant-actions">
               {quickActions.map(({ icon: Icon, title, hint, prompt }) => (
                 <button
@@ -4608,7 +4340,10 @@ function VoiceCapture({
                 </span>
               </button>
             </div>
+            )}
             <div className="assistant-inputs">
+              {!notesOnly && (
+              <>
               <button type="button" onClick={startListening}>
                 <span>
                   <Mic size={23} />
@@ -4629,6 +4364,8 @@ function VoiceCapture({
                 </div>
                 <ChevronRight size={18} />
               </button>
+              </>
+              )}
               <button type="button" onClick={startRecording}>
                 <span>
                   <AudioLines size={22} />
@@ -4665,9 +4402,9 @@ function VoiceCapture({
             <div className="prototype-note">
               <Sparkles size={19} />
               <p>
-                Your browser turns speech into text for free, then Studio’s AI
-                suggests changes. Voice notes are never sent to AI. Nothing
-                changes until you confirm.
+                {notesOnly
+                  ? "Voice notes are private recordings saved to your studio. They are never sent to AI."
+                  : "Your browser turns speech into text for free, then Studio’s AI suggests changes. Voice notes are never sent to AI. Nothing changes until you confirm."}
               </p>
             </div>
             <div className="assistant-boundary">
@@ -4955,6 +4692,7 @@ export default function App() {
   const [route, setRoute] = useState<Route>(routeFromPath)
   const [space, setSpace] = useState<SpaceKey | null>(null)
   const [capture, setCapture] = useState(false)
+  const [voiceNotes, setVoiceNotes] = useState(false)
   const [addDate, setAddDate] = useState<string | null>(null)
   const [activity, setActivity] = useState<{
     id: string
@@ -5228,9 +4966,29 @@ export default function App() {
         </Modal>
       )}
       {capture && (
-        <VoiceCapture
+        <StudioChat
           state={state}
           onClose={() => setCapture(false)}
+          update={update}
+          onVoiceNotes={() => {
+            setCapture(false)
+            setVoiceNotes(true)
+          }}
+          onGo={(to) => {
+            if (to.kind === "space") setSpace(to.space)
+            else if (to.kind === "progress") navigate("progress")
+            else {
+              setPlanFocus(to.date)
+              navigate("plan")
+            }
+          }}
+        />
+      )}
+      {voiceNotes && (
+        <VoiceCapture
+          notesOnly
+          state={state}
+          onClose={() => setVoiceNotes(false)}
           update={update}
           onGo={(to) => {
             if (to.kind === "space") setSpace(to.space)

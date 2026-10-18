@@ -5,6 +5,7 @@ import {
   CalendarPlus,
   Check,
   ChevronRight,
+  MoreHorizontal,
   Music2,
   Pencil,
   Plus,
@@ -84,7 +85,7 @@ export function Celebration({ message, onDone }: { message: CelebrationMessage; 
 // Send a step to a day (with clash check)
 // ---------------------------------------------------------------------------
 
-function StepScheduler({
+export function StepScheduler({
   title,
   plan,
   onSchedule,
@@ -187,6 +188,7 @@ function StepList({
 }) {
   const [draft, setDraft] = useState("")
   const [scheduling, setScheduling] = useState<string | null>(null)
+  const [tools, setTools] = useState<string | null>(null)
   return (
     <div className="step-list">
       {steps.length === 0 && (
@@ -220,21 +222,33 @@ function StepList({
                     </small>
                   )}
                 </div>
-                {!step.done && !planned && (
-                  <button
-                    type="button"
-                    className="step-list__schedule"
-                    onClick={() => setScheduling(scheduling === step.id ? null : step.id)}
-                  >
-                    <CalendarPlus size={15} /> Add to day
-                  </button>
-                )}
-                <div className="step-list__tools">
-                  <IconButton label="Move up" icon={ArrowUp} onClick={() => onMove(step.id, -1)} />
-                  <IconButton label="Move down" icon={ArrowDown} onClick={() => onMove(step.id, 1)} />
-                  <IconButton label={`Remove “${step.title}”`} icon={Trash2} onClick={() => onRemove(step.id)} />
-                </div>
+                <IconButton
+                  label={tools === step.id ? "Hide step options" : `Options for “${step.title}”`}
+                  icon={MoreHorizontal}
+                  active={tools === step.id}
+                  onClick={() => setTools(tools === step.id ? null : step.id)}
+                />
               </div>
+              {(!step.done && !planned) || tools === step.id ? (
+                <div className="step-list__actions">
+                  {!step.done && !planned && (
+                    <button
+                      type="button"
+                      className="step-list__schedule"
+                      onClick={() => setScheduling(scheduling === step.id ? null : step.id)}
+                    >
+                      <CalendarPlus size={15} /> Add to day
+                    </button>
+                  )}
+                  {tools === step.id && (
+                    <div className="step-list__tools">
+                      <IconButton label="Move up" icon={ArrowUp} onClick={() => onMove(step.id, -1)} />
+                      <IconButton label="Move down" icon={ArrowDown} onClick={() => onMove(step.id, 1)} />
+                      <IconButton label={`Remove “${step.title}”`} icon={Trash2} onClick={() => onRemove(step.id)} />
+                    </div>
+                  )}
+                </div>
+              ) : null}
               {scheduling === step.id && (
                 <StepScheduler
                   title={step.title}
@@ -1171,5 +1185,82 @@ export function GoalDetail({
       )}
       {celebration && <Celebration message={celebration} onDone={() => setCelebration(null)} />}
     </Modal>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Set aside: skipped things wait quietly here, never as a backlog
+// ---------------------------------------------------------------------------
+
+export function SetAsideShelf({ state, update }: { state: AppState; update: Update }) {
+  const [open, setOpen] = useState(false)
+  const [bringing, setBringing] = useState<string | null>(null)
+  const cutoff = addDays(today(), -60)
+  const items = state.plan
+    .filter((item) => item.status === "let-go" && item.date >= cutoff)
+    .sort((a, b) => b.date.localeCompare(a.date))
+  if (!items.length) return null
+  return (
+    <section className="set-aside">
+      <button type="button" className="set-aside__toggle" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span>
+          <strong>Set aside</strong>
+          <small>Things you skipped, here if you ever want them back. No need to catch up.</small>
+        </span>
+        <ChevronRight size={18} className={open ? "is-open" : ""} />
+      </button>
+      {open && (
+        <ul>
+          {items.map((item) => (
+            <li key={item.id}>
+              <div className="set-aside__row">
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>Set aside from {formatDate(item.date, { weekday: "short", day: "numeric", month: "short" })}</small>
+                </span>
+                <div className="inline-actions">
+                  <Button variant="secondary" icon={CalendarPlus} onClick={() => setBringing(bringing === item.id ? null : item.id)}>
+                    Bring back
+                  </Button>
+                  <button
+                    type="button"
+                    className="text-link"
+                    onClick={() =>
+                      update(
+                        (current) => ({ ...current, plan: current.plan.filter((candidate) => candidate.id !== item.id) }),
+                        "Cleared.",
+                      )
+                    }
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              {bringing === item.id && (
+                <StepScheduler
+                  title={item.title}
+                  plan={state.plan}
+                  onCancel={() => setBringing(null)}
+                  onSchedule={(date, time, duration) => {
+                    update(
+                      (current) => ({
+                        ...current,
+                        plan: current.plan.map((candidate) =>
+                          candidate.id === item.id
+                            ? { ...candidate, status: "planned" as const, date, time: time ?? candidate.time, duration: duration || candidate.duration, seriesId: undefined }
+                            : candidate,
+                        ),
+                      }),
+                      `Back on ${date === today() ? "today" : formatDate(date, { weekday: "long" })}.`,
+                    )
+                    setBringing(null)
+                  }}
+                />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }

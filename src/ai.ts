@@ -189,8 +189,10 @@ function studioContext(state: AppState) {
   }
 }
 
-export const askStudio = (input: string, state: AppState) =>
-  ai<StudioProposal>("assist", input, studioContext(state))
+export type ChatTurn = { role: "user" | "studio"; text: string; suggested?: string[]; outcome?: string }
+
+export const askStudio = (input: string, state: AppState, history: ChatTurn[] = []) =>
+  ai<StudioProposal>("assist", input, { ...studioContext(state), history: history.slice(-12) })
 
 export const askMoneyGuide = (question: string) =>
   ai<{ answer: string }>("guide", question).then((data) => data.answer)

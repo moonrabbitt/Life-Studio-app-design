@@ -23,12 +23,13 @@ import {
   seriesOf,
   skipOccurrence,
 } from "./series"
-import { checkPlacement } from "./training"
+import { buildIntroSession, checkPlacement } from "./training"
 import {
   ActivityButtons,
   DictateButton,
   PlannedWorkoutList,
   skipItem,
+  WorkoutEditor,
   StatusBadge,
   type ActivityMode,
 } from "./TrainingViews"
@@ -238,6 +239,7 @@ export function PlanItemSheet({
 }) {
   const item = state.plan.find((candidate) => candidate.id === itemId)
   const [editing, setEditing] = useState(false)
+  const [editingWorkout, setEditingWorkout] = useState(false)
   const [journal, setJournal] = useState("")
   const [howItWent, setHowItWent] = useState("")
   const [stepTitle, setStepTitle] = useState("")
@@ -305,7 +307,74 @@ export function PlanItemSheet({
             ))}
           </ul>
         )}
-        {item.workout?.length ? <PlannedWorkoutList workout={item.workout} /> : null}
+        {item.workout?.length ? (
+          editingWorkout ? (
+            <WorkoutEditor
+              workout={item.workout}
+              onCancel={() => setEditingWorkout(false)}
+              onSave={(workout) => {
+                patch({ workout }, "Exercises saved.")
+                setEditingWorkout(false)
+              }}
+            />
+          ) : (
+            <>
+              <PlannedWorkoutList workout={item.workout} />
+              {open && (
+                <button type="button" className="text-link" onClick={() => setEditingWorkout(true)}>
+                  <Pencil size={14} /> Edit exercises
+                </button>
+              )}
+            </>
+          )
+        ) : item.kind === "gym" && open ? (
+          editingWorkout ? (
+            <WorkoutEditor
+              workout={
+                state.trainingProfile
+                  ? buildIntroSession(state.trainingProfile).exercises.map((exercise) => ({
+                      name: exercise.name,
+                      sets: buildIntroSession(state.trainingProfile!).sets,
+                      reps: exercise.reps.replace(/ reps$/, ""),
+                      rest: exercise.rest,
+                      load: "A weight you could lift 3-4 more times",
+                      why: "From your introductory session",
+                    }))
+                  : []
+              }
+              onCancel={() => setEditingWorkout(false)}
+              onSave={(workout) => {
+                patch({ workout }, "Exercises saved for this session.")
+                setEditingWorkout(false)
+              }}
+            />
+          ) : (
+            <div className="plan-sheet__gym-tools">
+              <button type="button" className="text-link" onClick={() => setEditingWorkout(true)}>
+                <Pencil size={14} /> Customise exercises
+              </button>
+              {(state.workoutTemplates ?? []).length > 0 && (
+                <label className="plan-sheet__field">
+                  <span>Or use one of my workouts</span>
+                  <select
+                    value=""
+                    onChange={(event) => {
+                      const template = (state.workoutTemplates ?? []).find((candidate) => candidate.id === event.target.value)
+                      if (template) patch({ workout: template.exercises }, `Using “${template.name}”.`)
+                    }}
+                  >
+                    <option value="">Choose a workout…</option>
+                    {(state.workoutTemplates ?? []).map((template) => (
+                      <option value={template.id} key={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+          )
+        ) : null}
         {open && (
           <ActivityButtons
             item={item}
@@ -589,7 +658,7 @@ export function PlanItemSheet({
                   variant="ghost"
                   icon={X}
                   onClick={() => {
-                    patch({ status: "let-go" }, "Let go. Nothing needs to be made up.")
+                    patch({ status: "let-go" }, "Set aside. It’s under Plan → Set aside if you want it back.")
                     onClose()
                   }}
                 >
