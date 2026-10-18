@@ -1,5 +1,6 @@
 import { Compass, Map, Plus, RotateCcw, Trash2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
+import { AboutMeSuggestions } from "./AboutMeUpdates"
 import { restoreArchive } from "./setup"
 import { ABOUT_LABELS } from "./SetupChat"
 import type { AboutMe, AppState } from "./types"
@@ -8,6 +9,7 @@ import { Button, formatDate, Modal, SwipeRow, uid, useRemove } from "./ui"
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
 
 const PROMPTS: Record<keyof Omit<AboutMe, "updatedAt">, string> = {
+  whereNow: "Studio keeps this up to date with your progress each week",
   workingTowards: "Events, dates, things you’d love to be able to do",
   healthGoals: "e.g. strong and mobile as I get older, more energy",
   body: "Injuries, conditions, what hurts, what feels good",
@@ -19,6 +21,7 @@ const PROMPTS: Record<keyof Omit<AboutMe, "updatedAt">, string> = {
 }
 
 const blank: Omit<AboutMe, "updatedAt"> = {
+  whereNow: "",
   workingTowards: "",
   healthGoals: "",
   body: "",
@@ -109,6 +112,7 @@ export function AboutMeSpace({
           Studio reads this every time it plans something or suggests exercises, so plans fit your body, energy and
           week. Change it whenever life changes.
         </p>
+        <AboutMeSuggestions state={state} update={update} onAccepted={(field, value) => setDraft((current) => ({ ...current, [field]: value }))} />
         <section className="about-me__concern">
           <h3>Anything affecting exercise right now?</h3>
           <p className="capture-disclaimer">Pain, an injury or a condition. When this is on, Studio only suggests gentle options.</p>

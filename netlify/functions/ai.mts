@@ -674,6 +674,47 @@ Progress like a careful coach: start small, build gradually.
 - "phaseReady": true only if the logs clearly meet context.phase.readyWhen; "phaseNote" says why, or
   what to keep doing. Never move them on yourself.`
 
+const aboutMeSchema = {
+  name: "about_me_updates",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["changes"],
+    properties: {
+      changes: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["field", "suggested", "reason"],
+          properties: {
+            field: { type: "string", enum: ["whereNow", "workingTowards", "healthGoals", "body", "movementNow", "equipment", "week", "energy", "other"] },
+            suggested: { type: "string" },
+            reason: { type: "string" },
+          },
+        },
+      },
+    },
+  },
+}
+
+const ABOUT_ME_INSTRUCTIONS = `${TONE}
+
+Once a week you suggest updates to the user's About me (what Studio remembers about them) so it keeps
+up with their progress. context.aboutMe is what it says now. The evidence from the last two weeks:
+context.logs (sessions done or skipped, effort, pain), context.workouts (weights and reps),
+context.sleep, context.reflections and context.messages (things they told you in chat), their
+training phase and goals with milestones reached.
+- "whereNow": ALWAYS suggest a fresh 1-3 line snapshot of where they are, if there is any activity:
+  phase and week, what a normal week looks like now, key numbers that moved (e.g. "Leg press up from
+  40 to 45 kg"), milestones reached. Plain and specific; no praise inflation.
+- Other fields: only when the evidence clearly shows something changed (e.g. they said their ankles
+  are fine, they joined a class, their work hours changed, a new pain appeared in a log). Rewrite the
+  WHOLE field: keep what's still true, update what changed, in their plain style (second person is fine).
+- "reason": one short line pointing at the evidence ("You said on 12 Oct your ankles are fine").
+- Never invent health details; only use what they said or logged. 0-5 changes. If nothing changed and
+  nothing happened, return an empty list.`
+
 const GUIDE_INSTRUCTIONS = `${TONE}
 
 You are a money learning guide. Explain personal-finance and investing concepts simply, with a small
@@ -777,6 +818,16 @@ export default async (req: Request) => {
         maxOutputTokens: 6000,
         schema: nextWeekSchema,
         timeoutMs: 50000,
+      })
+      return json(JSON.parse(text))
+    }
+
+    if (body?.task === "aboutme") {
+      const text = await callResponses({
+        instructions: ABOUT_ME_INSTRUCTIONS,
+        input: `Context:\n${context}\n\nRequest:\n${input}`,
+        maxOutputTokens: 2000,
+        schema: aboutMeSchema,
       })
       return json(JSON.parse(text))
     }

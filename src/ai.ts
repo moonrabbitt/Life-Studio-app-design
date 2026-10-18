@@ -425,3 +425,23 @@ export const planNextWeek = (state: AppState, weekStart: string) => {
       .map((item) => ({ title: item.title, date: item.date, time: item.time, kind: item.kind })),
   })
 }
+
+// Once a week: Studio suggests About me updates from your progress (you accept or dismiss each).
+export const suggestAboutMe = (state: AppState) => {
+  const from = localDate(new Date(Date.now() - 14 * 86400000))
+  const { aboutMe } = state
+  return ai<{ changes: { field: string; suggested: string; reason: string }[] }>("aboutme", "Suggest updates to my About me from the last two weeks.", {
+    today: localDate(),
+    aboutMe: aboutMe && Object.fromEntries(Object.entries(aboutMe).filter(([key]) => key !== "updatedAt")),
+    phase: phaseSummary(state),
+    goals: state.goals.filter((goal) => goal.status !== "complete").map((goal) => ({ title: goal.title, milestonesReached: goal.milestones.filter((milestone) => milestone.completedAt).map((milestone) => milestone.title) })),
+    logs: state.plan
+      .filter((item) => item.kind && item.date >= from && item.date <= localDate() && item.status !== "planned" && item.status !== "proposed")
+      .map((item) => ({ title: item.title, kind: item.kind, date: item.date, status: item.status, effort: item.log?.effort, pain: item.log?.concern, note: item.log?.note })),
+    workouts: (state.workoutHistory ?? []).filter((record) => record.date >= from).slice(0, 8),
+    sleep: sleepContext(state),
+    reflections: (state.roadmap?.reflections ?? []).filter((item) => item.date >= from).map((item) => item.text).slice(0, 8),
+    messages: (state.chat ?? []).filter((message) => message.role === "user" && message.at >= from).map((message) => `${message.at.slice(0, 10)}: ${message.text}`).slice(-20),
+    concern: state.trainingProfile?.concern === "yes" ? state.trainingProfile.concernNote ?? "yes" : "no",
+  })
+}

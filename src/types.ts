@@ -290,6 +290,12 @@ export type TrainingProfile = {
   minutes: string
 }
 
+export type AboutMeSuggestion = {
+  field: keyof Omit<AboutMe, "updatedAt">
+  suggested: string
+  reason: string
+}
+
 export type SleepEntry = {
   id: string
   lightsOut: string // ISO time
@@ -299,6 +305,8 @@ export type SleepEntry = {
 }
 
 export type AboutMe = {
+  // A short snapshot of progress, refreshed with Studio's weekly suggestions.
+  whereNow?: string
   workingTowards: string
   healthGoals: string
   body: string
@@ -408,6 +416,8 @@ export type AppState = {
   // Snapshots kept when you set up again from the top.
   archives?: SpaceArchive[]
   tourDone?: boolean
+  // Studio's weekly suggested updates to About me, waiting for you to accept or dismiss.
+  aboutMeSuggestions?: { weekStart: string; at: string; items: AboutMeSuggestion[] }
   // Lights out / lights on, to see sleep patterns over time.
   sleep?: SleepEntry[]
   pastPlans?: PastPlan[]

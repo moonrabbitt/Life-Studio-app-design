@@ -110,6 +110,7 @@ function basicDraft(answers: Record<string, string[]>): SetupDraft {
 }
 
 export const ABOUT_LABELS: [keyof SetupChoices["aboutMe"], string][] = [
+  ["whereNow", "Where I am now"],
   ["workingTowards", "Working towards"],
   ["healthGoals", "Long-term health"],
   ["body", "Your body"],

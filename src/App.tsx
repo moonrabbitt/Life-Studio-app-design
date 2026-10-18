@@ -129,6 +129,7 @@ import { AboutMeSpace } from "./AboutMe"
 import { SetupChat } from "./SetupChat"
 import { applySetup } from "./setup"
 import { Tour } from "./Tour"
+import { AboutMeNudge, useWeeklyAboutMe } from "./AboutMeUpdates"
 import { openSleep, SleepSpace, SleepToggle } from "./SleepViews"
 import { NextWeekPlanner, nextWeekDue } from "./NextWeek"
 import { SessionPlanner, type PlannedSession } from "./SessionPlanner"
@@ -937,6 +938,7 @@ function ProgressView({
     )
   }
 
+  useWeeklyAboutMe(state, update)
   return (
     <div className="page">
       <header className="page-header progress-header journey-header">
@@ -947,6 +949,7 @@ function ProgressView({
       </header>
 
       <div className="journey-layout">
+        <AboutMeNudge state={state} />
         <WeekDigestCard state={state} update={update} />
         <JourneyGoals
           state={state}

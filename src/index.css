@@ -9697,3 +9697,69 @@ label.setup-review__pick > span {
   margin: 0;
   color: var(--ink-soft);
 }
+/* About me: keeping up with you */
+.about-updates {
+  display: grid;
+  gap: 0.7rem;
+}
+.about-updates__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+}
+.about-updates__head h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+.about-updates__item {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--moss);
+  border-radius: 1rem;
+  background: var(--surface);
+}
+.about-updates__item p {
+  margin: 0;
+}
+.about-updates__old {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  text-decoration: line-through;
+  text-decoration-color: rgb(0 0 0 / 25%);
+}
+.about-updates__item small {
+  color: var(--ink-soft);
+}
+.about-nudge {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.about-nudge span {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+}
+.about-nudge strong {
+  color: var(--moss);
+  white-space: nowrap;
+}
+.about-nudge svg {
+  flex: none;
+  color: var(--moss);
+}
