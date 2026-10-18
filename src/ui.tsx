@@ -1,5 +1,5 @@
 import { X, type LucideIcon } from "lucide-react"
-import { useEffect, useRef, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { localDate } from "./ai"
 
 export const today = () => localDate()
@@ -150,5 +150,33 @@ export function Modal({
         <div className="modal__body">{children}</div>
       </section>
     </div>
+  )
+}
+
+// A picture that falls back (or hides) if the file isn't there yet.
+export function Art({
+  src,
+  fallback,
+  className,
+  alt = "",
+}: {
+  src: string
+  fallback?: string
+  className?: string
+  alt?: string
+}) {
+  const [current, setCurrent] = useState(src)
+  const [hidden, setHidden] = useState(false)
+  if (hidden) return null
+  return (
+    <img
+      src={current}
+      alt={alt}
+      className={className}
+      onError={() => {
+        if (fallback && current !== fallback) setCurrent(fallback)
+        else setHidden(true)
+      }}
+    />
   )
 }

@@ -205,3 +205,14 @@ export const suggestGymSession = (
     energy: details.energy,
     equipmentToday: details.equipment,
   })
+
+export const suggestProjectSteps = (project: {
+  title: string
+  note: string
+  existing: string[]
+}) =>
+  ai<{ steps: { title: string; minutes: number }[] }>(
+    "steps",
+    "Suggest the next small steps for this project.",
+    project,
+  ).then((data) => (Array.isArray(data.steps) ? data.steps : []))

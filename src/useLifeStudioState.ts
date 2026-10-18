@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { getVoiceNote } from "./audioStore"
 import { demoState, emptyState } from "./data"
+import { reconcileProjects, tidyProjects } from "./projects"
 import {
   getPasscode,
   pullState,
@@ -19,13 +20,13 @@ export type SyncStatus = "off" | "syncing" | "synced" | "offline" | "locked" | "
 
 function normalise(value: Partial<AppState> | null | undefined): AppState | null {
   if (!value || value.version !== 1 || !Array.isArray(value.plan)) return null
-  return { ...demoState, ...value } as AppState
+  return tidyProjects({ ...demoState, ...value } as AppState)
 }
 
 function loadState(): AppState {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    return normalise(stored ? JSON.parse(stored) : null) ?? demoState
+    return normalise(stored ? JSON.parse(stored) : null) ?? tidyProjects(demoState)
   } catch {
     return demoState
   }
@@ -80,7 +81,7 @@ export function useLifeStudioState() {
   }, [])
 
   const commit = useCallback((recipe: (current: AppState) => AppState) => {
-    setState(recipe)
+    setState((current) => reconcileProjects(recipe(current)))
     setUpdatedAt(Date.now())
     setChanges((value) => value + 1)
   }, [])
@@ -215,7 +216,7 @@ export function useLifeStudioState() {
   const reset = useCallback(
     (kind: "demo" | "empty") => {
       commit(() =>
-        kind === "demo" ? demoState : { ...emptyState, onboarded: true },
+        kind === "demo" ? tidyProjects(demoState) : { ...emptyState, onboarded: true },
       )
       flash(
         kind === "demo"

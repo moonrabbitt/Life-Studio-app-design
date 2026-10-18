@@ -20,6 +20,7 @@ import {
   Zap,
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { celebrate } from "./GoalProjectViews"
 import { listen, speechSupported } from "./speech"
 import {
   acceptWeek,
@@ -54,7 +55,7 @@ import type {
   TrainingProfile,
   WorkoutRecord,
 } from "./types"
-import { Button, formatDate, Modal, today, uid } from "./ui"
+import { Art, Button, formatDate, Modal, today, uid } from "./ui"
 
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
 export type ActivityMode = "start" | "short" | "move"
@@ -125,7 +126,12 @@ export function DictateButton({ onText }: { onText: (text: string) => void }) {
   const session = useRef<ReturnType<typeof listen> | null>(null)
   useEffect(() => () => session.current?.cancel(), [])
 
-  if (!speechSupported()) return null
+  if (!speechSupported())
+    return (
+      <p className="dictate__text">
+        <Mic size={14} /> To speak instead, tap the 🎤 on your keyboard.
+      </p>
+    )
   return (
     <div className="dictate">
       <button
@@ -151,8 +157,8 @@ export function DictateButton({ onText }: { onText: (text: string) => void }) {
               setActive(false)
               setError(
                 kind === "permission"
-                  ? "Allow the microphone to dictate, or type instead."
-                  : "Voice isn’t available right now. Type instead.",
+                  ? "Allow the microphone to dictate, or tap the 🎤 on your keyboard."
+                  : "Voice isn’t available here. Tap the 🎤 on your keyboard instead.",
               )
             },
           })
@@ -508,6 +514,7 @@ export function Roadmap({
   return (
     <Modal title="Your roadmap" eyebrow="Running, gym and dance as one programme" onClose={onClose} wide>
       <div className="roadmap">
+        <Art className="roadmap__art" src="/assets/movement-path.jpg" />
         <ol className="roadmap__phases">
           {PHASES.map((item) => (
             <li
@@ -1262,6 +1269,7 @@ function DoTimer({ item, short, onFinish }: { item: PlanItem; short: boolean; on
 
   return (
     <div className="do-timer">
+      {item.kind === "dance" && <Art className="space-banner" src="/assets/dance-floor.jpg" />}
       {short && item.shortVersion && (
         <p className="do-timer__short">
           <Zap size={16} /> Short version: {item.shortVersion.note}
@@ -1581,6 +1589,15 @@ export function ActivityFlow({
 
   const saveLog = (log: ActivityLog, pauseTraining: boolean) => {
     const workoutId = workout ? uid() : undefined
+    if (!log.concern)
+      celebrate({
+        title: log.summary,
+        body: log.wasClass
+          ? "A whole class. Keep tomorrow gentle."
+          : item.kind === "gym"
+            ? "Strength in the bank. Your log makes next time specific."
+            : "Logged. That’s real progress.",
+      })
     complete(
       { ...log, workoutId },
       log.wasClass

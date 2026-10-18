@@ -67,6 +67,10 @@ export type PlanItem = {
   optional?: boolean
   intensity?: "light" | "moderate" | "hard"
   workout?: PlannedExercise[]
+  projectId?: string
+  stepId?: string
+  milestoneId?: string
+  personId?: string
   log?: ActivityLog
 }
 
@@ -78,6 +82,14 @@ export type JournalEntry = {
   mood?: string
 }
 
+export type ProjectStep = {
+  id: string
+  title: string
+  done: boolean
+  doneAt?: string
+}
+
+// A project makes something: ordered steps lead to a finished thing.
 export type Project = {
   id: string
   title: string
@@ -85,6 +97,10 @@ export type Project = {
   stage: "Seed" | "Exploring" | "Making" | "Resting" | "Complete"
   nextAction?: string
   estimatedCost?: number
+  steps?: ProjectStep[]
+  goalId?: string
+  finishedAt?: string
+  madeNote?: string
 }
 
 export type Person = {

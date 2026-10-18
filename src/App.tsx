@@ -43,6 +43,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react"
+import { flushSync } from "react-dom"
 import {
   useEffect,
   useMemo,
@@ -89,7 +90,16 @@ import {
   WeekAcceptBanner,
   type ActivityMode,
 } from "./TrainingViews"
-import { Button, formatDate, IconButton, Modal, today, uid } from "./ui"
+import {
+  Celebration,
+  celebrateDone,
+  GoalDetail,
+  GOAL_VS_PROJECT,
+  ProjectsSpace,
+  type CelebrationMessage,
+} from "./GoalProjectViews"
+import { PlanItemSheet } from "./PlanItemSheet"
+import { Art, Button, formatDate, IconButton, Modal, today, uid } from "./ui"
 import { useLifeStudioState, type SyncStatus } from "./useLifeStudioState"
 
 type Route = "today" | "plan" | "progress" | "space"
@@ -232,7 +242,7 @@ function Onboarding({
     <main className="onboarding">
       <div className="onboarding__visual">
         <img
-          src="/assets/life-studio-room.png"
+          src="/assets/life-studio-room.jpg"
           alt="A sunlit creative room overlooking London"
         />
         <div className="onboarding__brand">
@@ -401,6 +411,7 @@ function TodayView({
   onActivity,
   onRoadmap,
   onSetupRestart,
+  onOpenItem,
 }: {
   state: AppState
   update: (recipe: (current: AppState) => AppState, message?: string) => void
@@ -409,6 +420,7 @@ function TodayView({
   onActivity: (id: string, mode: ActivityMode) => void
   onRoadmap: () => void
   onSetupRestart: () => void
+  onOpenItem: (id: string) => void
 }) {
   const currentItems = state.plan
     .filter(
@@ -428,22 +440,28 @@ function TodayView({
       (current) => ({ ...current, checkIn: value }),
       "Today has been softened to fit.",
     )
-  const complete = (id: string) =>
-    update(
-      (current) => ({
-        ...current,
-        plan: current.plan.map((item) =>
-          item.id === id ? { ...item, status: "complete" } : item,
-        ),
-      }),
-      "Noted. One thing tended to.",
-    )
+  const complete = (id: string) => {
+    const done = state.plan.find((item) => item.id === id)
+    update((current) => ({
+      ...current,
+      plan: current.plan.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: "complete",
+              log: { completedAt: new Date().toISOString(), summary: item.title },
+            }
+          : item,
+      ),
+    }))
+    if (done) celebrateDone(done.title, done.area)
+  }
 
   return (
     <div className="page today-page">
       <section className="today-hero">
         <img
-          src="/assets/life-studio-room.png"
+          src="/assets/life-studio-room.jpg"
           alt=""
           className="today-hero__image"
         />
@@ -548,11 +566,8 @@ function TodayView({
                           <Button onClick={() => complete(item.id)} icon={Check}>
                             Done
                           </Button>
-                          <Button
-                            variant="ghost"
-                            onClick={() => onOpenSpace(item.area)}
-                          >
-                            Open {areaMeta[item.area].label}
+                          <Button variant="ghost" onClick={() => onOpenItem(item.id)}>
+                            Open
                           </Button>
                         </div>
                       )}
@@ -613,11 +628,15 @@ function PlanView({
   update,
   onAdd,
   onActivity,
+  focusDate,
+  onOpenItem,
 }: {
   state: AppState
   update: (recipe: (current: AppState) => AppState, message?: string) => void
   onAdd: (date?: string) => void
   onActivity: (id: string, mode: ActivityMode) => void
+  focusDate?: string | null
+  onOpenItem: (id: string) => void
 }) {
   const days = useMemo(
     () =>
@@ -628,12 +647,15 @@ function PlanView({
       }),
     [],
   )
-  const [selected, setSelected] = useState(days[0])
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
+  const [selected, setSelected] = useState(
+    focusDate && days.includes(focusDate) ? focusDate : days[0],
+  )
+  useEffect(() => {
+    if (focusDate && days.includes(focusDate)) setSelected(focusDate)
+  }, [focusDate, days])
   const items = state.plan
     .filter((item) => item.date === selected)
     .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""))
-  const selectedItem = state.plan.find((item) => item.id === selectedItemId)
 
   const moveTomorrow = (item: PlanItem) => {
     const target = new Date(`${item.date}T12:00:00`)
@@ -762,33 +784,39 @@ function PlanView({
                           onActivity={onActivity}
                           onSkip={(id) => skipItem(update, id)}
                         />
+                        <Button variant="ghost" onClick={() => onOpenItem(item.id)}>
+                          Details & edit
+                        </Button>
                       </div>
                     )}
                   {!item.kind && item.status === "planned" && (
                     <div className="agenda-item__actions">
                       <Button
                         variant="secondary"
-                        onClick={() => setSelectedItemId(item.id)}
+                        onClick={() => onOpenItem(item.id)}
                       >
                         Open
                       </Button>
                       <Button
                         icon={Check}
-                        onClick={() =>
-                          update(
-                            (current) => ({
-                              ...current,
-                              plan: current.plan.map((candidate) =>
-                                candidate.id === item.id
-                                  ? { ...candidate, status: "complete" }
-                                  : candidate,
-                              ),
-                            }),
-                            item.goalId
-                              ? "Done—and added to the goal’s progress."
-                              : "Done. This now appears in Progress.",
-                          )
-                        }
+                        onClick={() => {
+                          update((current) => ({
+                            ...current,
+                            plan: current.plan.map((candidate) =>
+                              candidate.id === item.id
+                                ? {
+                                    ...candidate,
+                                    status: "complete",
+                                    log: {
+                                      completedAt: new Date().toISOString(),
+                                      summary: candidate.title,
+                                    },
+                                  }
+                                : candidate,
+                            ),
+                          }))
+                          celebrateDone(item.title, item.area)
+                        }}
                       >
                         Done
                       </Button>
@@ -821,7 +849,7 @@ function PlanView({
                     <div className="agenda-item__actions">
                       <Button
                         variant="ghost"
-                        onClick={() => setSelectedItemId(item.id)}
+                        onClick={() => onOpenItem(item.id)}
                       >
                         Review
                       </Button>
@@ -860,209 +888,7 @@ function PlanView({
           </p>
         </aside>
       </div>
-      {selectedItem && (
-        <PlanItemDetail
-          item={selectedItem}
-          goal={state.goals.find((goal) => goal.id === selectedItem.goalId)}
-          onClose={() => setSelectedItemId(null)}
-          update={update}
-        />
-      )}
     </div>
-  )
-}
-
-function PlanItemDetail({
-  item,
-  goal,
-  onClose,
-  update,
-}: {
-  item: PlanItem
-  goal?: Goal
-  onClose: () => void
-  update: SpaceProps["update"]
-}) {
-  const [stepTitle, setStepTitle] = useState("")
-  const steps = item.steps ?? []
-  const completedSteps = steps.filter((step) => step.complete).length
-
-  return (
-    <Modal
-      title={item.title}
-      eyebrow={`${areaMeta[item.area].label} · ${formatDate(item.date, {
-        day: "numeric",
-        month: "long",
-      })}`}
-      onClose={onClose}
-    >
-      <div className="plan-detail">
-        <section className="plan-detail__summary">
-          <AreaMark area={item.area} />
-          <div>
-            <span>{item.time ?? "Anytime"}</span>
-            <span>
-              {item.duration ? `${item.duration} minutes` : "Open duration"}
-            </span>
-            <span>
-              {item.mode === "fixed"
-                ? "Fixed commitment"
-                : item.mode === "maybe"
-                  ? "Optional"
-                  : "Flexible"}
-            </span>
-          </div>
-          {goal && (
-            <div className="plan-detail__goal">
-              <Sparkles size={18} />
-              <span>
-                <small>Contributes to</small>
-                <strong>{goal.title}</strong>
-              </span>
-            </div>
-          )}
-        </section>
-
-        <section className="plan-steps">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Steps</p>
-              <h3>
-                {steps.length
-                  ? `${completedSteps} of ${steps.length} done`
-                  : "Break it down gently"}
-              </h3>
-            </div>
-          </div>
-          {steps.length > 0 && (
-            <div className="plan-step-list">
-              {steps.map((step) => (
-                <button
-                  type="button"
-                  className={step.complete ? "is-complete" : ""}
-                  aria-pressed={step.complete}
-                  onClick={() =>
-                    update(
-                      (current) => ({
-                        ...current,
-                        plan: current.plan.map((planItem) =>
-                          planItem.id === item.id
-                            ? {
-                                ...planItem,
-                                steps: (planItem.steps ?? []).map(
-                                  (candidate) =>
-                                    candidate.id === step.id
-                                      ? {
-                                          ...candidate,
-                                          complete: !candidate.complete,
-                                        }
-                                      : candidate,
-                                ),
-                              }
-                            : planItem,
-                        ),
-                      }),
-                      step.complete ? "Step reopened." : "One step done.",
-                    )
-                  }
-                  key={step.id}
-                >
-                  <span>{step.complete && <Check size={17} />}</span>
-                  <strong>{step.title}</strong>
-                </button>
-              ))}
-            </div>
-          )}
-          <form
-            className="plan-step-form"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!stepTitle.trim()) return
-              update(
-                (current) => ({
-                  ...current,
-                  plan: current.plan.map((planItem) =>
-                    planItem.id === item.id
-                      ? {
-                          ...planItem,
-                          steps: [
-                            ...(planItem.steps ?? []),
-                            {
-                              id: uid(),
-                              title: stepTitle.trim(),
-                              complete: false,
-                            },
-                          ],
-                        }
-                      : planItem,
-                  ),
-                }),
-                "Step added.",
-              )
-              setStepTitle("")
-            }}
-          >
-            <input
-              value={stepTitle}
-              onChange={(event) => setStepTitle(event.target.value)}
-              placeholder="Add one small next step"
-              aria-label="New plan step"
-            />
-            <Button type="submit" variant="secondary" icon={Plus}>
-              Add step
-            </Button>
-          </form>
-        </section>
-
-        <div className="plan-detail__actions">
-          {item.status !== "complete" ? (
-            <Button
-              icon={Check}
-              onClick={() =>
-                update(
-                  (current) => ({
-                    ...current,
-                    plan: current.plan.map((planItem) =>
-                      planItem.id === item.id
-                        ? { ...planItem, status: "complete" }
-                        : planItem,
-                    ),
-                  }),
-                  goal
-                    ? "Complete. This now contributes to the linked goal."
-                    : "Complete. This now appears in Progress.",
-                )
-              }
-            >
-              Mark the whole thing done
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              onClick={() =>
-                update(
-                  (current) => ({
-                    ...current,
-                    plan: current.plan.map((planItem) =>
-                      planItem.id === item.id
-                        ? { ...planItem, status: "planned" }
-                        : planItem,
-                    ),
-                  }),
-                  "Reopened without losing its steps.",
-                )
-              }
-            >
-              Reopen
-            </Button>
-          )}
-          <p>
-            Completing steps records the path. Marking the item done is what
-            sends it to Progress.
-          </p>
-        </div>
-      </div>
-    </Modal>
   )
 }
 
@@ -1082,11 +908,12 @@ function ProgressView({
     new Set(completeItems.map((item) => item.area)),
   )
   const biggerGoals = state.goals.filter(
-    (goal) => (goal.scale ?? "big") === "big",
+    (goal) => (goal.scale ?? "big") === "big" && goal.status !== "complete",
   )
   const smallerGoals = state.goals.filter(
-    (goal) => (goal.scale ?? "small") === "small",
+    (goal) => (goal.scale ?? "small") === "small" && goal.status !== "complete",
   )
+  const reachedGoals = state.goals.filter((goal) => goal.status === "complete")
   const selectedGoal = state.goals.find((goal) => goal.id === selectedGoalId)
 
   const completeMilestone = (goalId: string, milestoneId: string) => {
@@ -1155,7 +982,7 @@ function ProgressView({
 
       <section className="moments-banner">
         <div className="moments-banner__art">
-          <img src="/assets/dance-pavilion.png" alt="" />
+          <img src="/assets/dance-pavilion.jpg" alt="" />
         </div>
         <div className="moments-banner__content">
           <p className="eyebrow">This week, in your own words</p>
@@ -1300,6 +1127,28 @@ function ProgressView({
               </div>
             )}
           </div>
+          {reachedGoals.length > 0 && (
+            <div className="finished-shelf">
+              <p className="eyebrow">Reached shelf</p>
+              <ul>
+                {reachedGoals.map((goal) => (
+                  <li key={goal.id}>
+                    <button type="button" onClick={() => setSelectedGoalId(goal.id)}>
+                      <Sparkles size={16} />
+                      <span>
+                        <strong>{goal.title}</strong>
+                        <small>
+                          {goal.milestones.filter((item) => item.completedAt).length} of{" "}
+                          {goal.milestones.length}{" "}
+                          {goal.scale === "big" ? "milestones" : "steps"}
+                        </small>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
 
         <ActivityHistory state={state} />
@@ -1349,11 +1198,9 @@ function ProgressView({
       {selectedGoal && (
         <GoalDetail
           goal={selectedGoal}
+          state={state}
+          update={update}
           onClose={() => setSelectedGoalId(null)}
-          onToggleMilestone={(milestoneId) =>
-            completeMilestone(selectedGoal.id, milestoneId)
-          }
-          onAddMilestone={(title) => addMilestone(selectedGoal.id, title)}
         />
       )}
       {addingGoal && (
@@ -1373,157 +1220,6 @@ function ProgressView({
       )}
       {celebration && <MilestoneCelebration title={celebration} />}
     </div>
-  )
-}
-
-function GoalDetail({
-  goal,
-  onClose,
-  onToggleMilestone,
-  onAddMilestone,
-}: {
-  goal: Goal
-  onClose: () => void
-  onToggleMilestone: (milestoneId: string) => void
-  onAddMilestone: (title: string) => void
-}) {
-  const [newMilestone, setNewMilestone] = useState("")
-  const milestones = goal.milestones ?? []
-  const complete = milestones.filter((milestone) => milestone.completedAt)
-  const progress = milestones.length
-    ? Math.round((complete.length / milestones.length) * 100)
-    : 0
-
-  return (
-    <Modal
-      title={goal.title}
-      eyebrow={goal.scale === "big" ? "A bigger goal" : "A smaller goal"}
-      onClose={onClose}
-      wide
-    >
-      <div className="goal-detail">
-        <section className="goal-detail__summary">
-          <AreaMark area={goal.area} />
-          {goal.dateLabel && (
-            <p className="goal-card__date">{goal.dateLabel}</p>
-          )}
-          <h3>
-            {complete.length
-              ? `You’ve already made ${complete.length} meaningful step${
-                  complete.length === 1 ? "" : "s"
-                }.`
-              : "The first step can be beautifully small."}
-          </h3>
-          <p>
-            Progress here means moments you want to remember—not pressure to
-            move at a particular speed.
-          </p>
-          {milestones.length > 0 && (
-            <div className="goal-detail__progress">
-              <div
-                className="goal-progress__track"
-                role="progressbar"
-                aria-label="Completed milestones"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={progress}
-              >
-                <span style={{ width: `${progress}%` }} />
-              </div>
-              <strong>{progress}% of this path explored</strong>
-            </div>
-          )}
-        </section>
-
-        {goal.scale === "big" || milestones.length > 0 ? (
-          <section className="milestone-section">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Milestones</p>
-                <h3>The path, one piece at a time</h3>
-              </div>
-              <span>{complete.length} celebrated</span>
-            </div>
-            <div className="milestone-list">
-              {milestones.map((milestone, index) => (
-                <button
-                  type="button"
-                  className={milestone.completedAt ? "is-complete" : ""}
-                  aria-pressed={Boolean(milestone.completedAt)}
-                  onClick={() => onToggleMilestone(milestone.id)}
-                  key={milestone.id}
-                >
-                  <span className="milestone-list__line" />
-                  <span className="milestone-list__check">
-                    {milestone.completedAt ? <Check size={18} /> : index + 1}
-                  </span>
-                  <span>
-                    <strong>{milestone.title}</strong>
-                    <small>
-                      {milestone.completedAt
-                        ? `Celebrated ${formatDate(
-                            milestone.completedAt.slice(0, 10),
-                            {
-                              day: "numeric",
-                              month: "long",
-                              year: "numeric",
-                            },
-                          )}`
-                        : "Mark this when it feels true"}
-                    </small>
-                  </span>
-                </button>
-              ))}
-            </div>
-            <form
-              className="milestone-form"
-              onSubmit={(event) => {
-                event.preventDefault()
-                if (!newMilestone.trim()) return
-                onAddMilestone(newMilestone.trim())
-                setNewMilestone("")
-              }}
-            >
-              <input
-                value={newMilestone}
-                onChange={(event) => setNewMilestone(event.target.value)}
-                placeholder="Add another meaningful milestone"
-                aria-label="New milestone"
-              />
-              <Button type="submit" variant="secondary" icon={Plus}>
-                Add
-              </Button>
-            </form>
-          </section>
-        ) : (
-          <section className="small-goal-detail">
-            <p className="eyebrow">Next gentle step</p>
-            <h3>{goal.nextStep}</h3>
-            <p>
-              Smaller goals do not need a project plan. If this grows, you can
-              turn it into a bigger goal and add milestones later.
-            </p>
-          </section>
-        )}
-
-        {complete.length > 0 && (
-          <section className="look-back">
-            <div>
-              <Sparkles size={22} />
-              <div>
-                <p className="eyebrow">Look how far you’ve come</p>
-                <h3>These moments are part of the story now.</h3>
-              </div>
-            </div>
-            <div className="look-back__moments">
-              {complete.map((milestone) => (
-                <span key={milestone.id}>{milestone.title}</span>
-              ))}
-            </div>
-          </section>
-        )}
-      </div>
-    </Modal>
   )
 }
 
@@ -1588,6 +1284,10 @@ function NewGoalModal({
           })
         }}
       >
+        <p className="goal-vs-project">
+          {GOAL_VS_PROJECT} Making something, like a film or a song? Create it in
+          My space → Projects instead.
+        </p>
         <label>
           <span>What would you like to move toward?</span>
           <input
@@ -1608,7 +1308,7 @@ function NewGoalModal({
             <Check size={17} />
             <span>
               <strong>Smaller goal</strong>
-              <small>A direct next step without a project plan.</small>
+              <small>Something to reach in days or weeks. A few small steps, then tick it off.</small>
             </span>
           </button>
           <button
@@ -1620,7 +1320,7 @@ function NewGoalModal({
             <Sparkles size={17} />
             <span>
               <strong>Bigger goal</strong>
-              <small>A longer path you can break into milestones.</small>
+              <small>A change over months, often with a date. Milestones and logged sessions show the way.</small>
             </span>
           </button>
         </fieldset>
@@ -1781,7 +1481,7 @@ function MySpaceView({
   return (
     <div className="page space-page">
       <header className="space-hero">
-        <img src="/assets/life-studio-room.png" alt="" />
+        <img src="/assets/life-studio-room.jpg" alt="" />
         <div className="space-hero__content">
           <p className="eyebrow eyebrow--light">My space</p>
           <h1>Everything you’re making room for.</h1>
@@ -1891,6 +1591,7 @@ function JournalSpace({ state, update, close }: SpaceProps) {
 
   return (
     <Modal title="Journal" eyebrow="Reflect" onClose={close} wide>
+      <Art className="space-banner" src="/assets/writing-nook.jpg" />
       <div className="feature-layout">
         <div className="feature-main">
           <form className="writing-form" onSubmit={save}>
@@ -2315,119 +2016,11 @@ function BreatheSpace({ state, update, close }: SpaceProps) {
   )
 }
 
-function ProjectsSpace({ state, update, close }: SpaceProps) {
-  const [adding, setAdding] = useState(false)
-  const save = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const data = new FormData(event.currentTarget)
-    const cost = Number(data.get("cost") || 0)
-    const project: Project = {
-      id: uid(),
-      title: String(data.get("title")),
-      note: String(data.get("note")),
-      stage: "Seed",
-      nextAction: String(data.get("nextAction")),
-      estimatedCost: Math.round(cost * 100),
-    }
-    update(
-      (current) => ({ ...current, projects: [project, ...current.projects] }),
-      "Project planted.",
-    )
-    setAdding(false)
-  }
-
-  return (
-    <Modal title="Projects" eyebrow="Create" onClose={close} wide>
-      <div className="feature-topline">
-        <p>Ideas can be seeds, works in progress, or quietly resting.</p>
-        <Button icon={Plus} onClick={() => setAdding(!adding)}>
-          New project
-        </Button>
-      </div>
-      {adding && (
-        <form className="inline-form" onSubmit={save}>
-          <input name="title" required placeholder="Project name" />
-          <input name="nextAction" placeholder="One next action" />
-          <input
-            name="cost"
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="Estimated cost, optional"
-          />
-          <textarea
-            name="note"
-            rows={3}
-            placeholder="What is calling you toward it?"
-          />
-          <Button type="submit">Plant the seed</Button>
-        </form>
-      )}
-      <div className="project-grid">
-        {state.projects.map((project) => (
-          <article className="project-card" key={project.id}>
-            <div className="project-card__visual">
-              {project.title.toLowerCase().includes("london") ? (
-                <img src="/assets/life-studio-room.png" alt="" />
-              ) : (
-                <Music2 size={35} />
-              )}
-            </div>
-            <div className="project-card__body">
-              <span className="stage-pill">{project.stage}</span>
-              <h3>{project.title}</h3>
-              <p>{project.note}</p>
-              {project.nextAction && (
-                <div className="next-action">
-                  <span>Next action</span>
-                  <strong>{project.nextAction}</strong>
-                </div>
-              )}
-              <div className="project-card__footer">
-                <span>
-                  {project.estimatedCost
-                    ? `${formatMoney(project.estimatedCost)} estimate`
-                    : "No cost estimate"}
-                </span>
-                <Button
-                  variant="ghost"
-                  onClick={() =>
-                    update(
-                      (current) => ({
-                        ...current,
-                        plan: [
-                          ...current.plan,
-                          {
-                            id: uid(),
-                            title:
-                              project.nextAction || `Tend to ${project.title}`,
-                            area: "create",
-                            date: today(),
-                            mode: "flexible",
-                            status: "planned",
-                            duration: 25,
-                          },
-                        ],
-                      }),
-                      "Next action added to Today.",
-                    )
-                  }
-                >
-                  Add to Today
-                </Button>
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
-    </Modal>
-  )
-}
-
 function PeopleSpace({ state, update, close }: SpaceProps) {
   const [name, setName] = useState("")
   return (
     <Modal title="People" eyebrow="Connect" onClose={close} wide>
+      <Art className="space-banner" src="/assets/friends-cafe.jpg" />
       <div className="people-intro">
         <div>
           <h3>Connection without obligation.</h3>
@@ -2669,6 +2262,7 @@ function MoneySpace({ state, update, close }: SpaceProps) {
       wide
     >
       <section className="money-studio-hero">
+        <Art className="money-studio-hero__art" src="/assets/money-growth.jpg" />
         <div>
           <p className="eyebrow eyebrow--light">
             Your money, understood slowly
@@ -3090,8 +2684,9 @@ function MovementSpace({ state, update, close }: SpaceProps) {
       wide
     >
       <div className="movement-hero">
-        <img
-          src="/assets/dance-pavilion.png"
+        <Art
+          src="/assets/movement-path.jpg"
+          fallback="/assets/dance-pavilion.jpg"
           alt="A dancer moving in a sunlit riverside pavilion"
         />
         <div>
@@ -4251,6 +3846,7 @@ function AddPlanModal({
 }
 
 type CaptureMode =
+  | "saved"
   | "choose"
   | "listening"
   | "recording"
@@ -4623,6 +4219,40 @@ function applyAction(current: AppState, action: StudioAction): AppState {
   }
 }
 
+type Destination =
+  | { kind: "plan"; date: string }
+  | { kind: "space"; space: SpaceKey }
+  | { kind: "progress" }
+
+// Where each confirmed change lives, so the assistant can say "go there".
+function destinationOf(action: StudioAction, state: AppState): { label: string; to: Destination } {
+  const date = isDate(action.date) ? action.date : today()
+  const day = date === today() ? "today" : formatDate(date, { weekday: "long", day: "numeric", month: "short" })
+  switch (action.type) {
+    case "add_journal":
+      return { label: "Saved in your Journal", to: { kind: "space", space: "reflect" } }
+    case "add_project":
+      return { label: "New project in Projects", to: { kind: "space", space: "create" } }
+    case "add_goal":
+      return { label: "New goal in Progress", to: { kind: "progress" } }
+    case "add_transaction":
+      return { label: "Added to Money", to: { kind: "space", space: "money" } }
+    case "move_plan":
+    case "complete_plan": {
+      const item = state.plan.find((candidate) => candidate.id === action.planId)
+      const target = action.type === "move_plan" ? date : (item?.date ?? date)
+      return {
+        label: action.type === "move_plan" ? `Moved in your Plan to ${target === today() ? "today" : formatDate(target, { weekday: "long" })}` : "Marked done in your Plan",
+        to: { kind: "plan", date: target },
+      }
+    }
+    case "log_activity":
+      return { label: "Logged in your Plan and Progress", to: { kind: "plan", date } }
+    default:
+      return { label: `Added to your Plan · ${day}`, to: { kind: "plan", date } }
+  }
+}
+
 const DRAFT_KEY = "life-studio:assistant-draft"
 // Your own words are kept if the AI fails, so nothing you said or typed is lost.
 function readDraft() {
@@ -4651,12 +4281,15 @@ function VoiceCapture({
   state,
   onClose,
   update,
+  onGo,
 }: {
   state: AppState
   onClose: () => void
   update: SpaceProps["update"]
+  onGo: (to: Destination) => void
 }) {
   const [mode, setMode] = useState<CaptureMode>("choose")
+  const [saved, setSaved] = useState<{ summary: string; label: string; to: Destination }[]>([])
   const [text, setText] = useState("")
   const [noteTitle, setNoteTitle] = useState("")
   const [elapsed, setElapsed] = useState(0)
@@ -4673,6 +4306,8 @@ function VoiceCapture({
   const [heard, setHeard] = useState("")
   const [askedLabel, setAskedLabel] = useState("")
   const [hint, setHint] = useState("")
+  const [dictateHint, setDictateHint] = useState(false)
+  const composerRef = useRef<HTMLTextAreaElement>(null)
   const [draft, setDraft] = useState(readDraft)
   const lastRequest = useRef("")
   const listener = useRef<ReturnType<typeof listen> | null>(null)
@@ -4758,12 +4393,19 @@ function VoiceCapture({
     setMode("compose")
   }
 
+  // Keyboard dictation always works, including in iPhone home-screen apps.
+  // flushSync + focus inside the tap is what lets iOS open the keyboard.
+  const dictateWithKeyboard = () => {
+    flushSync(() => {
+      openComposer()
+      setDictateHint(true)
+    })
+    composerRef.current?.focus()
+  }
+
   const startListening = () => {
     if (!speechSupported()) {
-      openComposer()
-      setAiError(
-        "Voice isn’t available in this browser. Tap the microphone on your keyboard to dictate, or type instead.",
-      )
+      dictateWithKeyboard()
       return
     }
     setHeard("")
@@ -4786,9 +4428,7 @@ function VoiceCapture({
           setMode("error")
         } else {
           openComposer()
-          setAiError(
-            "Voice recognition isn’t available right now. Tap the microphone on your keyboard to dictate, or type instead.",
-          )
+          setDictateHint(true)
         }
       },
     })
@@ -4877,6 +4517,7 @@ function VoiceCapture({
   const openComposer = (prefill = "") => {
     setHeard("")
     setHint("")
+    setDictateHint(false)
     setAskedLabel("")
     setText(prefill)
     setProposal(null)
@@ -4943,14 +4584,12 @@ function VoiceCapture({
       (action, index) => selected[index] && isValidAction(action),
     )
     if (!chosen.length) return
-    update(
-      (current) => chosen.reduce(applyAction, current),
-      chosen.length === 1
-        ? "Saved after your confirmation."
-        : `${chosen.length} changes saved after your confirmation.`,
+    setSaved(
+      chosen.map((action) => ({ summary: action.summary, ...destinationOf(action, state) })),
     )
+    update((current) => chosen.reduce(applyAction, current))
     clearDraft()
-    onClose()
+    setMode("saved")
   }
 
   const saveRecordedNote = async () => {
@@ -5032,6 +4671,49 @@ function VoiceCapture({
       onClose={onClose}
     >
       <div className="capture assistant">
+        {mode === "saved" && (
+          <div className="assistant-saved">
+            <span className="assistant-saved__icon">
+              <Check size={26} />
+            </span>
+            <h3>{saved.length === 1 ? "Saved." : `${saved.length} changes saved.`}</h3>
+            <ul>
+              {saved.map((entry, index) => (
+                <li key={index}>
+                  <div>
+                    <strong>{entry.summary}</strong>
+                    <small>{entry.label}</small>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      onClose()
+                      onGo(entry.to)
+                    }}
+                  >
+                    Go there <ChevronRight size={15} />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <div className="inline-actions">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setSaved([])
+                  setProposal(null)
+                  setText("")
+                  setMode("choose")
+                }}
+              >
+                Ask something else
+              </Button>
+              <Button variant="ghost" onClick={onClose}>
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
         {mode === "choose" && (
           <>
             <div className="assistant-welcome">
@@ -5270,6 +4952,18 @@ function VoiceCapture({
               {askedLabel && (
                 <p className="asked-label">You asked: {askedLabel}</p>
               )}
+              {dictateHint && !text && (
+                <div className="dictate-hint" role="status">
+                  <Mic size={20} />
+                  <p>
+                    <strong>Tap the 🎤 on your keyboard and speak.</strong>
+                    <small>
+                      iPhone home-screen apps can’t listen directly, but keyboard
+                      dictation works. Then tap Ask Studio.
+                    </small>
+                  </p>
+                </div>
+              )}
               <label>
                 <span>
                   {heard
@@ -5277,6 +4971,7 @@ function VoiceCapture({
                     : "What would you like Studio to help with?"}
                 </span>
                 <textarea
+                  ref={composerRef}
                   autoFocus={!text}
                   rows={4}
                   value={text}
@@ -5439,6 +5134,15 @@ export default function App() {
     mode: ActivityMode
   } | null>(null)
   const [roadmap, setRoadmap] = useState(false)
+  const [planFocus, setPlanFocus] = useState<string | null>(null)
+  const [openItemId, setOpenItemId] = useState<string | null>(null)
+  const [celebration, setCelebration] = useState<CelebrationMessage | null>(null)
+  useEffect(() => {
+    const onCelebrate = (event: Event) =>
+      setCelebration((event as CustomEvent<CelebrationMessage>).detail)
+    window.addEventListener("studio:celebrate", onCelebrate)
+    return () => window.removeEventListener("studio:celebrate", onCelebrate)
+  }, [])
   const [restartSetup, setRestartSetup] = useState(false)
   const [editProfile, setEditProfile] = useState(false)
   const openActivity = (id: string, mode: ActivityMode) =>
@@ -5557,6 +5261,7 @@ export default function App() {
             onActivity={openActivity}
             onRoadmap={() => setRoadmap(true)}
             onSetupRestart={() => setRestartSetup(true)}
+            onOpenItem={setOpenItemId}
           />
         )}
         {route === "plan" && (
@@ -5565,6 +5270,8 @@ export default function App() {
             update={update}
             onAdd={(date) => setAddDate(date ?? today())}
             onActivity={openActivity}
+            focusDate={planFocus}
+            onOpenItem={setOpenItemId}
           />
         )}
         {route === "progress" && <ProgressView state={state} update={update} />}
@@ -5620,6 +5327,19 @@ export default function App() {
             setAddDate(null)
           }}
         />
+      )}
+      {openItemId && (
+        <PlanItemSheet
+          itemId={openItemId}
+          state={state}
+          update={update}
+          onClose={() => setOpenItemId(null)}
+          onActivity={openActivity}
+          onOpenSpace={(key) => setSpace(key)}
+        />
+      )}
+      {celebration && (
+        <Celebration message={celebration} onDone={() => setCelebration(null)} />
       )}
       {activity && (
         <ActivityFlow
@@ -5677,6 +5397,14 @@ export default function App() {
           state={state}
           onClose={() => setCapture(false)}
           update={update}
+          onGo={(to) => {
+            if (to.kind === "space") setSpace(to.space)
+            else if (to.kind === "progress") navigate("progress")
+            else {
+              setPlanFocus(to.date)
+              navigate("plan")
+            }
+          }}
         />
       )}
       {space === "reflect" && (

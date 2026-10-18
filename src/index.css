@@ -5984,3 +5984,663 @@ html {
     align-self: end;
   }
 }
+
+.dictate-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border-radius: 1rem;
+  padding: 0.7rem 0.85rem;
+  background: var(--sage-soft);
+  color: var(--moss-dark);
+}
+
+.dictate-hint p {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.dictate-hint small {
+  color: var(--ink-soft);
+}
+
+.assistant-saved {
+  display: grid;
+  justify-items: center;
+  gap: 0.8rem;
+  text-align: center;
+}
+
+.assistant-saved__icon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--moss);
+  color: var(--surface);
+}
+
+.assistant-saved h3 {
+  margin: 0;
+}
+
+.assistant-saved ul {
+  display: grid;
+  width: 100%;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.assistant-saved li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--surface);
+}
+
+.assistant-saved li > div {
+  display: grid;
+  flex: 1 1 12rem;
+  gap: 0.15rem;
+}
+
+.assistant-saved small {
+  color: var(--moss);
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------------------
+   Goals, projects, plan items
+--------------------------------------------------------------------------- */
+
+.milestone-celebration--small .milestone-celebration__card h3 {
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+.feature-topline__hint,
+.goal-vs-project {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--olive);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.goal-vs-project {
+  margin: 0 0 0.8rem;
+  border-left: 3px solid var(--honey);
+  padding-left: 0.6rem;
+}
+
+.step-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.step-list ol {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step-list li {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 0.55rem 0.6rem;
+  background: var(--surface);
+}
+
+.step-list li.is-done {
+  background: var(--surface-soft);
+}
+
+.step-list li.is-done strong {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+  text-decoration-color: var(--sage);
+}
+
+.step-list__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.step-list__check {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  border: 2px solid var(--sage);
+  border-radius: 50%;
+  background: var(--surface);
+  cursor: pointer;
+  color: var(--olive);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.step-list li.is-done .step-list__check {
+  border-color: var(--moss);
+  background: var(--moss);
+  color: var(--surface);
+}
+
+.step-list__text {
+  display: grid;
+  flex: 1 1 10rem;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.step-list__text small {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.step-list__planned {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--moss) !important;
+  font-weight: 700;
+}
+
+.step-list__schedule {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  background: var(--surface-soft);
+  cursor: pointer;
+  color: var(--moss);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.step-list__tools {
+  display: flex;
+  gap: 0.1rem;
+  margin-left: auto;
+}
+
+.step-list__tools .icon-button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+}
+
+.step-list__add,
+.project-form__add {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.step-list__add input,
+.project-form__add input,
+.project-form input,
+.project-form textarea,
+.project-form select,
+.plan-edit input,
+.plan-edit select,
+.plan-edit textarea,
+.plan-sheet__field input,
+.plan-sheet__field select,
+.plan-sheet__field textarea,
+.step-scheduler input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  padding: 0.55rem 0.8rem;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font: inherit;
+}
+
+.step-scheduler {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  border-top: 1px dashed var(--line);
+  padding-top: 0.6rem;
+}
+
+.step-scheduler__row,
+.plan-edit__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.project-form,
+.project-detail,
+.plan-edit,
+.plan-sheet {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.project-form label,
+.plan-edit label,
+.plan-sheet__field,
+.step-scheduler label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.plan-sheet__field > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.project-form__steps {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.project-form__label {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.project-form__step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.8rem;
+  padding: 0.3rem 0.3rem 0.3rem 0.7rem;
+  background: var(--surface);
+}
+
+.project-form__step p {
+  flex: 1;
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.project-detail__head {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.project-detail__head h3,
+.project-detail__head p {
+  margin: 0;
+}
+
+.project-detail__stage {
+  display: grid;
+  max-width: 14rem;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.project-detail__stage select {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  padding: 0 0.7rem;
+  background: var(--surface-soft);
+  font: inherit;
+}
+
+.finished-note {
+  display: grid;
+  gap: 0.6rem;
+  border-radius: 1rem;
+  padding: 0.9rem;
+  background: linear-gradient(150deg, #fbf3dc, var(--surface));
+}
+
+.finished-note p {
+  margin: 0;
+}
+
+.finished-shelf {
+  margin-top: 1.2rem;
+}
+
+.finished-shelf ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.finished-shelf button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.6rem;
+  border: 1px solid rgb(214 165 75 / 45%);
+  border-radius: 1rem;
+  padding: 0.6rem 0.8rem;
+  background: #fbf3dc;
+  cursor: pointer;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+
+.finished-shelf button svg {
+  flex: none;
+  color: #80601d;
+}
+
+.finished-shelf span {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.finished-shelf small {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.project-card__goal {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--moss);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.project-card__progress {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.6rem 0;
+}
+
+.project-card__progress small {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.next-step {
+  display: grid;
+  gap: 0.1rem;
+  border-left: 3px solid var(--honey);
+  padding-left: 0.65rem;
+}
+
+.next-step span {
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.next-step strong {
+  font-size: 0.92rem;
+}
+
+.next-step small {
+  color: var(--moss);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.project-card p {
+  font-size: 0.88rem;
+}
+
+.goal-detail__purpose {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.goal-detail__purpose small {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--olive);
+  font-weight: 700;
+}
+
+.goal-detail__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.goal-detail__stats p {
+  margin: 0;
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  background: var(--surface-soft);
+  font-size: 0.8rem;
+}
+
+.goal-detail__projects {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.goal-detail__projects li {
+  display: grid;
+  border-radius: 0.9rem;
+  padding: 0.55rem 0.8rem;
+  background: var(--surface);
+}
+
+.goal-detail__projects small {
+  color: var(--ink-soft);
+}
+
+.goal-detail__finish {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.8rem;
+}
+
+.goal-detail__finish p {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  color: #80601d;
+  font-weight: 800;
+}
+
+.goal-detail {
+  display: grid;
+  gap: 1rem;
+}
+
+.plan-sheet__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.plan-sheet__meta .text-link {
+  margin-left: auto;
+}
+
+.plan-sheet__purpose {
+  margin: 0;
+  border-radius: 0.9rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.plan-sheet__note {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.plan-sheet__details {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
+.plan-sheet__log {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border-radius: 0.9rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--sage-soft);
+  color: var(--moss-dark);
+}
+
+.plan-sheet__log span {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.plan-sheet__log small {
+  color: var(--ink-soft);
+}
+
+.plan-sheet__link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.plan-sheet__link p {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+.plan-sheet__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.8rem;
+}
+
+.plan-edit__delete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.9rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--peach-soft);
+}
+
+.plan-edit__delete p {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.plan-edit__delete-link {
+  justify-self: start;
+  color: var(--terracotta) !important;
+}
+
+.money-studio-hero {
+  position: relative;
+  isolation: isolate;
+}
+
+.money-studio-hero__art {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 70%;
+}
+
+.money-studio-hero:has(.money-studio-hero__art)::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(90deg, rgb(22 35 25 / 86%), rgb(22 35 25 / 40%) 70%, transparent);
+  content: "";
+}
+
+.roadmap__art {
+  width: 100%;
+  height: 140px;
+  border-radius: 1.1rem;
+  object-fit: cover;
+  object-position: center 60%;
+}
+
+.space-banner {
+  display: block;
+  width: 100%;
+  height: 150px;
+  margin-bottom: 1rem;
+  border-radius: 1.1rem;
+  object-fit: cover;
+  object-position: center 55%;
+}
+
+@media (min-width: 700px) {
+  .space-banner {
+    height: 190px;
+  }
+}
+
+.feature-topline .button,
+.project-card__footer .button,
+.step-list__schedule {
+  white-space: nowrap;
+}
+
+.project-card__footer .button span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+@media (min-width: 700px) {
+  .feature-topline {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+}

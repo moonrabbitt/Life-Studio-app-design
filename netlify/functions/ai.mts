@@ -241,6 +241,34 @@ Respect the energy level and equipment: low energy means 3 exercises and one set
 
 ${PLANNING}`
 
+const stepsSchema = {
+  name: "project_steps",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["steps"],
+    properties: {
+      steps: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["title", "minutes"],
+          properties: { title: { type: "string" }, minutes: { type: "integer" } },
+        },
+      },
+    },
+  },
+}
+
+const STEPS_INSTRUCTIONS = `${TONE}
+
+Break a creative project (something the user is making) into 3-6 small, concrete next steps, in order.
+- Each step is one sitting of 15-45 minutes, starts with a verb, and is specific to this project
+  ("Write three possible opening lines", not "Work on writing").
+- The first step is tiny and easy to start. The last step moves towards finishing or sharing.
+- Skip anything already in the existing steps. "minutes" is a realistic estimate.`
+
 const GUIDE_INSTRUCTIONS = `${TONE}
 
 You are a money learning guide. Explain personal-finance and investing concepts simply, with a small
@@ -282,6 +310,16 @@ export default async (req: Request) => {
         input: `Session details:\n${context}\n\nNotes from the user:\n${input}`,
         maxOutputTokens: 2500,
         schema: coachSchema,
+      })
+      return json(JSON.parse(text))
+    }
+
+    if (body?.task === "steps") {
+      const text = await callResponses({
+        instructions: STEPS_INSTRUCTIONS,
+        input: `Project:\n${context}\n\nRequest:\n${input}`,
+        maxOutputTokens: 1200,
+        schema: stepsSchema,
       })
       return json(JSON.parse(text))
     }
