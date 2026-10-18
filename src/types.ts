@@ -72,11 +72,13 @@ export type ChatMessage = {
   saved?: { summary: string; label: string; to: unknown }[]
 }
 
+// A reflection, or a moment you add yourself (with a title), on your journey.
 export type RoadmapReflection = {
   id: string
   date: string
   text: string
   phase: number
+  title?: string
 }
 
 export type PlanStep = {

@@ -7532,3 +7532,166 @@ label.proposal-action .planned-workout li {
   color: var(--ink-soft);
   font-size: 0.76rem;
 }
+
+/* Journey tab */
+.journey-section {
+  display: grid;
+  gap: 0.7rem;
+  margin-bottom: 1.25rem;
+  border-radius: 1.4rem;
+  padding: 1rem;
+  background: rgb(255 253 247 / 72%);
+}
+
+.journey-section__head h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.5rem;
+}
+
+.journey-ahead {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.journey-ahead li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border-radius: 1rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.journey-ahead li > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.journey-ahead small {
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+}
+
+.journey-phase h3 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.3rem;
+}
+
+.journey-phase p:not(.eyebrow) {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
+.journey-phase small {
+  color: var(--olive);
+  font-size: 0.78rem;
+}
+
+.journey-phase .eyebrow {
+  margin: 0;
+}
+
+.journey-phase__next {
+  font-weight: 700;
+}
+
+.journey-filter {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.1rem;
+}
+
+.journey-filter button {
+  flex: none;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.3rem 0.75rem;
+  background: var(--surface);
+  cursor: pointer;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.journey-filter button.is-selected {
+  border-color: var(--moss);
+  background: var(--moss);
+  color: var(--surface);
+}
+
+.journey-edit {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.journey-edit input,
+.journey-edit textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  padding: 0.45rem 0.65rem;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font: inherit;
+}
+
+.journey-edit__link {
+  justify-self: start;
+  min-height: 32px;
+  font-size: 0.74rem;
+}
+
+.roadmap__reflect .segmented {
+  max-width: 22rem;
+}
+
+.roadmap__reflect label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.roadmap__reflect input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  padding: 0.45rem 0.7rem;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font: inherit;
+}
+
+.this-week h3 {
+  margin: 0.2rem 0 0.5rem;
+}
+
+.this-week blockquote {
+  margin: 0 0 0.4rem;
+  border-left: 3px solid var(--honey);
+  padding-left: 0.7rem;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 1.15rem;
+  line-height: 1.35;
+}
+
+.this-week p {
+  margin: 0 0 0.3rem;
+}

@@ -374,7 +374,7 @@ export function destinationOf(action: StudioAction, state: AppState): { label: s
     case "add_project":
       return { label: "New project in Projects", to: { kind: "space", space: "create" } }
     case "add_goal":
-      return { label: "New goal in Progress", to: { kind: "progress" } }
+      return { label: "New goal in Journey", to: { kind: "progress" } }
     case "add_transaction":
       return { label: "Added to Money", to: { kind: "space", space: "money" } }
     case "move_plan":
@@ -387,7 +387,7 @@ export function destinationOf(action: StudioAction, state: AppState): { label: s
       }
     }
     case "log_activity":
-      return { label: "Logged in your Plan and Progress", to: { kind: "plan", date } }
+      return { label: "Logged in your Plan and Journey", to: { kind: "plan", date } }
     default:
       return { label: `Added to your Plan · ${day}`, to: { kind: "plan", date } }
   }

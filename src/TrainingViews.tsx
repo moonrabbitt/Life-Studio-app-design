@@ -445,7 +445,7 @@ export function NextActionCard({
           </button>
         )}
         <button type="button" className="text-link" onClick={onRoadmap}>
-          Roadmap and why this plan <ChevronRight size={16} />
+          Your journey <ChevronRight size={16} />
         </button>
       </div>
     </section>
@@ -551,7 +551,7 @@ export function RestartSetup({
 // Roadmap and "Why this plan?"
 // ---------------------------------------------------------------------------
 
-type JourneyEntry = { date: string; title: string; detail?: string; kind: string }
+type JourneyEntry = { date: string; title: string; detail?: string; kind: string; reflectionId?: string }
 
 const weeksUntil = (date: string) => {
   const days = Math.round((new Date(`${date}T12:00:00`).getTime() - new Date(`${today()}T12:00:00`).getTime()) / 86400000)
@@ -592,10 +592,330 @@ function journeyEntries(state: AppState): JourneyEntry[] {
   for (const item of state.plan)
     if (item.log?.wasClass) entries.push({ date: item.date, title: item.log.summary, detail: item.log.note, kind: "Dance" })
   for (const reflection of state.roadmap?.reflections ?? [])
-    entries.push({ date: reflection.date, title: reflection.text, detail: `Phase ${reflection.phase}`, kind: "Reflection" })
+    entries.push(
+      reflection.title
+        ? { date: reflection.date, title: reflection.title, detail: reflection.text, kind: "Moment", reflectionId: reflection.id }
+        : { date: reflection.date, title: reflection.text, kind: "Reflection", reflectionId: reflection.id },
+    )
   for (const change of state.roadmap?.phaseLog ?? [])
     entries.push({ date: change.date, title: `Started phase ${change.phase}: ${PHASES.find((phase) => phase.id === change.phase)?.title ?? ""}`, kind: "Phase" })
   return entries.sort((a, b) => b.date.localeCompare(a.date))
+}
+
+const dateLabelFor = (date: string) =>
+  formatDate(date, { weekday: "short", day: "numeric", month: "long", year: "numeric" })
+
+// What's ahead: dated goals counting down, events, and goals still waiting for a date.
+export function JourneyAhead({ state, update }: { state: AppState; update: Update }) {
+  const events = state.events ?? {}
+  const setEvents = (patch: Partial<NonNullable<AppState["events"]>>, message: string) =>
+    update((current) => {
+      const next = { ...current.events, ...patch }
+      return {
+        ...current,
+        events: next,
+        goals: current.goals.map((goal) =>
+          goal.id === "goal-race"
+            ? { ...goal, dateLabel: next.hackneyBooked ? "Sun 16 May 2027 · entry booked" : HACKNEY_LABEL }
+            : goal.id === "goal-dance"
+              ? {
+                  ...goal,
+                  date: next.fairplayConfirmed ? "2027-08-01" : goal.date === "2027-08-01" ? undefined : goal.date,
+                  dateLabel: next.fairplayConfirmed
+                    ? `1–8 Aug 2027, Kraków · dates confirmed by you · ${next.fairplayBooked ? "booked" : "not booked"}`
+                    : FAIRPLAY_REPORTED,
+                }
+              : goal,
+        ),
+      }
+    }, message)
+  const ahead = state.goals
+    .filter((goal) => goal.status !== "complete" && goal.date && goal.date >= today())
+    .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
+  const undated = state.goals.filter((goal) => goal.status !== "complete" && goal.scale === "big" && !goal.date)
+  const [showEvents, setShowEvents] = useState(false)
+
+  return (
+    <section className="journey-section">
+      <div className="journey-section__head">
+        <h2>Ahead</h2>
+      </div>
+      {ahead.length === 0 && <p className="capture-disclaimer">No dated goals yet. Add a date to a goal below.</p>}
+      <ul className="journey-ahead">
+        {ahead.map((goal) => {
+          const done = goal.milestones.filter((milestone) => milestone.completedAt).length
+          return (
+            <li key={goal.id}>
+              <div>
+                <strong>{goal.title}</strong>
+                <small>{goal.dateLabel ?? dateLabelFor(goal.date!)}</small>
+                {goal.milestones.length > 0 && (
+                  <small>
+                    {done} of {goal.milestones.length} milestones · next: {goal.milestones.find((milestone) => !milestone.completedAt)?.title ?? "reach it"}
+                  </small>
+                )}
+              </div>
+              <span className="roadmap__countdown">{weeksUntil(goal.date!)}</span>
+            </li>
+          )
+        })}
+      </ul>
+      {undated.length > 0 && (
+        <div className="roadmap__undated">
+          <p className="eyebrow">Give a bigger goal a date (optional)</p>
+          {undated.map((goal) => (
+            <label key={goal.id}>
+              <span>{goal.title}</span>
+              <input
+                type="date"
+                min={today()}
+                aria-label={`Target date for ${goal.title}`}
+                onChange={(event) =>
+                  event.target.value &&
+                  update(
+                    (current) => ({
+                      ...current,
+                      goals: current.goals.map((item) =>
+                        item.id === goal.id ? { ...item, date: event.target.value, dateLabel: dateLabelFor(event.target.value) } : item,
+                      ),
+                    }),
+                    "Date added to your journey.",
+                  )
+                }
+              />
+            </label>
+          ))}
+        </div>
+      )}
+      <button type="button" className="text-link" onClick={() => setShowEvents(!showEvents)}>
+        {showEvents ? "Hide event details" : "Event details: Hackney Half and FairPlay"} <ChevronRight size={14} />
+      </button>
+      {showEvents && (
+        <div className="roadmap__events">
+          <article>
+            <strong>Hackney Half Marathon</strong>
+            <p>{events.hackneyBooked ? "Sun 16 May 2027 · entry booked" : HACKNEY_LABEL}</p>
+            <a href="https://www.hackneymoves.com/2027" target="_blank" rel="noreferrer">
+              Official site <ExternalLink size={13} />
+            </a>
+            <label className="sync-replace">
+              <input type="checkbox" checked={!!events.hackneyBooked} onChange={(event) => setEvents({ hackneyBooked: event.target.checked }, "Hackney Half updated.")} />
+              <span>I have an entry</span>
+            </label>
+          </article>
+          <article>
+            <strong>FairPlay Dance Camp 2027</strong>
+            <p>
+              {events.fairplayConfirmed
+                ? "1–8 Aug 2027, Kraków · confirmed by you"
+                : "Dates TBC. Reported as 1–8 Aug 2027 in Kraków, but not yet verified on the official site."}
+            </p>
+            <a href="https://fpdancecamp.com/en/" target="_blank" rel="noreferrer">
+              Official site <ExternalLink size={13} />
+            </a>
+            <label className="sync-replace">
+              <input
+                type="checkbox"
+                checked={!!events.fairplayConfirmed}
+                onChange={(event) => setEvents({ fairplayConfirmed: event.target.checked }, event.target.checked ? "Dance camp dates confirmed." : "Dance camp dates back to TBC.")}
+              />
+              <span>I’ve checked the official site and these dates are right</span>
+            </label>
+            {events.fairplayConfirmed && (
+              <label className="sync-replace">
+                <input type="checkbox" checked={!!events.fairplayBooked} onChange={(event) => setEvents({ fairplayBooked: event.target.checked }, "Dance camp updated.")} />
+                <span>I have a ticket</span>
+              </label>
+            )}
+          </article>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// Where you are in the training programme.
+export function JourneyPhase({ state, onOpenPlan }: { state: AppState; onOpenPlan: () => void }) {
+  const phase = PHASES.find((item) => item.id === (state.trainingPhase ?? 1)) ?? PHASES[0]
+  const next = PHASES.find((item) => item.id === phase.id + 1)
+  return (
+    <section className="journey-section journey-phase">
+      <div className="journey-section__head">
+        <h2>Where you are</h2>
+      </div>
+      <p className="eyebrow">Phase {phase.id} of {PHASES.length}</p>
+      <h3>{phase.title}</h3>
+      <p>{phase.body}</p>
+      <small>{phase.ready}</small>
+      {next && <small className="journey-phase__next">Next: {next.title}</small>}
+      <button type="button" className="text-link" onClick={onOpenPlan}>
+        Training phases and why this plan <ChevronRight size={14} />
+      </button>
+    </section>
+  )
+}
+
+// Your story: everything that happened, plus reflections and moments you add and edit.
+export function JourneyStory({ state, update }: { state: AppState; update: Update }) {
+  const [mode, setMode] = useState<"reflect" | "moment">("reflect")
+  const [text, setText] = useState("")
+  const [title, setTitle] = useState("")
+  const [date, setDate] = useState(today())
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editText, setEditText] = useState("")
+  const [editTitle, setEditTitle] = useState("")
+  const [editDate, setEditDate] = useState("")
+  const [showAll, setShowAll] = useState(false)
+  const [filter, setFilter] = useState("All")
+  const phase = state.trainingPhase ?? 1
+  const story = journeyEntries(state)
+  const kinds = ["All", ...Array.from(new Set(story.map((entry) => entry.kind)))]
+  const shown = story.filter((entry) => filter === "All" || entry.kind === filter)
+  const setReflections = (recipe: (items: NonNullable<NonNullable<AppState["roadmap"]>["reflections"]>) => NonNullable<NonNullable<AppState["roadmap"]>["reflections"]>, message?: string) =>
+    update((current) => ({ ...current, roadmap: { ...current.roadmap, reflections: recipe(current.roadmap?.reflections ?? []) } }), message)
+
+  return (
+    <section className="journey-section">
+      <div className="journey-section__head">
+        <h2>Your story</h2>
+      </div>
+      <form
+        className="roadmap__reflect"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (mode === "moment" ? !title.trim() : !text.trim()) return
+          setReflections(
+            (items) => [
+              { id: uid(), date: mode === "moment" ? date : today(), text: text.trim(), phase, title: mode === "moment" ? title.trim() : undefined },
+              ...items,
+            ],
+            mode === "moment" ? "Moment added to your story." : "Reflection added to your story.",
+          )
+          setText("")
+          setTitle("")
+          setDate(today())
+        }}
+      >
+        <div className="segmented">
+          <button type="button" className={mode === "reflect" ? "is-active" : ""} aria-pressed={mode === "reflect"} onClick={() => setMode("reflect")}>
+            Reflect
+          </button>
+          <button type="button" className={mode === "moment" ? "is-active" : ""} aria-pressed={mode === "moment"} onClick={() => setMode("moment")}>
+            Add a moment
+          </button>
+        </div>
+        {mode === "moment" && (
+          <div className="plan-edit__row">
+            <label>
+              <span>What happened</span>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. First 5k without stopping" />
+            </label>
+            <label>
+              <span>When</span>
+              <input type="date" value={date} max={today()} onChange={(event) => event.target.value && setDate(event.target.value)} />
+            </label>
+          </div>
+        )}
+        <textarea
+          rows={3}
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder={mode === "moment" ? "A few words about it (optional)" : "How is it going? What’s getting easier, what feels hard, what do you want to change?"}
+          aria-label={mode === "moment" ? "About this moment" : "Reflection"}
+        />
+        <DictateButton onText={(spoken) => setText((current) => (current ? `${current} ${spoken}` : spoken))} />
+        <Button type="submit" variant="secondary" icon={Plus} disabled={mode === "moment" ? !title.trim() : !text.trim()}>
+          {mode === "moment" ? "Add moment" : "Add reflection"}
+        </Button>
+      </form>
+
+      {kinds.length > 2 && (
+        <div className="journey-filter" role="group" aria-label="Filter your story">
+          {kinds.map((kind) => (
+            <button type="button" key={kind} className={filter === kind ? "is-selected" : ""} aria-pressed={filter === kind} onClick={() => setFilter(kind)}>
+              {kind}
+            </button>
+          ))}
+        </div>
+      )}
+      {shown.length === 0 ? (
+        <p className="capture-disclaimer">Milestones, workouts, reviews, finished projects, reflections and moments gather here as you live.</p>
+      ) : (
+        <ol className="roadmap__story">
+          {(showAll ? shown : shown.slice(0, 15)).map((entry, index) => (
+            <li key={`${entry.date}-${index}`}>
+              <span className="roadmap__story-date">{formatDate(entry.date, { day: "numeric", month: "short" })}</span>
+              {editing && editing === entry.reflectionId ? (
+                <form
+                  className="journey-edit"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    setReflections(
+                      (items) =>
+                        items.map((item) =>
+                          item.id === editing ? { ...item, text: editText.trim(), title: item.title !== undefined ? editTitle.trim() || item.title : undefined, date: editDate || item.date } : item,
+                        ),
+                      "Saved.",
+                    )
+                    setEditing(null)
+                  }}
+                >
+                  {entry.kind === "Moment" && <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} aria-label="Moment title" />}
+                  <textarea rows={2} value={editText} onChange={(event) => setEditText(event.target.value)} aria-label="Text" />
+                  <input type="date" value={editDate} max={today()} onChange={(event) => setEditDate(event.target.value)} aria-label="Date" />
+                  <div className="inline-actions">
+                    <Button type="submit" icon={Check}>
+                      Save
+                    </Button>
+                    <Button variant="ghost" onClick={() => setEditing(null)}>
+                      Cancel
+                    </Button>
+                    <button
+                      type="button"
+                      className="text-link plan-edit__delete-link"
+                      onClick={() => {
+                        setReflections((items) => items.filter((item) => item.id !== editing), "Removed from your story.")
+                        setEditing(null)
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div>
+                  <small className="roadmap__story-kind">{entry.kind}</small>
+                  <strong>{entry.title}</strong>
+                  {entry.detail && <small>{entry.detail}</small>}
+                  {entry.reflectionId && (
+                    <button
+                      type="button"
+                      className="text-link journey-edit__link"
+                      onClick={() => {
+                        const item = (state.roadmap?.reflections ?? []).find((candidate) => candidate.id === entry.reflectionId)
+                        if (!item) return
+                        setEditing(item.id)
+                        setEditText(item.text)
+                        setEditTitle(item.title ?? "")
+                        setEditDate(item.date)
+                      }}
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+      {shown.length > 15 && !showAll && (
+        <button type="button" className="text-link" onClick={() => setShowAll(true)}>
+          Show all {shown.length}
+        </button>
+      )}
+    </section>
+  )
 }
 
 export function Roadmap({
@@ -611,7 +931,7 @@ export function Roadmap({
   onSetupRestart: () => void
   onEditProfile: () => void
 }) {
-  const [tab, setTab] = useState<"journey" | "phases" | "why">("journey")
+  const [tab, setTab] = useState<"phases" | "why">("phases")
   const [reflection, setReflection] = useState("")
   const [showAll, setShowAll] = useState(false)
   const phase = state.trainingPhase ?? 1
@@ -648,14 +968,13 @@ export function Roadmap({
   const story = journeyEntries(state)
 
   return (
-    <Modal title="Your journey" eyebrow="Goals, training and everything you’re building" onClose={onClose} wide>
+    <Modal title="Training plan" eyebrow="Running, gym and dance as one programme" onClose={onClose} wide>
       <div className="roadmap">
         <Art className="roadmap__art" src="/assets/movement-path.jpg" />
         <div className="segmented roadmap__tabs" role="tablist">
           {(
             [
-              ["journey", "Journey"],
-              ["phases", "Phases"],
+              ["phases", "Training phases"],
               ["why", "Why this plan"],
             ] as const
           ).map(([key, label]) => (
@@ -664,164 +983,6 @@ export function Roadmap({
             </button>
           ))}
         </div>
-
-        {tab === "journey" && (
-          <>
-            <section className="roadmap__ahead">
-              <h3>Ahead</h3>
-              {ahead.length === 0 && <p className="capture-disclaimer">No dated goals yet. Add a date to any goal below.</p>}
-              <ul>
-                {ahead.map((goal) => {
-                  const done = goal.milestones.filter((milestone) => milestone.completedAt).length
-                  return (
-                    <li key={goal.id}>
-                      <div>
-                        <strong>{goal.title}</strong>
-                        <small>{goal.dateLabel ?? formatDate(goal.date!, { day: "numeric", month: "long", year: "numeric" })}</small>
-                        {goal.milestones.length > 0 && (
-                          <small>
-                            {done} of {goal.milestones.length} milestones · next: {goal.milestones.find((milestone) => !milestone.completedAt)?.title ?? "reach it"}
-                          </small>
-                        )}
-                      </div>
-                      <span className="roadmap__countdown">{weeksUntil(goal.date!)}</span>
-                    </li>
-                  )
-                })}
-              </ul>
-              {undated.length > 0 && (
-                <div className="roadmap__undated">
-                  <p className="eyebrow">Bigger goals without a date</p>
-                  {undated.map((goal) => (
-                    <label key={goal.id}>
-                      <span>{goal.title}</span>
-                      <input
-                        type="date"
-                        min={today()}
-                        onChange={(event) =>
-                          event.target.value &&
-                          update(
-                            (current) => ({
-                              ...current,
-                              goals: current.goals.map((item) =>
-                                item.id === goal.id
-                                  ? {
-                                      ...item,
-                                      date: event.target.value,
-                                      dateLabel: formatDate(event.target.value, { weekday: "short", day: "numeric", month: "long", year: "numeric" }),
-                                    }
-                                  : item,
-                              ),
-                            }),
-                            "Date added to your journey.",
-                          )
-                        }
-                        aria-label={`Target date for ${goal.title}`}
-                      />
-                    </label>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="roadmap__events">
-              <h3>Events</h3>
-              <article>
-                <strong>Hackney Half Marathon</strong>
-                <p>{events.hackneyBooked ? "Sun 16 May 2027 · entry booked" : HACKNEY_LABEL}</p>
-                <a href="https://www.hackneymoves.com/2027" target="_blank" rel="noreferrer">
-                  Official site <ExternalLink size={13} />
-                </a>
-                <label className="sync-replace">
-                  <input type="checkbox" checked={!!events.hackneyBooked} onChange={(event) => setEvents({ hackneyBooked: event.target.checked }, "Hackney Half updated.")} />
-                  <span>I have an entry</span>
-                </label>
-              </article>
-              <article>
-                <strong>FairPlay Dance Camp 2027</strong>
-                <p>
-                  {events.fairplayConfirmed
-                    ? "1–8 Aug 2027, Kraków · confirmed by you"
-                    : "Dates TBC. Reported as 1–8 Aug 2027 in Kraków, but not yet verified on the official site."}
-                </p>
-                <a href="https://fpdancecamp.com/en/" target="_blank" rel="noreferrer">
-                  Official site <ExternalLink size={13} />
-                </a>
-                <label className="sync-replace">
-                  <input
-                    type="checkbox"
-                    checked={!!events.fairplayConfirmed}
-                    onChange={(event) =>
-                      setEvents({ fairplayConfirmed: event.target.checked }, event.target.checked ? "Dance camp dates confirmed." : "Dance camp dates back to TBC.")
-                    }
-                  />
-                  <span>I’ve checked the official site and these dates are right</span>
-                </label>
-                {events.fairplayConfirmed && (
-                  <label className="sync-replace">
-                    <input type="checkbox" checked={!!events.fairplayBooked} onChange={(event) => setEvents({ fairplayBooked: event.target.checked }, "Dance camp updated.")} />
-                    <span>I have a ticket</span>
-                  </label>
-                )}
-              </article>
-            </section>
-
-            <form
-              className="roadmap__reflect"
-              onSubmit={(event) => {
-                event.preventDefault()
-                if (!reflection.trim()) return
-                setRoadmap(
-                  (roadmap) => ({
-                    ...roadmap,
-                    reflections: [{ id: uid(), date: today(), text: reflection.trim(), phase }, ...(roadmap.reflections ?? [])],
-                  }),
-                  "Reflection added to your journey.",
-                )
-                setReflection("")
-              }}
-            >
-              <h3>Reflect on the journey</h3>
-              <textarea
-                rows={3}
-                value={reflection}
-                onChange={(event) => setReflection(event.target.value)}
-                placeholder="How is it going? What’s getting easier, what feels hard, what do you want to change?"
-              />
-              <DictateButton onText={(text) => setReflection((current) => (current ? `${current} ${text}` : text))} />
-              <Button type="submit" variant="secondary" icon={Plus} disabled={!reflection.trim()}>
-                Add to my journey
-              </Button>
-            </form>
-
-            <section className="roadmap__story">
-              <h3>Your story so far</h3>
-              {story.length === 0 ? (
-                <p className="capture-disclaimer">
-                  Milestones, workouts, reviews, finished projects and reflections will gather here as you go.
-                </p>
-              ) : (
-                <ol>
-                  {(showAll ? story : story.slice(0, 12)).map((entry, index) => (
-                    <li key={`${entry.date}-${index}`}>
-                      <span className="roadmap__story-date">{formatDate(entry.date, { day: "numeric", month: "short" })}</span>
-                      <div>
-                        <small className="roadmap__story-kind">{entry.kind}</small>
-                        <strong>{entry.title}</strong>
-                        {entry.detail && <small>{entry.detail}</small>}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-              {story.length > 12 && !showAll && (
-                <button type="button" className="text-link" onClick={() => setShowAll(true)}>
-                  Show all {story.length}
-                </button>
-              )}
-            </section>
-          </>
-        )}
 
         {tab === "phases" && (
           <>

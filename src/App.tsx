@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Compass,
   ArrowRight,
   AudioLines,
   BookOpen,
@@ -65,7 +66,7 @@ import { listen, speechSupported } from "./speech"
 import { downloadVoice, getPasscode } from "./sync"
 import { areaMeta, demoState } from "./data"
 import { createSeries, REPEAT_LABELS } from "./series"
-import { checkPlacement } from "./training"
+import { checkPlacement, mondayOf } from "./training"
 import type {
   ActivityKind,
   AppState,
@@ -83,6 +84,9 @@ import {
   ActivityFlow,
   ActivityHistory,
   GymIntake,
+  JourneyAhead,
+  JourneyPhase,
+  JourneyStory,
   NextActionCard,
   PlannedWorkoutList,
   RestartSetup,
@@ -134,7 +138,7 @@ const formatMoney = (pence: number) =>
 const routePath: Record<Route, string> = {
   today: "/",
   plan: "/plan",
-  progress: "/progress",
+  progress: "/journey",
   space: "/space",
 }
 
@@ -150,14 +154,14 @@ const areaIcon: Record<Area, LucideIcon> = {
 const navItems: { key: Route; label: string; icon: LucideIcon }[] = [
   { key: "today", label: "Today", icon: Coffee },
   { key: "plan", label: "Plan", icon: CalendarDays },
-  { key: "progress", label: "Progress", icon: Sparkles },
+  { key: "progress", label: "Journey", icon: Compass },
   { key: "space", label: "My space", icon: UserRound },
 ]
 
 function routeFromPath(): Route {
   const value = window.location.pathname
   if (value.endsWith("/plan")) return "plan"
-  if (value.endsWith("/progress")) return "progress"
+  if (value.endsWith("/journey") || value.endsWith("/progress")) return "progress"
   if (value.endsWith("/space")) return "space"
   return "today"
 }
@@ -1070,40 +1074,20 @@ function ProgressView({
     <div className="page">
       <header className="page-header progress-header">
         <div>
-          <p className="eyebrow">Things taking shape</p>
-          <h1>Notice what is becoming yours.</h1>
+          <p className="eyebrow">Where you’re going, and how far you’ve come</p>
+          <h1>Your journey</h1>
           <p>
-            No life score. Just goals, moments, and what you want to tend next.
+            Goals, training, milestones and the moments in between. It grows as you live, and you
+            can edit any of it.
           </p>
         </div>
-        <div className="inline-actions">
-          <Button icon={Sparkles} onClick={onJourney}>
-            Your journey
-          </Button>
-          <Button variant="secondary" icon={PenLine} onClick={() => setReviewing(true)}>
-            Weekly reflection
-          </Button>
-        </div>
+        <Button variant="secondary" icon={PenLine} onClick={() => setReviewing(true)}>
+          Weekly reflection
+        </Button>
       </header>
 
-      <section className="moments-banner">
-        <div className="moments-banner__art">
-          <img src="/assets/dance-pavilion.jpg" alt="" />
-        </div>
-        <div className="moments-banner__content">
-          <p className="eyebrow">This week, in your own words</p>
-          <blockquote>
-            “More space is not the same as doing nothing.”
-          </blockquote>
-          <div className="moment-tags">
-            {activeAreas.length ? (
-              activeAreas.map((area) => <AreaMark area={area} key={area} />)
-            ) : (
-              <span>There is nothing to prove this week.</span>
-            )}
-          </div>
-        </div>
-      </section>
+      <JourneyAhead state={state} update={update} />
+      <JourneyPhase state={state} onOpenPlan={onJourney} />
 
       <div className="progress-grid">
         <section className="section-block">
@@ -1262,35 +1246,48 @@ function ProgressView({
           <StrengthProgress state={state} />
         </div>
 
-        <aside className="week-note">
-          <p className="eyebrow">A factual glance</p>
-          <h3>{completeItems.length || "No"} things tended this week</h3>
-          <p>
-            {completeItems.length
-              ? `Across ${activeAreas.length} part${
-                  activeAreas.length === 1 ? "" : "s"
-                } of life. Nothing is ranked.`
-              : "An empty week is information, not a verdict."}
-          </p>
-          <div className="week-note__areas">
-            {(Object.keys(areaMeta) as Area[]).map((area) => {
-              const count = completeItems.filter(
-                (item) => item.area === area,
-              ).length
-              return (
-                <div key={area}>
-                  <AreaMark area={area} compact />
-                  <span>
-                    {count
-                      ? `${count} moment${count === 1 ? "" : "s"}`
-                      : "Quiet"}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+        <aside className="week-note this-week">
+          <p className="eyebrow">This week</p>
+          {(() => {
+            const weekStart = mondayOf(today())
+            const done = state.plan.filter(
+              (item) => item.status === "complete" && item.date >= weekStart && item.date <= today(),
+            )
+            const sessions = done.filter((item) => item.kind && ["gym", "walk", "run", "dance"].includes(item.kind))
+            const latest = (state.roadmap?.reflections ?? []).find((item) => !item.title && item.date >= weekStart)
+            return (
+              <>
+                <h3>
+                  {done.length
+                    ? `${done.length} thing${done.length === 1 ? "" : "s"} done`
+                    : "A quiet week so far"}
+                  {sessions.length ? ` · ${sessions.length} movement session${sessions.length === 1 ? "" : "s"}` : ""}
+                </h3>
+                {latest ? (
+                  <blockquote>“{latest.text}”</blockquote>
+                ) : (
+                  <p>
+                    {done.length
+                      ? "How did it feel? A line or two in Your story keeps this week in your own words."
+                      : "An empty week is information, not a verdict."}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="text-link"
+                  onClick={() =>
+                    document.querySelector(".roadmap__reflect textarea")?.scrollIntoView({ behavior: "smooth", block: "center" })
+                  }
+                >
+                  {latest ? "Add another reflection" : "Write this week’s reflection"}
+                </button>
+              </>
+            )
+          })()}
         </aside>
       </div>
+
+      <JourneyStory state={state} update={update} />
 
       {reviewing && (
         <WeeklyReview
@@ -4844,7 +4841,7 @@ export default function App() {
             onAdd={() => setAddDate(today())}
             onOpenSpace={(key) => setSpace(key)}
             onActivity={openActivity}
-            onRoadmap={() => setRoadmap(true)}
+            onRoadmap={() => navigate("progress")}
             onSetupRestart={() => setRestartSetup(true)}
             onOpenItem={setOpenItemId}
           />
@@ -4937,7 +4934,7 @@ export default function App() {
           onAdd={() => setAddDate(today())}
           onSpace={(key) => setSpace(key)}
           onVoiceNotes={() => setVoiceNotes(true)}
-          onJourney={() => setRoadmap(true)}
+          onJourney={() => navigate("progress")}
           onStartNext={(id) => openActivity(id, "start")}
         />
       )}
