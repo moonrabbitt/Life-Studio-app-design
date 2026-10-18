@@ -84,7 +84,7 @@ import {
   ActivityFlow,
   ActivityHistory,
   GymIntake,
-  JourneyAhead,
+  JourneyGoals,
   JourneyPhase,
   JourneyStory,
   NextActionCard,
@@ -692,6 +692,14 @@ function TodayView({
               <p className="eyebrow">A quiet corner</p>
               <h3>A softer day still belongs to your life.</h3>
               <p>Rest, make tea, write one line, or leave the space open.</p>
+              <div className="companion-card__actions">
+                <button type="button" onClick={() => onOpenSpace("breathe")}>
+                  <Wind size={16} /> Breathe for a minute
+                </button>
+                <button type="button" onClick={() => onOpenSpace("reflect")}>
+                  <Feather size={16} /> Write one line
+                </button>
+              </div>
             </div>
             <img src="/assets/samoyed.png" alt="" />
           </section>
@@ -1087,161 +1095,15 @@ function ProgressView({
         </Button>
       </header>
 
-      <JourneyAhead state={state} update={update} />
       <JourneyPhase state={state} onOpenPlan={onJourney} />
+      <JourneyGoals
+        state={state}
+        update={update}
+        onOpenGoal={setSelectedGoalId}
+        onNewGoal={() => setAddingGoal(true)}
+      />
 
       <div className="progress-grid">
-        <section className="section-block">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Goals</p>
-              <h2>Things worth tending</h2>
-            </div>
-            <Button
-              variant="ghost"
-              icon={Plus}
-              onClick={() => setAddingGoal(true)}
-            >
-              New goal
-            </Button>
-          </div>
-          <div className="goal-groups">
-            {biggerGoals.length > 0 && (
-              <div>
-                <div className="goal-group-heading">
-                  <div>
-                    <h3>Bigger goals</h3>
-                    <p>Longer journeys, held in smaller milestones.</p>
-                  </div>
-                  <Sparkles size={20} />
-                </div>
-                <div className="goal-list">
-                  {biggerGoals.map((goal) => {
-                    const milestones = goal.milestones ?? []
-                    const complete = milestones.filter(
-                      (milestone) => milestone.completedAt,
-                    ).length
-                    const linkedComplete = state.plan.filter(
-                      (item) =>
-                        item.goalId === goal.id && item.status === "complete",
-                    ).length
-                    const progress = milestones.length
-                      ? Math.round((complete / milestones.length) * 100)
-                      : 0
-                    return (
-                      <article
-                        className="goal-card goal-card--big"
-                        key={goal.id}
-                      >
-                        <div className="goal-card__topline">
-                          <AreaMark area={goal.area} />
-                          <span>Big goal</span>
-                        </div>
-                        <h3>{goal.title}</h3>
-                        {goal.dateLabel && (
-                          <p className="goal-card__date">{goal.dateLabel}</p>
-                        )}
-                        <div className="goal-progress">
-                          <div>
-                            <span>How far you’ve come</span>
-                            <strong>
-                              {complete} of {milestones.length} milestones
-                            </strong>
-                          </div>
-                          <div
-                            className="goal-progress__track"
-                            role="progressbar"
-                            aria-label={`${goal.title} milestone progress`}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-valuenow={progress}
-                          >
-                            <span style={{ width: `${progress}%` }} />
-                          </div>
-                        </div>
-                        <div className="goal-card__next">
-                          <span>Next gentle step</span>
-                          <p>{goal.nextStep}</p>
-                        </div>
-                        {linkedComplete > 0 && (
-                          <div className="goal-linked-progress">
-                            <Check size={15} />
-                            <span>
-                              {linkedComplete} completed plan item
-                              {linkedComplete === 1 ? "" : "s"} contributing
-                            </span>
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          className="text-link"
-                          onClick={() => setSelectedGoalId(goal.id)}
-                        >
-                          See the journey <ChevronRight size={16} />
-                        </button>
-                      </article>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {smallerGoals.length > 0 && (
-              <div>
-                <div className="goal-group-heading">
-                  <div>
-                    <h3>Smaller goals</h3>
-                    <p>Closer steps that can stay simple.</p>
-                  </div>
-                </div>
-                <div className="small-goal-list">
-                  {smallerGoals.map((goal) => (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedGoalId(goal.id)}
-                      key={goal.id}
-                    >
-                      <AreaMark area={goal.area} compact />
-                      <span>
-                        <strong>{goal.title}</strong>
-                        <small>{goal.nextStep}</small>
-                        {state.plan.some(
-                          (item) =>
-                            item.goalId === goal.id &&
-                            item.status === "complete",
-                        ) && <small>Plan progress recorded</small>}
-                      </span>
-                      <ChevronRight size={17} />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          {reachedGoals.length > 0 && (
-            <div className="finished-shelf">
-              <p className="eyebrow">Reached shelf</p>
-              <ul>
-                {reachedGoals.map((goal) => (
-                  <li key={goal.id}>
-                    <button type="button" onClick={() => setSelectedGoalId(goal.id)}>
-                      <Sparkles size={16} />
-                      <span>
-                        <strong>{goal.title}</strong>
-                        <small>
-                          {goal.milestones.filter((item) => item.completedAt).length} of{" "}
-                          {goal.milestones.length}{" "}
-                          {goal.scale === "big" ? "milestones" : "steps"}
-                        </small>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </section>
-
         <div className="progress-stack">
           <ActivityHistory state={state} onEditLog={setEditLogId} />
           <StrengthProgress state={state} />

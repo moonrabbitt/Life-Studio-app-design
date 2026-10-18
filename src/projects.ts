@@ -55,9 +55,37 @@ function seedEvents(state: AppState): AppState {
   }
 }
 
+// Events that belong to a goal become dated milestones of that goal.
+function eventsToMilestones(state: AppState): AppState {
+  const events = state.journeyEvents ?? []
+  const owned = events.filter((event) => event.goalId && state.goals.some((goal) => goal.id === event.goalId))
+  if (!owned.length) return state
+  return {
+    ...state,
+    journeyEvents: events.filter((event) => !owned.includes(event)),
+    goals: state.goals.map((goal) => {
+      const mine = owned.filter((event) => event.goalId === goal.id)
+      if (!mine.length) return goal
+      return {
+        ...goal,
+        milestones: [
+          ...goal.milestones,
+          ...mine
+            .filter((event) => !goal.milestones.some((milestone) => milestone.id === event.id))
+            .map(({ id, title, goalId: _goalId, ...event }) => ({ id, title, event })),
+        ],
+      }
+    }),
+    plan: state.plan.map((item) => {
+      const event = owned.find((candidate) => candidate.id === item.eventId)
+      return event ? { ...item, eventId: undefined, goalId: event.goalId, milestoneId: event.id } : item
+    }),
+  }
+}
+
 // One-time tidy: each idea lives in one place, and old "next action" text becomes a step.
 export function tidyProjects(input: AppState): AppState {
-  let next = seedEvents(input)
+  let next = eventsToMilestones(seedEvents(input))
   const filmGoal = next.goals.find((goal) => goal.id === "goal-film")
   const filmProject = next.projects.find((project) => project.id === "project-1")
   if (filmGoal && filmProject && !filmProject.steps) {

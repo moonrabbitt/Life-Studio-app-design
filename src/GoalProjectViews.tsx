@@ -18,6 +18,7 @@ import {
 import { useEffect, useState } from "react"
 import { suggestProjectSteps } from "./ai"
 import { projectSteps } from "./projects"
+import { GoalMilestones } from "./MilestoneViews"
 import { addDays, checkPlacement } from "./training"
 import type { AppState, Goal, PlanItem, Project, ProjectStep } from "./types"
 import { Art, Button, formatDate, IconButton, Modal, today, uid } from "./ui"
@@ -1062,65 +1063,7 @@ export function GoalDetail({
 
         <section>
           <p className="eyebrow">{big ? "Milestones" : "Small steps"}</p>
-          <StepList
-            steps={steps}
-            scheduled={scheduled}
-            plan={state.plan}
-            addPlaceholder={big ? "Add a milestone" : "Add a small step"}
-            onToggle={(step) => {
-              const done = !step.done
-              update((current) => ({
-                ...current,
-                goals: current.goals.map((item) =>
-                  item.id === goal.id
-                    ? {
-                        ...item,
-                        milestones: item.milestones.map((milestone) =>
-                          milestone.id === step.id
-                            ? { ...milestone, completedAt: done ? new Date().toISOString() : undefined }
-                            : milestone,
-                        ),
-                      }
-                    : item,
-                ),
-                plan: syncPlan(current.plan, (item) => item.goalId === goal.id && item.milestoneId === step.id, done, step.title),
-              }))
-              if (done) {
-                const remaining = steps.filter((candidate) => !candidate.done && candidate.id !== step.id).length
-                setCelebration({
-                  title: step.title,
-                  body: remaining ? `${remaining} ${word}${remaining === 1 ? "" : "s"} to go.` : `Every ${word} done. Ready to mark this goal reached?`,
-                })
-              }
-            }}
-            onAdd={(title) => setMilestones((current) => [...current, { id: uid(), title }], `${big ? "Milestone" : "Step"} added.`)}
-            onRemove={(stepId) => setMilestones((current) => current.filter((milestone) => milestone.id !== stepId))}
-            onMove={(stepId, direction) => setMilestones((current) => move(current, stepId, direction))}
-            onSchedule={(step, date, time, duration) =>
-              update(
-                (current) => ({
-                  ...current,
-                  plan: [
-                    ...current.plan,
-                    {
-                      id: uid(),
-                      title: step.title,
-                      area: goal.area,
-                      date,
-                      time,
-                      duration,
-                      mode: "flexible",
-                      status: "planned",
-                      goalId: goal.id,
-                      milestoneId: step.id,
-                      details: [`Towards your goal: ${goal.title}.`],
-                    },
-                  ],
-                }),
-                `Added to ${date === today() ? "today" : formatDate(date, { weekday: "long" })}.`,
-              )
-            }
-          />
+          <GoalMilestones goal={goal} state={state} update={update} />
         </section>
 
         {projects.length > 0 && (

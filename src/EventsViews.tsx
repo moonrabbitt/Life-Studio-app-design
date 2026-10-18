@@ -15,21 +15,21 @@ export const countdown = (date: string, feeling?: JourneyEvent["feeling"]) => {
   return `${span} away`
 }
 
-const FEELINGS: [NonNullable<JourneyEvent["feeling"]>, string][] = [
+export const FEELINGS: [NonNullable<JourneyEvent["feeling"]>, string][] = [
   ["excited", "Excited"],
   ["nervous", "Nervous"],
   ["mixed", "Mixed"],
   ["not-sure", "Not sure"],
 ]
 
-const when = (event: JourneyEvent) =>
+export const when = (event: Pick<JourneyEvent, "date" | "endDate" | "dateTBC">) =>
   event.dateTBC || !event.date
     ? "Date TBC"
     : event.endDate && event.endDate !== event.date
       ? `${formatDate(event.date, { day: "numeric", month: "short" })} – ${formatDate(event.endDate, { day: "numeric", month: "short", year: "numeric" })}`
       : formatDate(event.date, { weekday: "short", day: "numeric", month: "long", year: "numeric" })
 
-const safeUrl = (value: string) => {
+export const safeUrl = (value: string) => {
   const url = value.trim()
   if (!url) return ""
   return /^https?:\/\//i.test(url) ? url : `https://${url}`
@@ -165,19 +165,7 @@ function EventForm({
           Add link
         </Button>
       </div>
-      <label>
-        <span>Part of a goal? (optional)</span>
-        <select value={goalId} onChange={(event) => setGoalId(event.target.value)}>
-          <option value="">No linked goal</option>
-          {state.goals
-            .filter((goal) => goal.status !== "complete")
-            .map((goal) => (
-              <option value={goal.id} key={goal.id}>
-                {goal.title}
-              </option>
-            ))}
-        </select>
-      </label>
+      <p className="capture-disclaimer">Part of a goal, like race day? Add it as a milestone of that goal instead.</p>
       <label>
         <span>Note (optional)</span>
         <textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} />

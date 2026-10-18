@@ -261,6 +261,7 @@ export function PeopleSpace({
   >({ kind: "list" })
   const person = "id" in view ? state.people.find((candidate) => candidate.id === view.id) : undefined
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [removingId, setRemovingId] = useState<string | null>(null)
   const removePerson = (target: Person) => {
     update(
       (current) => ({
@@ -503,14 +504,29 @@ export function PeopleSpace({
                         : "Nothing planned"}
                   </span>
                 </div>
-                <div className="person-card__actions">
-                  <Button variant="secondary" icon={CalendarPlus} onClick={() => setView({ kind: "plan", id: candidate.id, back: "list" })}>
-                    Plan something
-                  </Button>
-                  <Button variant="ghost" onClick={() => setView({ kind: "person", id: candidate.id })}>
-                    Open
-                  </Button>
-                </div>
+                {removingId === candidate.id ? (
+                  <div className="plan-edit__delete person-card__confirm">
+                    <p>Remove {candidate.name}? Plans with them stay in your Plan, just unlinked.</p>
+                    <Button variant="danger" icon={Trash2} onClick={() => { removePerson(candidate); setRemovingId(null) }}>
+                      Remove
+                    </Button>
+                    <Button variant="ghost" onClick={() => setRemovingId(null)}>
+                      Keep
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="person-card__actions">
+                    <Button variant="secondary" icon={CalendarPlus} onClick={() => setView({ kind: "plan", id: candidate.id, back: "list" })}>
+                      Plan something
+                    </Button>
+                    <Button variant="ghost" onClick={() => setView({ kind: "person", id: candidate.id })}>
+                      Open
+                    </Button>
+                    <button type="button" className="icon-button person-card__remove" aria-label={`Remove ${candidate.name}`} title={`Remove ${candidate.name}`} onClick={() => setRemovingId(candidate.id)}>
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                )}
               </article>
             )
           })}

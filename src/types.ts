@@ -199,11 +199,17 @@ export type Goal = {
   status: "tending" | "paused" | "complete"
   reachedAt?: string
   nextStep: string
-  milestones: {
-    id: string
-    title: string
-    completedAt?: string
-  }[]
+  milestones: Milestone[]
+}
+
+// Details for a milestone that happens on a date (race day, the camp…).
+export type MilestoneEvent = Omit<JourneyEvent, "id" | "title" | "goalId">
+
+export type Milestone = {
+  id: string
+  title: string
+  completedAt?: string
+  event?: MilestoneEvent
 }
 
 export type WorkoutSet = {

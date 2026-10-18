@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { countdown, EventsList } from "./EventsViews"
+import { goalDate, goalFeeling, GoalMilestones } from "./MilestoneViews"
 import { celebrate } from "./GoalProjectViews"
 import { listen, speechSupported } from "./speech"
 import {
@@ -607,86 +608,99 @@ const dateLabelFor = (date: string) =>
   formatDate(date, { weekday: "short", day: "numeric", month: "long", year: "numeric" })
 
 // What's ahead: dated goals counting down, events, and goals still waiting for a date.
-export function JourneyAhead({ state, update }: { state: AppState; update: Update }) {
-  const events = state.journeyEvents ?? []
-  // A goal's countdown uses its own date, or the date of an event that's part of it.
-  const dateOf = (goal: AppState["goals"][number]) =>
-    goal.date ??
-    events
-      .filter((event) => event.goalId === goal.id && event.date && event.date >= today())
-      .map((event) => event.date!)
-      .sort()[0]
-  const active = state.goals.filter((goal) => goal.status !== "complete")
-  const ahead = active
-    .filter((goal) => {
-      const date = dateOf(goal)
-      return (date && date >= today()) || events.some((event) => event.goalId === goal.id)
+// Goals on the journey: each with its countdown and milestones (some of which are dated events).
+export function JourneyGoals({
+  state,
+  update,
+  onOpenGoal,
+  onNewGoal,
+}: {
+  state: AppState
+  update: Update
+  onOpenGoal: (id: string) => void
+  onNewGoal: () => void
+}) {
+  const active = state.goals
+    .filter((goal) => goal.status !== "complete")
+    .sort((a, b) => {
+      const da = goalDate(a) ?? "9999"
+      const db = goalDate(b) ?? "9999"
+      if (da !== db) return da.localeCompare(db)
+      return (a.scale === "big" ? 0 : 1) - (b.scale === "big" ? 0 : 1)
     })
-    .sort((a, b) => (dateOf(a) ?? "9999").localeCompare(dateOf(b) ?? "9999"))
-  const undated = active.filter((goal) => goal.scale === "big" && !dateOf(goal) && !ahead.includes(goal))
-
+  const reached = state.goals.filter((goal) => goal.status === "complete")
   return (
     <section className="journey-section">
-      <div className="journey-section__head">
-        <h2>Ahead</h2>
+      <div className="journey-section__head journey-section__head--row">
+        <h2>Goals</h2>
+        <Button variant="secondary" icon={Plus} onClick={onNewGoal}>
+          New goal
+        </Button>
       </div>
-      {ahead.length === 0 && <p className="capture-disclaimer">No dated goals yet. Add a date to a goal below, or an event to look forward to.</p>}
+      {active.length === 0 && <p className="capture-disclaimer">No goals yet. What would you like to grow towards?</p>}
       <ul className="journey-ahead">
-        {ahead.map((goal) => {
-          const done = goal.milestones.filter((milestone) => milestone.completedAt).length
-          const date = dateOf(goal)
+        {active.map((goal) => {
+          const date = goalDate(goal)
+          const feeling = goalFeeling(goal)
+          const hide = goal.milestones.some((milestone) => milestone.event?.hideCountdown && milestone.event.date === date)
           return (
             <li key={goal.id}>
               <div className="journey-ahead__goal">
-                <div>
+                <button type="button" className="journey-ahead__title" onClick={() => onOpenGoal(goal.id)}>
                   <small className="journey-ahead__kind">{goal.scale === "big" ? "Bigger goal" : "Smaller goal"}</small>
                   <strong>{goal.title}</strong>
                   {goal.date && <small>Target: {formatDate(goal.date, { day: "numeric", month: "long", year: "numeric" })}</small>}
-                  {goal.milestones.length > 0 && (
-                    <small>
-                      {done} of {goal.milestones.length} milestones · next: {goal.milestones.find((milestone) => !milestone.completedAt)?.title ?? "reach it"}
-                    </small>
-                  )}
-                </div>
-                {date && !events.some((event) => event.goalId === goal.id && event.hideCountdown) && (
-                  <span className={`roadmap__countdown ${events.some((event) => event.goalId === goal.id && event.feeling === "nervous") ? "is-gentle" : ""}`}>
-                    {countdown(date, events.find((event) => event.goalId === goal.id && event.feeling)?.feeling)}
-                  </span>
-                )}
+                </button>
+                {date && !hide && <span className={`roadmap__countdown ${feeling === "nervous" ? "is-gentle" : ""}`}>{countdown(date, feeling)}</span>}
               </div>
-              <EventsList state={state} update={update} goalId={goal.id} />
+              <GoalMilestones goal={goal} state={state} update={update} limit={5} onSeeAll={() => onOpenGoal(goal.id)} />
+              {goal.scale === "big" && !date && (
+                <label className="journey-ahead__date">
+                  <span>Target date (optional)</span>
+                  <input
+                    type="date"
+                    min={today()}
+                    aria-label={`Target date for ${goal.title}`}
+                    onChange={(event) =>
+                      event.target.value &&
+                      update(
+                        (current) => ({
+                          ...current,
+                          goals: current.goals.map((item) =>
+                            item.id === goal.id ? { ...item, date: event.target.value, dateLabel: dateLabelFor(event.target.value) } : item,
+                          ),
+                        }),
+                        "Date added to your journey.",
+                      )
+                    }
+                  />
+                </label>
+              )}
             </li>
           )
         })}
       </ul>
-      {undated.length > 0 && (
-        <div className="roadmap__undated">
-          <p className="eyebrow">Give a bigger goal a date (optional)</p>
-          {undated.map((goal) => (
-            <label key={goal.id}>
-              <span>{goal.title}</span>
-              <input
-                type="date"
-                min={today()}
-                aria-label={`Target date for ${goal.title}`}
-                onChange={(event) =>
-                  event.target.value &&
-                  update(
-                    (current) => ({
-                      ...current,
-                      goals: current.goals.map((item) =>
-                        item.id === goal.id ? { ...item, date: event.target.value, dateLabel: dateLabelFor(event.target.value) } : item,
-                      ),
-                    }),
-                    "Date added to your journey.",
-                  )
-                }
-              />
-            </label>
-          ))}
+      <EventsList state={state} update={update} />
+      {reached.length > 0 && (
+        <div className="finished-shelf">
+          <p className="eyebrow">Reached shelf</p>
+          <ul>
+            {reached.map((goal) => (
+              <li key={goal.id}>
+                <button type="button" onClick={() => onOpenGoal(goal.id)}>
+                  <Sparkles size={16} />
+                  <span>
+                    <strong>{goal.title}</strong>
+                    <small>
+                      {goal.milestones.filter((item) => item.completedAt).length} of {goal.milestones.length} {goal.scale === "big" ? "milestones" : "steps"}
+                    </small>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
-      <EventsList state={state} update={update} />
     </section>
   )
 }
