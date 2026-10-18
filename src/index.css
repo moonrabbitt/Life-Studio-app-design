@@ -2089,8 +2089,10 @@ textarea::placeholder {
   gap: 0.5rem;
 }
 
-.mini-list button {
+.mini-list > button,
+.mini-list .swipe__content > button {
   display: flex;
+  width: 100%;
   flex-direction: column;
   border: 1px solid var(--line);
   border-radius: 0.8rem;
@@ -2100,13 +2102,16 @@ textarea::placeholder {
   text-align: left;
 }
 
-.mini-list button small,
-.mini-list button span {
+.mini-list > button small,
+.mini-list > button span,
+.mini-list .swipe__content > button small,
+.mini-list .swipe__content > button span {
   color: var(--ink-soft);
   font-size: 0.68rem;
 }
 
-.mini-list button span {
+.mini-list > button span,
+.mini-list .swipe__content > button span {
   overflow: hidden;
   max-height: 2.7rem;
   margin-top: 0.35rem;
@@ -6391,7 +6396,7 @@ html {
   list-style: none;
 }
 
-.finished-shelf button {
+.finished-shelf .swipe__content > button {
   display: flex;
   width: 100%;
   align-items: center;
@@ -6406,7 +6411,7 @@ html {
   text-align: left;
 }
 
-.finished-shelf button svg {
+.finished-shelf .swipe__content > button svg {
   flex: none;
   color: #80601d;
 }
@@ -8862,4 +8867,125 @@ label.check-row input {
   flex: none;
   margin-top: 0.1rem;
   accent-color: var(--moss);
+}
+
+/* Swipe left to reveal Delete (and friends) */
+.swipe {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--swipe-radius, 18px);
+  touch-action: pan-y;
+}
+.swipe__actions {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+}
+.swipe:not(.is-open):not(.is-dragging) .swipe__actions {
+  visibility: hidden;
+}
+.swipe__action {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  border: 0;
+  padding: 0 0.4rem;
+  color: #fffaf0;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  cursor: pointer;
+}
+.swipe__action.is-danger {
+  background: #a5483a;
+}
+.swipe__action.is-neutral {
+  background: var(--sage, #7d8c6f);
+}
+.swipe__content {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.22s ease;
+  will-change: transform;
+}
+.swipe__content.is-dragging {
+  transition: none;
+}
+.swipe__content > * {
+  margin: 0;
+}
+.swipe__handle {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: 0.3rem;
+  display: none;
+  width: 24px;
+  height: 40px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 1.2rem;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+.swipe.is-open .swipe__handle {
+  display: none;
+}
+/* Mouse and keyboard: a small handle on hover or focus instead of swiping */
+@media (hover: hover) and (pointer: fine) {
+  .swipe:hover .swipe__handle,
+  .swipe:focus-within .swipe__handle {
+    display: grid;
+  }
+}
+.swipe__handle:focus-visible {
+  display: grid;
+  outline: 2px solid var(--moss);
+}
+.swipe-hint {
+  margin: 0.3rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  text-align: center;
+}
+.toast .toast__undo {
+  margin-left: 0.4rem;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  background: rgb(255 255 255 / 16%);
+  color: #fffaf0;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.swipe--card,
+.mini-list .swipe {
+  --swipe-radius: 1rem;
+}
+.mini-list .swipe {
+  --swipe-radius: 0.8rem;
+}
+.swipe--card .swipe__content > .is-proposed {
+  background: var(--surface);
+}
+@media (hover: hover) and (pointer: fine) {
+  .swipe-hint {
+    display: none;
+  }
+}
+.swipe__content img {
+  -webkit-user-drag: none;
+  user-select: none;
 }

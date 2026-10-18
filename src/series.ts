@@ -114,3 +114,10 @@ export function editFuture(state: AppState, item: PlanItem, changes: Partial<Pla
 
 export const seriesOf = (state: AppState, item: PlanItem) =>
   (state.series ?? []).find((series) => series.id === item.seriesId)
+
+// Delete a plan item: a one-off is removed; a repeat can lose just this date or this and every later one.
+export function removePlanItem(state: AppState, item: PlanItem, scope: "this" | "future" = "this"): AppState {
+  if (item.seriesId && (state.series ?? []).some((series) => series.id === item.seriesId))
+    return scope === "future" ? endSeriesBefore(state, item.seriesId, item.date) : skipOccurrence(state, item)
+  return { ...state, plan: state.plan.filter((candidate) => candidate.id !== item.id) }
+}

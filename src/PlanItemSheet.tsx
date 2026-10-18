@@ -21,6 +21,7 @@ import {
   endSeriesBefore,
   REPEAT_LABELS,
   seriesOf,
+  removePlanItem,
   skipOccurrence,
 } from "./series"
 import { buildIntroSession, checkPlacement } from "./training"
@@ -34,7 +35,7 @@ import {
   type ActivityMode,
 } from "./TrainingViews"
 import type { ActivityKind, AppState, Area, PlanItem, RepeatFrequency, Series } from "./types"
-import { Button, formatDate, Modal, today, uid } from "./ui"
+import { Button, formatDate, Modal, today, uid, type SwipeAction } from "./ui"
 
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
 
@@ -689,4 +690,17 @@ export function PlanItemSheet({
       )}
     </Modal>
   )
+}
+
+// Swipe actions for anything in your plan, with undo instead of an "are you sure?".
+export function planSwipeActions(
+  item: PlanItem,
+  remove: (recipe: (current: AppState) => AppState, message: string) => void,
+): SwipeAction[] {
+  if (item.seriesId)
+    return [
+      { label: "This one", icon: Trash2, tone: "neutral", onClick: () => remove((current) => removePlanItem(current, item, "this"), `Removed “${item.title}” on this day.`) },
+      { label: "All future", icon: Trash2, tone: "danger", onClick: () => remove((current) => removePlanItem(current, item, "future"), `Removed “${item.title}” from here on.`) },
+    ]
+  return [{ label: "Delete", icon: Trash2, tone: "danger", onClick: () => remove((current) => removePlanItem(current, item), `Deleted “${item.title}”.`) }]
 }

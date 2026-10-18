@@ -50,6 +50,9 @@ export function useLifeStudioState() {
   const [syncMessage, setSyncMessage] = useState("")
   const [lastSynced, setLastSynced] = useState(0)
   const [changes, setChanges] = useState(0)
+  // Swipe-deletes can be undone for a few seconds.
+  const [undo, setUndo] = useState<{ message: string; previous: AppState } | null>(null)
+  const undoTimer = useRef<number | undefined>(undefined)
   const stateRef = useRef(state)
   const updatedAt = useRef(loadUpdatedAt())
   const syncing = useRef(false)
@@ -94,6 +97,26 @@ export function useLifeStudioState() {
     },
     [commit, flash],
   )
+
+  const removeWithUndo = useCallback(
+    (recipe: (current: AppState) => AppState, message: string) => {
+      const previous = stateRef.current
+      commit(recipe)
+      setUndo({ message, previous })
+      window.clearTimeout(undoTimer.current)
+      undoTimer.current = window.setTimeout(() => setUndo(null), 6000)
+    },
+    [commit],
+  )
+
+  const undoLast = useCallback(() => {
+    if (!undo) return
+    const previous = undo.previous
+    commit(() => previous)
+    setUndo(null)
+    window.clearTimeout(undoTimer.current)
+    flash("Restored.")
+  }, [undo, commit, flash])
 
   const adopt = (remote: Remote) => {
     const next = normalise(remote.state)
@@ -232,6 +255,8 @@ export function useLifeStudioState() {
   return {
     state,
     update,
+    removeWithUndo,
+    undo: undo ? { message: undo.message, run: undoLast } : null,
     notice,
     setNotice: flash,
     reset,

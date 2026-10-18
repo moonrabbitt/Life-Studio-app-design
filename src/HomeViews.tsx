@@ -3,7 +3,7 @@ import { useState } from "react"
 import { celebrate } from "./GoalProjectViews"
 import { createSeries, editFuture, endSeriesBefore, REPEAT_LABELS } from "./series"
 import type { AppState, RepeatFrequency, Routine, Series } from "./types"
-import { Button, formatDate, IconButton, Modal, today, uid } from "./ui"
+import { Button, formatDate, IconButton, Modal, SwipeRow, today, uid, useRemove } from "./ui"
 
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
 
@@ -126,6 +126,7 @@ function RoutineForm({
 
 export function HomeSpace({ state, update, close }: { state: AppState; update: Update; close: () => void }) {
   const [editing, setEditing] = useState<string | "new" | null>(null)
+  const remove = useRemove()
   const seriesFor = (routine: Routine) => (state.series ?? []).find((series) => series.id === routine.seriesId)
   const blank: Draft = { title: "", inCalendar: true, frequency: "weekly", start: today(), time: "", duration: "20" }
 
@@ -206,7 +207,23 @@ export function HomeSpace({ state, update, close }: { state: AppState; update: U
           const done = routine.completedDates.includes(today())
           const todays = series && state.plan.find((item) => item.seriesId === series.id && item.date === today())
           return (
-            <article className={done ? "is-complete" : ""} key={routine.id}>
+            <SwipeRow
+              key={routine.id}
+              className="swipe--card"
+              actions={[
+                {
+                  label: "Delete",
+                  icon: Trash2,
+                  tone: "danger",
+                  onClick: () =>
+                    remove((current) => {
+                      const next = series ? endSeriesBefore(current, series.id, today()) : current
+                      return { ...next, routines: next.routines.filter((item) => item.id !== routine.id) }
+                    }, `Deleted “${routine.title}”${series ? " and its future calendar entries" : ""}.`),
+                },
+              ]}
+            >
+            <article className={done ? "is-complete" : ""}>
               <button
                 type="button"
                 className="routine-check"
@@ -241,6 +258,7 @@ export function HomeSpace({ state, update, close }: { state: AppState; update: U
               </div>
               <IconButton label={`Edit “${routine.title}”`} icon={Pencil} onClick={() => setEditing(routine.id)} />
             </article>
+            </SwipeRow>
           )
         })}
       </div>

@@ -20,7 +20,7 @@ import { useState } from "react"
 import { celebrate } from "./GoalProjectViews"
 import { addDays, checkPlacement } from "./training"
 import type { AppState, Person, PlanItem } from "./types"
-import { Art, Button, formatDate, Modal, today, uid } from "./ui"
+import { Art, Button, formatDate, Modal, SwipeRow, today, uid, useRemove } from "./ui"
 
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
 
@@ -261,15 +261,15 @@ export function PeopleSpace({
   >({ kind: "list" })
   const person = "id" in view ? state.people.find((candidate) => candidate.id === view.id) : undefined
   const [confirmRemove, setConfirmRemove] = useState(false)
-  const [removingId, setRemovingId] = useState<string | null>(null)
+  const remove = useRemove()
   const removePerson = (target: Person) => {
-    update(
+    remove(
       (current) => ({
         ...current,
         people: current.people.filter((candidate) => candidate.id !== target.id),
         plan: current.plan.map((item) => (item.personId === target.id ? { ...item, personId: undefined } : item)),
       }),
-      `${target.name} removed.`,
+      `Removed ${target.name}.`,
     )
     setConfirmRemove(false)
     setView({ kind: "list" })
@@ -491,7 +491,12 @@ export function PeopleSpace({
               .filter((item) => (item.status === "planned" || item.status === "proposed") && item.date >= today())
               .sort(sortByDate)[0]
             return (
-              <article className="person-card" key={candidate.id}>
+              <SwipeRow
+                key={candidate.id}
+                className="swipe--card"
+                actions={[{ label: "Remove", icon: Trash2, tone: "danger", onClick: () => removePerson(candidate) }]}
+              >
+              <article className="person-card">
                 <div className="person-card__avatar">{candidate.name.slice(0, 1)}</div>
                 <div>
                   <h3>{candidate.name}</h3>
@@ -504,30 +509,16 @@ export function PeopleSpace({
                         : "Nothing planned"}
                   </span>
                 </div>
-                {removingId === candidate.id ? (
-                  <div className="plan-edit__delete person-card__confirm">
-                    <p>Remove {candidate.name}? Plans with them stay in your Plan, just unlinked.</p>
-                    <Button variant="danger" icon={Trash2} onClick={() => { removePerson(candidate); setRemovingId(null) }}>
-                      Remove
-                    </Button>
-                    <Button variant="ghost" onClick={() => setRemovingId(null)}>
-                      Keep
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="person-card__actions">
-                    <Button variant="secondary" icon={CalendarPlus} onClick={() => setView({ kind: "plan", id: candidate.id, back: "list" })}>
-                      Plan something
-                    </Button>
-                    <Button variant="ghost" onClick={() => setView({ kind: "person", id: candidate.id })}>
-                      Open
-                    </Button>
-                    <button type="button" className="icon-button person-card__remove" aria-label={`Remove ${candidate.name}`} title={`Remove ${candidate.name}`} onClick={() => setRemovingId(candidate.id)}>
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                )}
+                <div className="person-card__actions">
+                  <Button variant="secondary" icon={CalendarPlus} onClick={() => setView({ kind: "plan", id: candidate.id, back: "list" })}>
+                    Plan something
+                  </Button>
+                  <Button variant="ghost" onClick={() => setView({ kind: "person", id: candidate.id })}>
+                    Open
+                  </Button>
+                </div>
               </article>
+              </SwipeRow>
             )
           })}
         </div>

@@ -67,7 +67,7 @@ import type {
   TrainingProfile,
   WorkoutRecord,
 } from "./types"
-import { Art, Button, formatDate, Modal, today, uid } from "./ui"
+import { Art, Button, formatDate, Modal, SwipeRow, today, uid, useRemove } from "./ui"
 
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
 export type ActivityMode = "start" | "short" | "move"
@@ -642,8 +642,10 @@ export function JourneyGoals({
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const setStatus = (id: string, status: AppState["goals"][number]["status"], message: string) =>
     update((current) => ({ ...current, goals: current.goals.map((goal) => (goal.id === id ? { ...goal, status } : goal)) }), message)
+  const remove = useRemove()
   const deleteGoal = (id: string) => {
-    update(
+    const title = state.goals.find((goal) => goal.id === id)?.title ?? "Goal"
+    remove(
       (current) => {
         const goal = current.goals.find((item) => item.id === id)
         const entries = new Set((goal?.milestones ?? []).map((milestone) => milestone.event?.planItemId).filter(Boolean))
@@ -656,7 +658,7 @@ export function JourneyGoals({
           projects: current.projects.map((project) => (project.goalId === id ? { ...project, goalId: undefined } : project)),
         }
       },
-      "Goal deleted.",
+      `Deleted “${title}”.`,
     )
     setConfirmDelete(null)
   }
@@ -754,6 +756,12 @@ export function JourneyGoals({
                   )}
                 </div>
               ) : (
+              <SwipeRow
+                actions={[
+                  { label: "Rest", icon: Pause, tone: "neutral", onClick: () => setStatus(goal.id, "paused", "Resting. It’s in your Resting list.") },
+                  { label: "Delete", icon: Trash2, tone: "danger", onClick: () => deleteGoal(goal.id) },
+                ]}
+              >
               <button type="button" className="journey-row" onClick={() => onOpenGoal(goal.id)}>
                 <span className="journey-row__main">
                   <strong>{goal.title}</strong>
@@ -772,6 +780,7 @@ export function JourneyGoals({
                   <ChevronRight size={18} className="journey-row__chevron" />
                 )}
               </button>
+              </SwipeRow>
               )}
             </li>
           )

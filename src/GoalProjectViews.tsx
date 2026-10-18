@@ -21,7 +21,7 @@ import { projectSteps } from "./projects"
 import { GoalMilestones } from "./MilestoneViews"
 import { addDays, checkPlacement } from "./training"
 import type { AppState, Goal, PlanItem, Project, ProjectStep } from "./types"
-import { Art, Button, formatDate, IconButton, Modal, today, uid } from "./ui"
+import { Art, Button, formatDate, IconButton, Modal, SwipeRow, today, uid, useRemove } from "./ui"
 
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
 
@@ -469,6 +469,8 @@ function ProjectDetail({
   const doneCount = steps.filter((step) => step.done).length
   const goal = state.goals.find((item) => item.id === project.goalId)
   const [finishing, setFinishing] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const remove = useRemove()
   const [made, setMade] = useState("")
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState("")
@@ -696,8 +698,43 @@ function ProjectDetail({
           Mark project finished
         </Button>
       )}
+      {confirmDelete ? (
+        <div className="plan-edit__delete">
+          <p>Delete “{project.title}” and its planned steps? Anything you’ve already done stays in your history.</p>
+          <div className="inline-actions">
+            <Button
+              variant="danger"
+              icon={Trash2}
+              onClick={() => {
+                remove((current) => deleteProject(current, project.id), `Deleted “${project.title}”.`)
+                onBack()
+              }}
+            >
+              Delete project
+            </Button>
+            <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
+              Keep it
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className="text-link plan-edit__delete-link project-detail__delete" onClick={() => setConfirmDelete(true)}>
+          <Trash2 size={15} /> Delete project
+        </button>
+      )}
     </div>
   )
+}
+
+// Delete a project: its open plans go too; anything you already did stays in your history, unlinked.
+export function deleteProject(state: AppState, id: string): AppState {
+  return {
+    ...state,
+    projects: state.projects.filter((project) => project.id !== id),
+    plan: state.plan
+      .filter((item) => !(item.projectId === id && (item.status === "planned" || item.status === "proposed")))
+      .map((item) => (item.projectId === id ? { ...item, projectId: undefined, stepId: undefined } : item)),
+  }
 }
 
 export function ProjectsSpace({ state, update, close }: { state: AppState; update: Update; close: () => void }) {
@@ -707,6 +744,10 @@ export function ProjectsSpace({ state, update, close }: { state: AppState; updat
   const open = state.projects.find((project) => project.id === openId)
   const active = state.projects.filter((project) => project.stage !== "Complete")
   const finished = state.projects.filter((project) => project.stage === "Complete")
+  const remove = useRemove()
+  const deleteAction = (project: Project) => [
+    { label: "Delete", icon: Trash2, tone: "danger" as const, onClick: () => remove((current) => deleteProject(current, project.id), `Deleted “${project.title}”.`) },
+  ]
 
   const addToDay = (project: Project, step: ProjectStep) =>
     update(
@@ -771,7 +812,8 @@ export function ProjectsSpace({ state, update, close }: { state: AppState; updat
                 )
               const goal = state.goals.find((item) => item.id === project.goalId)
               return (
-                <article className="project-card" key={project.id}>
+                <SwipeRow key={project.id} className="swipe--card" actions={deleteAction(project)}>
+                <article className="project-card">
                   <ProjectVisual project={project} />
                   <div className="project-card__body">
                     <span className="stage-pill">{project.stage}</span>
@@ -818,6 +860,7 @@ export function ProjectsSpace({ state, update, close }: { state: AppState; updat
                     </div>
                   </div>
                 </article>
+                </SwipeRow>
               )
             })}
           </div>
@@ -829,7 +872,7 @@ export function ProjectsSpace({ state, update, close }: { state: AppState; updat
               <p className="eyebrow">Finished shelf</p>
               <ul>
                 {finished.map((project) => (
-                  <li key={project.id}>
+                  <SwipeRow as="li" key={project.id} actions={deleteAction(project)}>
                     <button type="button" onClick={() => setOpenId(project.id)}>
                       <Sparkles size={16} />
                       <span>
@@ -840,7 +883,7 @@ export function ProjectsSpace({ state, update, close }: { state: AppState; updat
                         </small>
                       </span>
                     </button>
-                  </li>
+                  </SwipeRow>
                 ))}
               </ul>
             </section>

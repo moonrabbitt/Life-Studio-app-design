@@ -121,12 +121,12 @@ import {
   type SpaceKey,
 } from "./assistant"
 import { PeopleSpace } from "./PeopleViews"
-import { PlanItemSheet } from "./PlanItemSheet"
+import { PlanItemSheet, planSwipeActions } from "./PlanItemSheet"
 import { QuickMenu } from "./QuickMenu"
 import { StudioChat } from "./StudioChat"
 import { VoiceNoteList } from "./VoiceNotes"
 import { WeekDigestCard } from "./WeekDigest"
-import { Art, Button, formatDate, IconButton, Modal, today, uid } from "./ui"
+import { Art, Button, formatDate, IconButton, Modal, RemoveContext, SwipeHint, SwipeRow, today, uid, useRemove } from "./ui"
 import { useLifeStudioState, type SyncStatus } from "./useLifeStudioState"
 
 type Route = "today" | "plan" | "progress" | "space"
@@ -448,6 +448,7 @@ function TodayView({
   onSetupRestart: () => void
   onOpenItem: (id: string) => void
 }) {
+  const remove = useRemove()
   const currentItems = state.plan
     .filter(
       (item) =>
@@ -633,11 +634,11 @@ function TodayView({
             {visibleItems.length ? (
               <div className="today-list">
                 {visibleItems.map((item, index) => (
+                  <SwipeRow key={item.id} className="swipe--card" actions={planSwipeActions(item, remove)}>
                   <article
                     className={`today-item ${
                       index === 0 ? "today-item--focus" : ""
                     }`}
-                    key={item.id}
                   >
                     <div className="today-item__time">
                       <span>{item.time ?? "Anytime"}</span>
@@ -674,6 +675,7 @@ function TodayView({
                       )}
                     </div>
                   </article>
+                  </SwipeRow>
                 ))}
               </div>
             ) : (
@@ -747,6 +749,7 @@ function PlanView({
   focusDate?: string | null
   onOpenItem: (id: string) => void
 }) {
+  const remove = useRemove()
   const days = useMemo(
     () =>
       Array.from({ length: 14 }, (_, index) => {
@@ -845,11 +848,11 @@ function PlanView({
           {items.length ? (
             <div className="agenda__timeline">
               {items.map((item) => (
+                <SwipeRow key={item.id} className="swipe--card" actions={planSwipeActions(item, remove)}>
                 <article
                   className={`agenda-item area-border-${item.area} ${
                     item.status === "proposed" ? "is-proposed" : ""
                   }`}
-                  key={item.id}
                 >
                   <div className="agenda-item__time">
                     <strong>{item.time ?? "Anytime"}</strong>
@@ -967,7 +970,9 @@ function PlanView({
                     </div>
                   )}
                 </article>
+                </SwipeRow>
               ))}
+              <SwipeHint />
               <button
                 type="button"
                 className="open-space"
@@ -1513,6 +1518,7 @@ function MySpaceView({
 
 function JournalSpace({ state, update, close }: SpaceProps) {
   const [editing, setEditing] = useState<JournalEntry | null>(null)
+  const remove = useRemove()
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
@@ -1579,17 +1585,31 @@ function JournalSpace({ state, update, close }: SpaceProps) {
           <p className="eyebrow">Recent pages</p>
           <div className="mini-list">
             {state.journal.map((entry) => (
-              <button
-                type="button"
-                onClick={() => setEditing(entry)}
+              <SwipeRow
                 key={entry.id}
+                actions={[
+                  {
+                    label: "Delete",
+                    icon: Trash2,
+                    tone: "danger",
+                    onClick: () => {
+                      if (editing?.id === entry.id) setEditing(null)
+                      remove(
+                        (current) => ({ ...current, journal: current.journal.filter((item) => item.id !== entry.id) }),
+                        `Deleted “${entry.title}”.`,
+                      )
+                    },
+                  },
+                ]}
               >
-                <strong>{entry.title}</strong>
-                <small>
-                  {formatDate(entry.date)} {entry.mood ? `· ${entry.mood}` : ""}
-                </small>
-                <span>{entry.body}</span>
-              </button>
+                <button type="button" onClick={() => setEditing(entry)}>
+                  <strong>{entry.title}</strong>
+                  <small>
+                    {formatDate(entry.date)} {entry.mood ? `· ${entry.mood}` : ""}
+                  </small>
+                  <span>{entry.body}</span>
+                </button>
+              </SwipeRow>
             ))}
           </div>
           {(state.voiceNotes ?? []).length > 0 && (
@@ -4503,7 +4523,7 @@ function VoiceCapture({
 }
 
 export default function App() {
-  const { state, update, notice, setNotice, reset, sync } = useLifeStudioState()
+  const { state, update, removeWithUndo, undo, notice, setNotice, reset, sync } = useLifeStudioState()
   const [quickMenu, setQuickMenu] = useState(false)
   const [chatHint, setChatHint] = useState("")
   const manualSync = async () => {
@@ -4596,6 +4616,7 @@ export default function App() {
   }
 
   return (
+    <RemoveContext.Provider value={removeWithUndo}>
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
         Skip to main content
@@ -4704,11 +4725,21 @@ export default function App() {
         </button>
       </nav>
 
-      {notice && (
+      {undo ? (
         <div className="toast" role="status">
-          <Check size={17} />
-          {notice}
+          <Trash2 size={17} />
+          {undo.message}
+          <button type="button" className="toast__undo" onClick={undo.run}>
+            Undo
+          </button>
         </div>
+      ) : (
+        notice && (
+          <div className="toast" role="status">
+            <Check size={17} />
+            {notice}
+          </div>
+        )
       )}
 
       {addDate && (
@@ -4922,5 +4953,6 @@ export default function App() {
         />
       )}
     </div>
+    </RemoveContext.Provider>
   )
 }
