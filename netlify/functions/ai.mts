@@ -15,6 +15,64 @@ clinician, or financial adviser: never diagnose, treat, or recommend specific in
 
 const nullable = (type: string) => ({ type: [type, "null"] })
 
+// One exercise in a suggested workout: exact, loggable, explained.
+const workoutItem = {
+  type: "object",
+  additionalProperties: false,
+  required: ["name", "sets", "reps", "rest", "load", "why"],
+  properties: {
+    name: { type: "string" },
+    sets: { type: "integer" },
+    reps: { type: "string" },
+    rest: { type: "string" },
+    load: { type: "string" },
+    why: { type: "string" },
+  },
+}
+
+const PLANNING = `How to plan well (apply to every suggestion that adds or moves something):
+
+TIMING
+- context.busy lists every booked slot as "YYYY-MM-DD HH:MM-HH:MM title". A new or moved item's
+  start-to-end range must not intersect ANY busy slot on that date. Check each one before choosing a
+  time; if a slot clashes, pick another time or day. Leave at least 15 minutes either side of "fixed" items.
+- Never schedule earlier today than context.time. Weekday sessions usually fit 18:00-20:30;
+  weekends are more flexible. Prefer days in context.profile.days when given, and keep sessions
+  within context.profile.minutes.
+- Do not put two moderate or hard sessions (gym, run, dance class) on the same day. Keep the day
+  after a dance class (wasClass) or a hard/very-hard log light. Respect recovery days (kind recovery).
+- Leave space: no more than one exercise session a day, and not every day.
+- Never pile missed or skipped sessions onto later days. Do not raise workload just because a week
+  has passed; base it on recent logs (effort, concern) in context.recentLogs.
+- In "details", the first line explains the timing choice in plain words (e.g. "Thursday 18:30:
+  after work, and two days after your dance class"). Keep details to at most 3 short lines and the
+  reply to 1-2 sentences, so answers stay quick.
+
+EXERCISE SPECIFICS
+- Gym/strength: fill "workout" with 3-5 exercises. Each: exact exercise name (e.g. "Goblet squat"),
+  sets (usually 2; 1 if energy is low or they are new), reps ("8-10" or "20-30 seconds"),
+  rest ("60-90 seconds"), load, and a one-line why (what it strengthens and how it helps their goal).
+- Load: if context.recentWorkouts has that exercise, start from the last weight used: repeat it, or
+  add the smallest step (about 1-2 kg on dumbbells, 2.5 kg on machines) only if it felt easy or
+  comfortable with no concern. If there is no record, never invent a number: say "a weight you could
+  lift 3-4 more times; log it so next time can be specific". Bodyweight moves say "bodyweight".
+- Cover a squat or leg press, a hip hinge or bridge, a push, a pull, and optionally calves or core,
+  matched to context.profile.equipment. Runners benefit from calf and single-leg work.
+- Walks and runs: put duration, effort ("conversational pace") and any run/walk intervals in
+  "details". Only include running if their profile or logs show they can run a little.
+- Dance: duration and one focus (technique, stamina, a routine) in "details".
+
+WHY AND GOALS
+- "why": one sentence on why this, now. Mention the goal it serves by name.
+- "goalId": the id from context.goals it contributes to (Hackney Half, FairPlay Dance Camp,
+  strength routine, money, creative goals), or null.
+- "kind": gym | walk | run | dance | create | money | social | journal | reset | recovery, or null.
+
+SAFETY
+- If context.profile.concern is "yes" or a recent log has concern true, suggest only gentle
+  options (easy walk, mobility) and recommend getting advice from a GP or physiotherapist.
+- No medical claims, no calorie or weight-loss talk.`
+
 const assistSchema = {
   name: "studio_proposal",
   schema: {
@@ -47,6 +105,11 @@ const assistSchema = {
             "nextAction",
             "effort",
             "concern",
+            "kind",
+            "goalId",
+            "why",
+            "details",
+            "workout",
           ],
           properties: {
             type: {
@@ -89,6 +152,26 @@ const assistSchema = {
               enum: ["easy", "comfortable", "hard", "very-hard", null],
             },
             concern: nullable("boolean"),
+            kind: {
+              type: ["string", "null"],
+              enum: [
+                "gym",
+                "walk",
+                "run",
+                "dance",
+                "create",
+                "money",
+                "social",
+                "journal",
+                "reset",
+                "recovery",
+                null,
+              ],
+            },
+            goalId: nullable("string"),
+            why: nullable("string"),
+            details: { type: ["array", "null"], items: { type: "string" } },
+            workout: { type: ["array", "null"], items: workoutItem },
           },
         },
       },
@@ -104,13 +187,15 @@ their plan items (with ids), and goals. Rules:
 - Only propose actions the user asked for or that clearly help; 0-5 actions. For pure questions or
   chat, return an empty actions list and answer in "reply".
 - Dates are YYYY-MM-DD, resolved relative to context.today. Times are 24h HH:MM. Duration in minutes.
-- add_plan: title, date, optional time/duration, area, mode (fixed = appointment, flexible = can move, maybe = optional).
+- add_plan: title, date, time, duration, area, mode (fixed = appointment, flexible = can move,
+  maybe = optional), kind, goalId, why, details. For a gym session also fill workout.
 - move_plan / complete_plan: planId MUST be an id from context.plan; move_plan needs the new date (and time if given).
 - add_journal: title + body in the user's own words (lightly tidied, never invented feelings).
 - add_project: creative idea; title, body (note), nextAction.
 - add_goal: title, area, scale, nextStep in nextAction, 0-4 milestone titles.
 - add_transaction: amount in pounds as a positive number for money spent, title, category, date.
-- add_gym_session: title, 3-5 gentle beginner-friendly exercise names, duration.
+- add_gym_session: title, date, time, duration, goalId, why, details, and a full workout (exercises
+  can stay null).
 - log_activity: the user says they DID something ("I walked 20 minutes, it felt easy"). Set planId to
   the matching open item in context.plan (same day and kind, status planned or proposed) or null if none
   fits. Never point at an item whose status is complete. Include title (what they actually did),
@@ -118,25 +203,28 @@ their plan items (with ids), and goals. Rules:
   only if they mention pain, injury or feeling unwell. Never invent numbers they did not say.
 - Plans with status "proposed" are suggestions the user has not accepted yet. Never pile missed or
   skipped sessions onto other days.
-- "summary" is a one-line human description of the action shown to the user.
-- Set every field that does not apply to null.`
+- "summary" is a one-line human description of the action shown to the user, including day and time.
+- Set every field that does not apply to null.
+
+${PLANNING}`
 
 const coachSchema = {
   name: "gym_session",
   schema: {
     type: "object",
     additionalProperties: false,
-    required: ["title", "summary", "exercises"],
+    required: ["title", "summary", "why", "goalId", "exercises"],
     properties: {
       title: { type: "string" },
       summary: { type: "string" },
+      why: { type: "string" },
+      goalId: nullable("string"),
       exercises: {
         type: "array",
         items: {
-          type: "object",
-          additionalProperties: false,
-          required: ["name", "cue"],
-          properties: { name: { type: "string" }, cue: { type: "string" } },
+          ...workoutItem,
+          required: [...workoutItem.required, "cue"],
+          properties: { ...workoutItem.properties, cue: { type: "string" } },
         },
       },
     },
@@ -146,9 +234,12 @@ const coachSchema = {
 const COACH_INSTRUCTIONS = `${TONE}
 
 Suggest one gentle, editable gym session for someone returning to movement. Return a short title,
-a one-sentence summary (sets, effort guidance like "finish with energy left"), and 3-5 exercises,
-each with a short cue (reps or time and one technique tip). Respect the energy level and equipment.
-Low energy means 3 exercises and one set. Never prescribe through pain.`
+a one-sentence summary (effort guidance like "finish with energy left"), "why" (one sentence on how
+this session serves their goal), goalId (from context.goals, or null), and 3-5 exercises. Each
+exercise has an exact name, sets, reps, rest, load, a one-line why, and a cue (one technique tip).
+Respect the energy level and equipment: low energy means 3 exercises and one set.
+
+${PLANNING}`
 
 const GUIDE_INSTRUCTIONS = `${TONE}
 
@@ -173,13 +264,13 @@ export default async (req: Request) => {
     const input = body?.input?.trim()
     if (!input) throw new HttpError(400, "Please say or type something first.")
     if (input.length > MAX_INPUT) throw new HttpError(413, "That is a little long. Try a shorter request.")
-    const context = JSON.stringify(body?.context ?? {}).slice(0, 12000)
+    const context = JSON.stringify(body?.context ?? {}).slice(0, 20000)
 
     if (body?.task === "assist") {
       const text = await callResponses({
         instructions: ASSIST_INSTRUCTIONS,
         input: `Context:\n${context}\n\nRequest:\n${input}`,
-        maxOutputTokens: 2500,
+        maxOutputTokens: 4000,
         schema: assistSchema,
       })
       return json(JSON.parse(text))
@@ -189,7 +280,7 @@ export default async (req: Request) => {
       const text = await callResponses({
         instructions: COACH_INSTRUCTIONS,
         input: `Session details:\n${context}\n\nNotes from the user:\n${input}`,
-        maxOutputTokens: 1500,
+        maxOutputTokens: 2500,
         schema: coachSchema,
       })
       return json(JSON.parse(text))

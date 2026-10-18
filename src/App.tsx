@@ -67,6 +67,7 @@ import { checkPlacement } from "./training"
 import type {
   ActivityKind,
   AppState,
+  PlannedExercise,
   Area,
   CheckIn,
   Goal,
@@ -80,6 +81,7 @@ import {
   ActivityHistory,
   GymIntake,
   NextActionCard,
+  PlannedWorkoutList,
   RestartSetup,
   Roadmap,
   skipItem,
@@ -3244,9 +3246,14 @@ function GymCoach({
   const [energy, setEnergy] = useState<CheckIn>("steady")
   const [equipment, setEquipment] = useState("Gym machines and free weights")
   const [note, setNote] = useState("")
-  const [preview, setPreview] = useState<string[]>([])
-  const [cues, setCues] = useState<string[]>([])
-  const [headline, setHeadline] = useState({ title: "", summary: "" })
+  const [planned, setPlanned] = useState<PlannedExercise[]>([])
+  const preview = planned.map((item) => item.name)
+  const [headline, setHeadline] = useState({
+    title: "",
+    summary: "",
+    why: "",
+    goalId: "" as string | null,
+  })
   const [coachLoading, setCoachLoading] = useState(false)
   const [coachError, setCoachError] = useState("")
 
@@ -3273,9 +3280,17 @@ function GymCoach({
               "Incline push",
               "Comfortable carry",
             ]
-    setPreview(energy === "low" ? exercises.slice(0, 3) : exercises)
-    setCues([])
-    setHeadline({ title: "", summary: "" })
+    setPlanned(
+      (energy === "low" ? exercises.slice(0, 3) : exercises).map((name) => ({
+        name,
+        sets: energy === "low" ? 1 : 2,
+        reps: "8-10",
+        rest: "60-90 seconds",
+        load: "A weight you could lift 3-4 more times; log it so next time can be specific",
+        why: "General full-body strength",
+      })),
+    )
+    setHeadline({ title: "", summary: "", why: "", goalId: null })
   }
 
   const buildPreview = async () => {
@@ -3283,19 +3298,22 @@ function GymCoach({
     setCoachLoading(true)
     setCoachError("")
     try {
-      const suggestion = await suggestGymSession({
-        goal,
-        energy,
-        equipment,
-        note: note.trim(),
-      })
+      const suggestion = await suggestGymSession(
+        { goal, energy, equipment, note: note.trim() },
+        state,
+      )
       const exercises = (suggestion.exercises ?? []).filter((item) =>
         item?.name?.trim(),
       )
       if (!exercises.length) throw new Error("Studio returned no exercises.")
-      setPreview(exercises.map((item) => item.name.trim()))
-      setCues(exercises.map((item) => item.cue))
-      setHeadline({ title: suggestion.title, summary: suggestion.summary })
+      setPlanned(exercises)
+      setHeadline({
+        title: suggestion.title,
+        summary: suggestion.summary,
+        why: suggestion.why ?? "",
+        goalId:
+          state.goals.find((item) => item.id === suggestion.goalId)?.id ?? null,
+      })
     } catch (error) {
       setCoachError(
         `${(error as Error).message} Showing a simple offline suggestion instead.`,
@@ -3306,9 +3324,8 @@ function GymCoach({
   }
 
   const savePlan = () => {
-    if (!preview.length) return
+    if (!planned.length) return
     const sessionId = uid()
-    const rounds = energy === "low" ? 1 : 2
     update(
       (current) => ({
         ...current,
@@ -3336,11 +3353,11 @@ function GymCoach({
         workout: {
           active: false,
           current: 0,
-          sets: preview.flatMap((exercise) =>
-            Array.from({ length: rounds }, (_, index) => ({
-              id: `${sessionId}-${exercise}-${index}`,
-              exercise,
-              reps: energy === "open" ? 10 : 8,
+          sets: planned.flatMap((exercise) =>
+            Array.from({ length: Math.max(1, exercise.sets) }, (_, index) => ({
+              id: `${sessionId}-${exercise.name}-${index}`,
+              exercise: exercise.name,
+              reps: Number.parseInt(exercise.reps, 10) || 8,
               complete: false,
             })),
           ),
@@ -3349,12 +3366,17 @@ function GymCoach({
           ...current.plan,
           {
             id: uid(),
-            title: `${goal} gym session`,
+            title: headline.title || `${goal} gym session`,
             area: "move",
+            kind: "gym",
+            intensity: "moderate",
             date: today(),
             duration: energy === "low" ? 25 : 40,
             mode: "flexible",
             status: "planned",
+            goalId: headline.goalId ?? undefined,
+            details: [headline.why, headline.summary].filter(Boolean),
+            workout: planned,
             note: "Reviewed and saved from the Studio coach",
           },
         ],
@@ -3480,20 +3502,14 @@ function GymCoach({
                   `${energy === "low" ? "One comfortable set" : "Two comfortable sets"} each. Finish with energy left.`}
               </p>
             </div>
-            <ol>
-              {preview.map((exercise, index) => (
-                <li key={`${exercise}-${index}`}>
-                  <span>{index + 1}</span>
-                  <div>
-                    <strong>{exercise}</strong>
-                    <small>
-                      {cues[index] ||
-                        "8–10 comfortable reps · editable in the player"}
-                    </small>
-                  </div>
-                </li>
-              ))}
-            </ol>
+            {headline.why && <p className="coach-why">{headline.why}</p>}
+            {headline.goalId && (
+              <p className="coach-goal">
+                <Sparkles size={15} /> Supports{" "}
+                {state.goals.find((item) => item.id === headline.goalId)?.title}
+              </p>
+            )}
+            <PlannedWorkoutList workout={planned} />
             <div className="inline-actions">
               <Button icon={Check} onClick={savePlan}>
                 Save to Today
@@ -4282,6 +4298,11 @@ const blankAction = (
   nextAction: null,
   effort: null,
   concern: null,
+  kind: null,
+  goalId: null,
+  why: null,
+  details: null,
+  workout: null,
 })
 
 // Offline fallback: a small keyword parser used when the AI service is unreachable.
@@ -4388,13 +4409,32 @@ function offlineProposal(text: string, state: AppState): StudioProposal {
   }
 }
 
+const EXERCISE_KINDS: ActivityKind[] = ["gym", "walk", "run", "dance"]
+
+// The planning details the AI attached: why, how, linked goal and exact workout.
+function plannedExtras(current: AppState, action: StudioAction) {
+  const kind = action.kind ?? undefined
+  const workout = action.workout?.filter((item) => item?.name?.trim()) ?? []
+  return {
+    kind,
+    intensity:
+      kind === "walk" ? ("light" as const) : kind && EXERCISE_KINDS.includes(kind) ? ("moderate" as const) : undefined,
+    goalId: current.goals.some((goal) => goal.id === action.goalId)
+      ? (action.goalId ?? undefined)
+      : undefined,
+    details: [action.why ?? "", ...(action.details ?? [])].filter((line) => line.trim()),
+    workout: workout.length ? workout : undefined,
+  }
+}
+
 function applyAction(current: AppState, action: StudioAction): AppState {
   const area =
     action.area && areaKeys.includes(action.area) ? action.area : undefined
   const date = isDate(action.date) ? action.date : today()
   const title = action.title?.trim()
   switch (action.type) {
-    case "add_plan":
+    case "add_plan": {
+      const extras = plannedExtras(current, action)
       return {
         ...current,
         plan: [
@@ -4402,16 +4442,21 @@ function applyAction(current: AppState, action: StudioAction): AppState {
           {
             id: uid(),
             title: title || "A new plan",
-            area: area ?? current.priorities[0] ?? "home",
+            area:
+              extras.kind && EXERCISE_KINDS.includes(extras.kind)
+                ? "move"
+                : (area ?? current.priorities[0] ?? "home"),
             date,
             time: isTime(action.time) ? action.time : undefined,
             duration: action.duration ?? undefined,
             mode: action.mode ?? "flexible",
             status: "planned",
             note: action.body ?? undefined,
+            ...extras,
           },
         ],
       }
+    }
     case "move_plan":
     case "complete_plan":
       return {
@@ -4526,9 +4571,12 @@ function applyAction(current: AppState, action: StudioAction): AppState {
     }
     case "add_gym_session": {
       const sessionId = uid()
-      const exercises = action.exercises?.length
-        ? action.exercises
-        : ["Sit to stand or leg press", "Supported row", "Calf raise"]
+      const extras = plannedExtras(current, { ...action, kind: "gym" })
+      const exercises = extras.workout?.length
+        ? extras.workout.map((item) => item.name)
+        : action.exercises?.length
+          ? action.exercises
+          : ["Sit to stand or leg press", "Supported row", "Calf raise"]
       return {
         ...current,
         gymSessionPlans: [
@@ -4560,10 +4608,12 @@ function applyAction(current: AppState, action: StudioAction): AppState {
             title: title || "Gentle gym session",
             area: "move",
             date,
+            time: isTime(action.time) ? action.time : undefined,
             duration: action.duration ?? 35,
             mode: "flexible",
             status: "planned",
             note: "Suggested by Studio. Edit it to suit you.",
+            ...extras,
           },
         ],
       }
@@ -4839,6 +4889,40 @@ function VoiceCapture({
     setAiError("")
     setProposal(result)
     setSelected(result.actions.map(() => true))
+  }
+
+  // Safety net: check each suggestion against the real calendar and recovery rules.
+  const actionWarnings = (action: StudioAction) => {
+    if (!isDate(action.date)) return []
+    const time = isTime(action.time) ? action.time : undefined
+    const existing =
+      action.type === "move_plan"
+        ? state.plan.find((item) => item.id === action.planId)
+        : undefined
+    if (action.type === "move_plan" && !existing) return []
+    if (!existing && action.type !== "add_plan" && action.type !== "add_gym_session")
+      return []
+    const candidate: PlanItem = existing ?? {
+      id: "suggestion",
+      title: action.title ?? "",
+      area: "move",
+      date: action.date,
+      mode: "flexible",
+      status: "planned",
+      duration: action.duration ?? undefined,
+      kind: action.type === "add_gym_session" ? "gym" : (action.kind ?? undefined),
+      intensity: action.kind === "walk" ? "light" : undefined,
+    }
+    const { conflicts, warnings } = checkPlacement(
+      state.plan,
+      { ...candidate, duration: action.duration ?? candidate.duration },
+      action.date,
+      time ?? existing?.time,
+    )
+    return [
+      ...conflicts.map((other) => `Overlaps ${other.title} at ${other.time}`),
+      ...warnings,
+    ]
   }
 
   const isValidAction = (action: StudioAction) => {
@@ -5265,6 +5349,27 @@ function VoiceCapture({
                           .filter(Boolean)
                           .join(" · ")}
                       </small>
+                      {action.goalId &&
+                        state.goals.some((goal) => goal.id === action.goalId) && (
+                          <small className="proposal-action__goal">
+                            Supports{" "}
+                            {state.goals.find((goal) => goal.id === action.goalId)?.title}
+                          </small>
+                        )}
+                      {actionWarnings(action).map((warning) => (
+                        <small className="proposal-action__warn" key={warning}>
+                          ⚠ {warning}
+                        </small>
+                      ))}
+                      {action.why && <small className="proposal-action__why">{action.why}</small>}
+                      {(action.details ?? []).map((line) => (
+                        <small className="proposal-action__detail" key={line}>
+                          {line}
+                        </small>
+                      ))}
+                      {(action.workout ?? []).length > 0 && (
+                        <PlannedWorkoutList workout={action.workout ?? []} />
+                      )}
                     </span>
                   </label>
                 ))}

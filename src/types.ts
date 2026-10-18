@@ -16,6 +16,17 @@ export type ActivityKind =
   | "reset"
   | "journal"
 
+// An exercise suggested by the coach or assistant, with exact guidance.
+export type PlannedExercise = {
+  name: string
+  sets: number
+  reps: string
+  rest: string
+  load: string
+  why: string
+  cue?: string
+}
+
 export type Effort = "easy" | "comfortable" | "hard" | "very-hard"
 
 export type ActivityLog = {
@@ -55,6 +66,7 @@ export type PlanItem = {
   shortVersion?: { duration: number; note: string }
   optional?: boolean
   intensity?: "light" | "moderate" | "hard"
+  workout?: PlannedExercise[]
   log?: ActivityLog
 }
 

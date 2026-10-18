@@ -35,6 +35,8 @@ export function json(body: unknown, status = 200) {
 
 export function errorResponse(error: unknown) {
   if (error instanceof HttpError) return json({ error: error.message }, error.status)
+  if (error instanceof Error && error.name === "TimeoutError")
+    return json({ error: "The AI took too long to answer. Please try again." }, 504)
   console.error(error)
   return json({ error: "Studio could not reach the server. Please try again." }, 502)
 }
@@ -77,6 +79,7 @@ export async function callResponses({
   const { url, key, resource, model } = gatewayConfig()
   const response = await fetch(`${url}/azure-openai/${resource}/openai/v1/responses`, {
     method: "POST",
+    signal: AbortSignal.timeout(25000),
     headers: {
       "Content-Type": "application/json",
       "cf-aig-authorization": key,

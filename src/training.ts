@@ -3,6 +3,7 @@ import type {
   AppState,
   Goal,
   PlanItem,
+  PlannedExercise,
   TrainingProfile,
   WorkoutRecord,
 } from "./types"
@@ -411,6 +412,9 @@ export type Exercise = {
   rest: string
   demo?: { label: string; url: string }
   alternatives: string[]
+  load?: string
+  why?: string
+  sets?: number
 }
 
 const NHS_STRENGTH = {
@@ -688,6 +692,49 @@ export const EXERCISES: Record<string, Exercise> = {
   },
 }
 
+const IGNORED = new Set(["machine", "seated", "standing", "the", "a", "with", "and", "or"])
+const words = (value: string) =>
+  new Set(
+    value
+      .toLowerCase()
+      .replace(/[^a-z ]/g, " ")
+      .split(" ")
+      .filter((word) => word && !IGNORED.has(word)),
+  )
+
+// Finds the verified library entry for an AI-named exercise, for its demo link and steps.
+export function matchExercise(name: string) {
+  const target = words(name)
+  let best: { exercise: Exercise; score: number } | null = null
+  for (const exercise of Object.values(EXERCISES)) {
+    const candidate = words(exercise.name)
+    const shared = [...target].filter((word) => candidate.has(word)).length
+    const score = shared / new Set([...target, ...candidate]).size
+    if (score >= 0.5 && (!best || score > best.score)) best = { exercise, score }
+  }
+  return best?.exercise
+}
+
+export function fromPlanned(planned: PlannedExercise, index: number): Exercise {
+  const match = matchExercise(planned.name)
+  return {
+    id: match?.id ?? `custom-${index}-${planned.name.toLowerCase().replace(/[^a-z]+/g, "-")}`,
+    name: planned.name,
+    category: match?.category ?? "squat",
+    equipment: match?.equipment ?? "",
+    track: /sec|second|min/i.test(planned.reps) ? "seconds" : "reps",
+    reps: planned.reps,
+    setup: match?.setup ?? [],
+    technique: [...(planned.cue ? [planned.cue] : []), ...(match?.technique ?? [])],
+    rest: planned.rest,
+    demo: match?.demo,
+    alternatives: [],
+    load: planned.load,
+    why: planned.why,
+    sets: planned.sets,
+  }
+}
+
 export const WARM_UP = {
   title: "Warm-up · about 5 minutes",
   steps: [
@@ -787,9 +834,15 @@ export function buildIntroSession(
   }
 }
 
-export function lastPerformance(history: WorkoutRecord[], exerciseId: string) {
+export function lastPerformance(
+  history: WorkoutRecord[],
+  current: { id: string; name: string },
+) {
+  const name = current.name.toLowerCase()
   for (const record of history) {
-    const match = record.exercises.find((exercise) => exercise.id === exerciseId)
+    const match = record.exercises.find(
+      (exercise) => exercise.id === current.id || exercise.name.toLowerCase() === name,
+    )
     const done = match?.sets.filter((set) => set.done)
     if (done?.length) {
       const set = done[done.length - 1]

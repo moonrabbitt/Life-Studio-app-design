@@ -30,6 +30,7 @@ import {
   checkPlacement,
   EXERCISES,
   FAIRPLAY_REPORTED,
+  fromPlanned,
   HACKNEY_LABEL,
   lastPerformance,
   mondayOf,
@@ -45,6 +46,7 @@ import {
 } from "./training"
 import type {
   ActivityLog,
+  PlannedExercise,
   AppState,
   Effort,
   LoggedSet,
@@ -165,6 +167,36 @@ export function DictateButton({ onText }: { onText: (text: string) => void }) {
   )
 }
 
+// Exact, explained exercises from the coach or assistant.
+export function PlannedWorkoutList({ workout }: { workout: PlannedExercise[] }) {
+  return (
+    <ol className="planned-workout">
+      {workout.map((exercise, index) => (
+        <li key={`${exercise.name}-${index}`}>
+          <span>{index + 1}</span>
+          <div>
+            <strong>{exercise.name}</strong>
+            <small className="planned-workout__dose">
+              {exercise.sets} × {exercise.reps} · rest {exercise.rest}
+            </small>
+            <small>
+              <b>Load:</b> {exercise.load}
+            </small>
+            <small>
+              <b>Why:</b> {exercise.why}
+            </small>
+            {exercise.cue && (
+              <small>
+                <b>Tip:</b> {exercise.cue}
+              </small>
+            )}
+          </div>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Activity buttons: Start · Short version · Move · Skip
 // ---------------------------------------------------------------------------
@@ -233,8 +265,10 @@ export function NextActionCard({
 }) {
   const next = nextUsefulAction(state.plan, today())
   const hasRestart = state.plan.some((item) => item.phase === "restart")
+  const offer = !hasRestart && state.restartOffer !== "dismissed"
 
-  if (!hasRestart && state.restartOffer !== "dismissed") {
+  // The full offer only when there's nothing else to do; otherwise a small link in the card.
+  if (offer && !next) {
     return (
       <section className="today-next today-next--offer">
         <p className="eyebrow">Restart phase · 2 weeks</p>
@@ -313,6 +347,11 @@ export function NextActionCard({
             }
           >
             <Check size={16} /> Accept this week
+          </button>
+        )}
+        {offer && (
+          <button type="button" className="text-link" onClick={onSetupRestart}>
+            <CalendarCheck size={16} /> Review the starter fortnight
           </button>
         )}
         <button type="button" className="text-link" onClick={onRoadmap}>
@@ -829,22 +868,49 @@ function WorkoutSession({
   profile,
   short,
   history,
+  custom,
   onFinish,
   onEditProfile,
 }: {
   profile: TrainingProfile
   short: boolean
   history: WorkoutRecord[]
+  custom?: PlannedExercise[]
   onFinish: (exercises: WorkoutRecord["exercises"], minutes: number) => void
   onEditProfile: () => void
 }) {
-  const plan = useMemo(() => buildIntroSession(profile, short), [profile, short])
+  // A suggested workout (from the coach or assistant) is used as-is; otherwise the intro session.
+  const plan = useMemo(() => {
+    if (!custom?.length) return buildIntroSession(profile, short)
+    const exercises = (short ? custom.slice(0, 2) : custom).map((item, index) => {
+      const exercise = fromPlanned(item, index)
+      return short ? { ...exercise, sets: 1 } : exercise
+    })
+    return {
+      blocked: false,
+      sets: 1,
+      setsLabel: short ? "1 comfortable set" : "Suggested sets",
+      exercises,
+      notes: [
+        "Weights come from your own logs; with no record, choose a weight you could lift 3–4 more times.",
+        "Comfortable effort. Stop any exercise that causes pain.",
+        "It’s fine to take longer than the estimated time.",
+      ],
+    }
+  }, [profile, short, custom])
+  const catalog = useMemo(
+    () => ({
+      ...EXERCISES,
+      ...Object.fromEntries(plan.exercises.map((exercise) => [exercise.id, exercise])),
+    }),
+    [plan],
+  )
   const started = useRef(Date.now())
   const [warm, setWarm] = useState(false)
   const [rows, setRows] = useState<ExerciseState[]>(() =>
     plan.exercises.map((exercise) => ({
       chosen: exercise.id,
-      sets: Array.from({ length: plan.sets }, () => ({ done: false })),
+      sets: Array.from({ length: exercise.sets ?? plan.sets }, () => ({ done: false })),
     })),
   )
   const updateSet = (row: number, index: number, patch: Partial<LoggedSet>) =>
@@ -865,7 +931,7 @@ function WorkoutSession({
   return (
     <div className="workout">
       <p className="capture-disclaimer">
-        {plan.setsLabel} of each · built from your answers ·{" "}
+        {custom?.length ? "Your suggested session" : `${plan.setsLabel} of each · built from your answers`} ·{" "}
         <button type="button" className="text-link" onClick={onEditProfile}>
           edit answers
         </button>
@@ -885,8 +951,8 @@ function WorkoutSession({
         </a>
       </section>
       {rows.map((row, rowIndex) => {
-        const exercise: Exercise = EXERCISES[row.chosen]
-        const previous = lastPerformance(history, exercise.id)
+        const exercise: Exercise = catalog[row.chosen]
+        const previous = lastPerformance(history, exercise)
         return (
           <section className="workout__card" key={rowIndex}>
             <div className="workout__head">
@@ -894,19 +960,27 @@ function WorkoutSession({
               <div>
                 <h3>{exercise.name}</h3>
                 <small>
-                  {exercise.equipment} · {plan.setsLabel} × {exercise.reps}
+                  {[exercise.equipment, `${exercise.sets ?? plan.sets} × ${exercise.reps}`]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </small>
+                {exercise.load && <small><b>Load:</b> {exercise.load}</small>}
+                {exercise.why && <small><b>Why:</b> {exercise.why}</small>}
                 {previous && <small className="workout__last">{previous}</small>}
               </div>
             </div>
             <details open={rowIndex === 0}>
               <summary>How to do it</summary>
-              <p className="workout__label">Setup</p>
-              <ul>
-                {exercise.setup.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
+              {exercise.setup.length > 0 && (
+                <>
+                  <p className="workout__label">Setup</p>
+                  <ul>
+                    {exercise.setup.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
               <p className="workout__label">Technique</p>
               <ul>
                 {exercise.technique.map((line) => (
@@ -939,7 +1013,7 @@ function WorkoutSession({
                       )
                     }
                   >
-                    {EXERCISES[id].name}
+                    {catalog[id].name}
                   </button>
                 ))}
               </div>
@@ -1032,7 +1106,7 @@ function WorkoutSession({
           onFinish(
             rows.map((row) => ({
               id: row.chosen,
-              name: EXERCISES[row.chosen].name,
+              name: catalog[row.chosen].name,
               sets: row.sets,
             })),
             Math.max(1, Math.round((Date.now() - started.current) / 60000)),
@@ -1617,6 +1691,7 @@ export function ActivityFlow({
           profile={state.trainingProfile}
           short={short}
           history={state.workoutHistory ?? []}
+          custom={item.workout}
           onEditProfile={() => setStep("intake")}
           onFinish={(exercises, elapsed) => {
             setWorkout(exercises)

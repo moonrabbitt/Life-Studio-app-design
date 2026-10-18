@@ -2382,14 +2382,19 @@ textarea::placeholder {
 }
 
 .project-card__visual {
+  position: relative;
   display: grid;
   height: 125px;
+  overflow: hidden;
   place-items: center;
   background: linear-gradient(145deg, #dfe6d5, #f2dccb);
   color: var(--moss);
 }
 
 .project-card__visual img {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -5843,4 +5848,139 @@ html {
 .modal audio,
 .modal video {
   max-width: 100%;
+}
+
+.planned-workout {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planned-workout li {
+  display: flex;
+  gap: 0.6rem;
+  border-radius: 0.9rem;
+  padding: 0.6rem 0.7rem;
+  background: var(--surface);
+}
+
+.planned-workout li > span {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--moss);
+  color: var(--surface);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.planned-workout li > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.planned-workout small {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.planned-workout .planned-workout__dose {
+  color: var(--moss);
+  font-weight: 800;
+}
+
+.proposal-action > span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.proposal-action__goal,
+.coach-goal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--moss);
+  font-weight: 800;
+}
+
+.proposal-action__why,
+.coach-why {
+  color: var(--ink);
+}
+
+.proposal-action__detail {
+  color: var(--ink-soft);
+}
+
+.proposal-action__warn {
+  color: var(--terracotta);
+  font-weight: 700;
+}
+
+/* Heroes grow to fit their text panel, so it never runs past the picture's edge. */
+.today-hero,
+.space-hero {
+  display: flex;
+  align-items: flex-end;
+  padding: 1.2rem 1.2rem 1.4rem;
+}
+
+.today-hero__content,
+.space-hero__content {
+  position: relative;
+  inset: auto;
+  margin-top: 2.5rem;
+}
+
+.today-hero__image,
+.today-hero__veil,
+.space-hero img {
+  inset: 0;
+}
+
+@media (max-width: 699px) {
+  .today-page .today-hero {
+    min-height: 190px;
+    padding-bottom: 1.8rem;
+  }
+
+  .today-page .today-hero__content {
+    bottom: auto;
+  }
+}
+
+@media (min-width: 700px) {
+  .today-hero,
+  .space-hero {
+    padding: 2.5rem;
+  }
+}
+
+/* Space cards: icon, title and arrow line up across every card in a row. */
+@media (min-width: 1024px) {
+  .space-card {
+    grid-template-rows: 1fr auto;
+    align-content: stretch;
+    align-items: start;
+  }
+
+  .space-card__icon {
+    grid-row: 1;
+  }
+
+  .space-card__copy {
+    grid-row: 1;
+  }
+
+  .space-card > svg {
+    grid-row: 2;
+    align-self: end;
+  }
 }
