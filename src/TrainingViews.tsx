@@ -595,6 +595,13 @@ function journeyEntries(state: AppState): JourneyEntry[] {
     })
   for (const item of state.plan)
     if (item.log?.wasClass) entries.push({ date: item.date, title: item.log.summary, detail: item.log.note, kind: "Dance" })
+  for (const note of state.voiceNotes ?? [])
+    entries.push({
+      date: note.createdAt.slice(0, 10),
+      title: note.title,
+      detail: `${Math.floor(note.duration / 60)}:${String(note.duration % 60).padStart(2, "0")} recording · play it in Journal`,
+      kind: "Voice note",
+    })
   for (const reflection of state.roadmap?.reflections ?? [])
     entries.push(
       reflection.title

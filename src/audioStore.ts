@@ -35,3 +35,14 @@ export async function getVoiceNote(id: string) {
   database.close()
   return blob
 }
+
+export async function deleteVoiceNote(id: string) {
+  const database = await openDatabase()
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(STORE, "readwrite")
+    transaction.objectStore(STORE).delete(id)
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error)
+  })
+  database.close()
+}

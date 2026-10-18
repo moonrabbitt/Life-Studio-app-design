@@ -33,7 +33,12 @@ export default async (req: Request) => {
       return new Response(null, { status: 204 })
     }
 
-    throw new HttpError(405, "Use GET or PUT.")
+    if (req.method === "DELETE") {
+      await store.delete(id)
+      return new Response(null, { status: 204 })
+    }
+
+    throw new HttpError(405, "Use GET, PUT or DELETE.")
   } catch (error) {
     return errorResponse(error)
   }

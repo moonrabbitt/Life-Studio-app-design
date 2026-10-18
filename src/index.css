@@ -8475,3 +8475,83 @@ label.proposal-action .planned-workout li {
     grid-column: 1 / -1;
   }
 }
+
+/* Voice notes */
+.voice-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.voice-list li {
+  display: grid;
+  gap: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--surface);
+}
+
+.voice-list__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.voice-list__play {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--moss);
+  cursor: pointer;
+  color: #fffaf0;
+}
+
+.voice-list__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.voice-list__text strong {
+  overflow: hidden;
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-list__text small {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.voice-list__rename {
+  display: flex;
+  flex: 1;
+  gap: 0.3rem;
+}
+
+.voice-list__rename input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  padding: 0.35rem 0.6rem;
+  background: var(--surface-soft);
+  font: inherit;
+}
+
+.voice-list audio {
+  width: 100%;
+}
+
+.journal-voice {
+  margin-top: 1rem;
+}

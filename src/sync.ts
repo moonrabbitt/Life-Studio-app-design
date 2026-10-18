@@ -87,3 +87,7 @@ export async function uploadVoice(id: string, blob: Blob) {
 export async function downloadVoice(id: string) {
   return (await request(`/api/voice?id=${encodeURIComponent(id)}`)).blob()
 }
+
+export async function removeVoice(id: string) {
+  await request(`/api/voice?id=${encodeURIComponent(id)}`, { method: "DELETE" })
+}

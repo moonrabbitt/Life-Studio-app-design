@@ -124,6 +124,7 @@ import { PeopleSpace } from "./PeopleViews"
 import { PlanItemSheet } from "./PlanItemSheet"
 import { QuickMenu } from "./QuickMenu"
 import { StudioChat } from "./StudioChat"
+import { VoiceNoteList } from "./VoiceNotes"
 import { WeekDigestCard } from "./WeekDigest"
 import { Art, Button, formatDate, IconButton, Modal, today, uid } from "./ui"
 import { useLifeStudioState, type SyncStatus } from "./useLifeStudioState"
@@ -1582,6 +1583,12 @@ function JournalSpace({ state, update, close }: SpaceProps) {
               </button>
             ))}
           </div>
+          {(state.voiceNotes ?? []).length > 0 && (
+            <div className="journal-voice">
+              <p className="eyebrow">Voice notes</p>
+              <VoiceNoteList state={state} update={update} />
+            </div>
+          )}
         </aside>
       </div>
     </Modal>
@@ -4194,24 +4201,8 @@ function VoiceCapture({
             </div>
             {(state.voiceNotes ?? []).length > 0 && (
               <div className="recent-voice-notes">
-                <p className="eyebrow">Recent voice notes</p>
-                {(state.voiceNotes ?? []).slice(0, 3).map((note) => (
-                  <button
-                    type="button"
-                    onClick={() => playSavedNote(note.id)}
-                    key={note.id}
-                  >
-                    <Play size={15} />
-                    <span>
-                      <strong>{note.title}</strong>
-                      <small>
-                        {formatDate(note.createdAt.slice(0, 10))} ·{" "}
-                        {note.duration}s
-                      </small>
-                    </span>
-                  </button>
-                ))}
-                {playingUrl && <audio src={playingUrl} autoPlay controls />}
+                <p className="eyebrow">Your voice notes</p>
+                <VoiceNoteList state={state} update={update} limit={notesOnly ? undefined : 3} />
               </div>
             )}
             <div className="prototype-note">
