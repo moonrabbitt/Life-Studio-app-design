@@ -1,4 +1,5 @@
 import { authHeaders } from "./sync"
+import { phaseTimeline } from "./training"
 import type { ActivityKind, AppState, Area, PlanMode, PlannedExercise } from "./types"
 
 export type StudioAction = {
@@ -88,6 +89,23 @@ export const localDate = (date = new Date()) => {
   return new Date(date.getTime() - offset).toISOString().slice(0, 10)
 }
 
+// The current training phase, its focus, the week within it and its planned end.
+function phaseSummary(state: AppState) {
+  const { current, week, rows } = phaseTimeline(state)
+  const next = rows.find((row) => row.id === current.id + 1)
+  return {
+    number: current.id,
+    title: current.title,
+    focus: current.body,
+    readyWhen: current.ready,
+    week,
+    plannedWeeks: current.weeks,
+    started: current.start,
+    endsAround: current.end,
+    next: next && { title: next.title, startsAround: next.start },
+  }
+}
+
 // What the AI needs to plan well: the calendar, goals, training answers and recent history.
 function studioContext(state: AppState) {
   const now = new Date()
@@ -104,6 +122,7 @@ function studioContext(state: AppState) {
     priorities: state.priorities,
     energy: state.checkIn,
     trainingPhase: state.trainingPhase ?? 1,
+    phase: phaseSummary(state),
     profile: profile && {
       equipment: profile.equipment,
       gymExperience: profile.gymExperience,
@@ -265,6 +284,7 @@ export function digestContext(state: AppState, weekStart: string) {
       .filter((event) => event.date && event.date >= today)
       .map((event) => ({ title: event.title, date: event.date, feeling: event.feeling, goal: goalTitle(event.goalId) })),
     energy: state.checkIn,
+    phase: phaseSummary(state),
   }
 }
 

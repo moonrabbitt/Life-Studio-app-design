@@ -48,6 +48,12 @@ TIMING
   after work, and two days after your dance class"). Keep details to at most 3 short lines and the
   reply to 1-2 sentences, so answers stay quick.
 
+PHASE
+- context.phase is where they are in a running-gym-dance programme: its focus, the current week and
+  its planned length. Shape exercise suggestions to that phase's focus (e.g. walks and gentle strength
+  in the Restart phase; no structured running before "Beginner running"). Never jump ahead to a later
+  phase's training. Near the end of a phase, it's fine to suggest checking readiness for the next one.
+
 EXERCISE SPECIFICS
 - Gym/strength: fill "workout" with 3-5 exercises. Each: exact exercise name (e.g. "Goblet squat"),
   sets (usually 2; 1 if energy is low or they are new), reps ("8-10" or "20-30 seconds"),
@@ -297,7 +303,8 @@ coming up next week.
   courage honestly; if something they are nervous about is ahead, acknowledge that showing up anyway
   matters. If little happened, be kind: rest and quiet weeks count. Never invent anything not in the
   context, never use numbers that are not there.
-- "nextWeek": 1-2 sentences on what is planned next week, gently; suggest one small focus if useful.
+- "nextWeek": 1-2 sentences on what is planned next week, gently; suggest one small focus if useful,
+  in line with context.phase (e.g. "week 3 of base building").
 - "encouragement": one short line, genuine and not cheesy, no exclamation-mark overload.
 - No guilt, no streaks, no comparison, no calorie or body talk.`
 

@@ -339,6 +339,7 @@ export type AppState = {
   }
   roadmap?: {
     phaseDates?: Record<string, string>
+    phaseWeeks?: Record<string, number>
     reflections?: RoadmapReflection[]
     phaseLog?: { phase: number; date: string }[]
   }

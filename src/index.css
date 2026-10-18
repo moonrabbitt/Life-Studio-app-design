@@ -8141,3 +8141,18 @@ label.proposal-action .planned-workout li {
   justify-self: start;
   margin-top: 0.2rem;
 }
+
+.roadmap__phase-dates {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--moss) !important;
+  font-weight: 700;
+}
+
+.roadmap__phase-tools input[type="number"] {
+  width: 6rem;
+}
+
+.journey-phase .goal-progress__track {
+  margin: 0.2rem 0;
+}

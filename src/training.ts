@@ -860,30 +860,35 @@ export function lastPerformance(
 export const PHASES = [
   {
     id: 1,
+    weeks: 2,
     title: "Restart phase",
     body: "Establish comfortable, repeatable activity: one gym session, walks, dance and recovery.",
     ready: "Move on when you have found a week you can comfortably repeat, without pain.",
   },
   {
     id: 2,
+    weeks: 8,
     title: "Base building",
     body: "Build a walking and running base, and develop strength gradually towards two sessions a week.",
     ready: "Move on when walks feel easy and strength sessions are routine.",
   },
   {
     id: 3,
+    weeks: 9,
     title: "Beginner running",
     body: "Introduce a beginner running programme such as NHS Couch to 5K. Its three runs a week replace walks in the shared week rather than being added on top, with recovery days between.",
     ready: "Finishing Couch to 5K is a milestone, not proof of half-marathon readiness.",
   },
   {
     id: 4,
+    weeks: 16,
     title: "Half-marathon build",
     body: "Move to a suitable half-marathon programme once current fitness and the time left support it, alongside strength and dance.",
     ready: "If preparation falls behind, reassess the race or plan rather than squeezing training.",
   },
   {
     id: 5,
+    weeks: 3,
     title: "Taper, race and dance camp",
     body: "Plan a taper and recovery around 16 May 2027, then dance-camp preparation around its confirmed dates.",
     ready: "Dance-camp planning waits until the dates are confirmed.",
@@ -1038,3 +1043,40 @@ export function recordToExercises(exercises: WorkoutRecord["exercises"]): Planne
     })
 }
 
+
+
+const today = () => {
+  const now = new Date()
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+}
+
+// Where you are in the programme: phase, week within it, and the planned timeline ahead.
+export function phaseTimeline(state: AppState) {
+  const roadmap = state.roadmap ?? {}
+  const current = state.trainingPhase ?? 1
+  const weeksOf = (id: number) => roadmap.phaseWeeks?.[String(id)] ?? PHASES.find((phase) => phase.id === id)!.weeks
+  const loggedStart = (id: number) =>
+    [...(roadmap.phaseLog ?? [])].reverse().find((entry) => entry.phase === id)?.date
+  const restartStart = state.plan.filter((item) => item.phase === "restart").map((item) => item.date).sort()[0]
+  const currentStart =
+    roadmap.phaseDates?.[String(current)] || loggedStart(current) || (current === 1 ? restartStart : undefined) || today()
+  const rows = PHASES.map((phase) => ({ ...phase, weeks: weeksOf(phase.id), start: "", end: "" }))
+  let cursor = currentStart
+  for (const row of rows) {
+    if (row.id < current) {
+      row.start = roadmap.phaseDates?.[String(row.id)] || loggedStart(row.id) || ""
+      continue
+    }
+    row.start = row.id === current ? currentStart : roadmap.phaseDates?.[String(row.id)] && roadmap.phaseDates[String(row.id)] > cursor ? roadmap.phaseDates[String(row.id)] : cursor
+    row.end = addDays(row.start, row.weeks * 7 - 1)
+    cursor = addDays(row.end, 1)
+  }
+  const now = rows.find((row) => row.id === current)!
+  const elapsed = Math.floor((new Date(`${today()}T12:00:00`).getTime() - new Date(`${now.start}T12:00:00`).getTime()) / 86400000)
+  const week = Math.min(now.weeks, Math.max(1, Math.floor(elapsed / 7) + 1))
+  const race = state.goals.find((goal) => goal.id === "goal-race")
+  const raceDate = race?.date
+  const build = rows.find((row) => row.id === 4)
+  const overRace = !!(raceDate && build?.end && build.end > raceDate)
+  return { rows, current: now, week, overRace, raceDate }
+}

@@ -43,6 +43,7 @@ import {
   nextMonday,
   nextUsefulAction,
   PHASES,
+  phaseTimeline,
   RESTART_START,
   SOURCES,
   STRENGTH_GOAL,
@@ -707,20 +708,40 @@ export function JourneyGoals({
 
 // Where you are in the training programme.
 export function JourneyPhase({ state, onOpenPlan }: { state: AppState; onOpenPlan: () => void }) {
-  const phase = PHASES.find((item) => item.id === (state.trainingPhase ?? 1)) ?? PHASES[0]
-  const next = PHASES.find((item) => item.id === phase.id + 1)
+  const { rows, current, week, overRace } = phaseTimeline(state)
+  const next = rows.find((row) => row.id === current.id + 1)
+  const percent = Math.round((week / current.weeks) * 100)
   return (
     <section className="journey-section journey-phase">
       <div className="journey-section__head">
         <h2>Where you are</h2>
       </div>
-      <p className="eyebrow">Phase {phase.id} of {PHASES.length}</p>
-      <h3>{phase.title}</h3>
-      <p>{phase.body}</p>
-      <small>{phase.ready}</small>
-      {next && <small className="journey-phase__next">Next: {next.title}</small>}
+      <p className="eyebrow">
+        Phase {current.id} of {rows.length} · week {week} of about {current.weeks}
+      </p>
+      <h3>{current.title}</h3>
+      <div className="goal-progress__track" role="progressbar" aria-label="Through this phase" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+        <span style={{ width: `${percent}%` }} />
+      </div>
+      <small>
+        Started {formatDate(current.start, { day: "numeric", month: "short" })} · until about{" "}
+        {formatDate(current.end, { day: "numeric", month: "short", year: "numeric" })}
+      </small>
+      <p>{current.body}</p>
+      <small>{current.ready} Dates are a guide; move on when you’re ready, not when the calendar says.</small>
+      {next && (
+        <small className="journey-phase__next">
+          Next: {next.title}, from about {formatDate(next.start, { day: "numeric", month: "short" })}
+        </small>
+      )}
+      {overRace && (
+        <p className="events__reassure">
+          At these lengths the half-marathon build would finish after race day. You could shorten a phase, or
+          decide later whether this race is the right one. Either is fine.
+        </p>
+      )}
       <button type="button" className="text-link" onClick={onOpenPlan}>
-        Training phases and why this plan <ChevronRight size={14} />
+        Adjust phases and lengths <ChevronRight size={14} />
       </button>
     </section>
   )
@@ -903,6 +924,7 @@ export function Roadmap({
   onEditProfile: () => void
 }) {
   const [tab, setTab] = useState<"phases" | "why">("phases")
+  const timeline = phaseTimeline(state)
   const [reflection, setReflection] = useState("")
   const [showAll, setShowAll] = useState(false)
   const phase = state.trainingPhase ?? 1
@@ -958,9 +980,15 @@ export function Roadmap({
         {tab === "phases" && (
           <>
             <p className="capture-disclaimer">
-              Running, gym and dance as one programme. Move to the next phase when your logs say you’re
-              ready, not because a week has passed. Missed sessions are never piled onto the next week.
+              Running, gym and dance as one programme. Lengths are a guide for planning; move to the next
+              phase when your logs say you’re ready, not because a week has passed.
             </p>
+            {timeline.overRace && (
+              <p className="events__reassure">
+                At these lengths the half-marathon build would finish after race day ({formatDate(timeline.raceDate!, { day: "numeric", month: "short" })}).
+                Shorten a phase, or decide later whether this race is the right one.
+              </p>
+            )}
             <ol className="roadmap__phases">
               {PHASES.map((item) => (
                 <li key={item.id} className={item.id === phase ? "is-current" : item.id < phase ? "is-done" : ""}>
@@ -972,7 +1000,31 @@ export function Roadmap({
                     </strong>
                     <p>{item.body}</p>
                     <small>{item.ready}</small>
+                    {(() => {
+                      const row = timeline.rows.find((candidate) => candidate.id === item.id)
+                      return row?.start && row.end ? (
+                        <small className="roadmap__phase-dates">
+                          About {formatDate(row.start, { day: "numeric", month: "short" })} – {formatDate(row.end, { day: "numeric", month: "short", year: "numeric" })}
+                        </small>
+                      ) : null
+                    })()}
                     <div className="roadmap__phase-tools">
+                      <label>
+                        <span>Lasts about (weeks)</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={52}
+                          inputMode="numeric"
+                          value={state.roadmap?.phaseWeeks?.[String(item.id)] ?? item.weeks}
+                          onChange={(event) =>
+                            setRoadmap((roadmap) => ({
+                              ...roadmap,
+                              phaseWeeks: { ...(roadmap.phaseWeeks ?? {}), [String(item.id)]: Math.max(1, Math.min(52, Number(event.target.value) || item.weeks)) },
+                            }))
+                          }
+                        />
+                      </label>
                       <label>
                         <span>{item.id <= phase ? "Started" : "Aim to start by"} (optional)</span>
                         <input
@@ -996,6 +1048,7 @@ export function Roadmap({
                                 trainingPhase: item.id as AppState["trainingPhase"],
                                 roadmap: {
                                   ...current.roadmap,
+                                  phaseDates: { ...(current.roadmap?.phaseDates ?? {}), [String(item.id)]: today() },
                                   phaseLog: [...(current.roadmap?.phaseLog ?? []), { phase: item.id, date: today() }],
                                 },
                               }),
