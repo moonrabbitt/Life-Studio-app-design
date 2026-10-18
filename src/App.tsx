@@ -66,7 +66,7 @@ import { listen, speechSupported } from "./speech"
 import { downloadVoice, getPasscode } from "./sync"
 import { areaMeta, demoState } from "./data"
 import { createSeries, REPEAT_LABELS } from "./series"
-import { checkPlacement, mondayOf } from "./training"
+import { checkPlacement, mondayOf, nextUsefulAction } from "./training"
 import type {
   ActivityKind,
   AppState,
@@ -282,7 +282,14 @@ function TodayView({
     energy === "low" && !showTucked ? currentItems.filter((item) => !isOptional(item)) : currentItems
   const baseMax = state.density === "one" ? 1 : state.density === "few" ? 3 : 5
   const max = energy === "low" ? Math.min(baseMax, 2) : energy === "open" ? baseMax + 2 : baseMax
-  const visibleItems = shown.slice(0, energy === "low" && showTucked ? shown.length : max)
+  // The same item the Next useful action card points at is marked "Up next" here, and always shown.
+  const upNext = nextUsefulAction(state.plan, today())
+  const upNextId = upNext?.when === "today" ? upNext.item.id : undefined
+  // Nothing disappears silently: beyond your usual amount, the rest sits behind "N more today".
+  const [showMore, setShowMore] = useState(false)
+  const withinLimit = shown.filter((item, index) => index < max || item.id === upNextId)
+  const visibleItems = showMore || (energy === "low" && showTucked) ? shown : withinLimit
+  const hiddenCount = shown.length - withinLimit.length
   const exploreIdea = (() => {
     if (energy !== "open") return null
     for (const project of state.projects) {
@@ -462,11 +469,11 @@ function TodayView({
             )}
             {visibleItems.length ? (
               <div className="today-list">
-                {visibleItems.map((item, index) => (
+                {visibleItems.map((item) => (
                   <SwipeRow key={item.id} className="swipe--card" actions={planSwipeActions(item, remove)}>
                   <article
                     className={`today-item ${
-                      index === 0 ? "today-item--focus" : ""
+                      item.id === upNextId ? "today-item--focus" : ""
                     }`}
                   >
                     <div className="today-item__time">
@@ -476,6 +483,7 @@ function TodayView({
                     <div className="today-item__body">
                       <div className="today-item__marks">
                         <AreaMark area={item.area} />
+                        {item.id === upNextId && <span className="up-next-badge">Up next</span>}
                         {item.status === "proposed" && <StatusBadge item={item} />}
                       </div>
                       <h3>{item.title}</h3>
@@ -506,6 +514,16 @@ function TodayView({
                   </article>
                   </SwipeRow>
                 ))}
+                {hiddenCount > 0 && !showMore && !(energy === "low" && showTucked) && (
+                  <button type="button" className="energy-note" onClick={() => setShowMore(true)}>
+                    {hiddenCount} more today. Show
+                  </button>
+                )}
+                {showMore && shown.length > withinLimit.length && (
+                  <button type="button" className="energy-note" onClick={() => setShowMore(false)}>
+                    Show less
+                  </button>
+                )}
               </div>
             ) : (
               <EmptyState

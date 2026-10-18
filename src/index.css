@@ -9496,3 +9496,13 @@ label.setup-review__pick > span {
   font-weight: 700;
   overflow-wrap: anywhere;
 }
+.up-next-badge {
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  background: var(--moss);
+  color: var(--surface);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
