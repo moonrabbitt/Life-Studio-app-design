@@ -288,6 +288,27 @@ export type TrainingProfile = {
   minutes: string
 }
 
+export type AboutMe = {
+  workingTowards: string
+  healthGoals: string
+  body: string
+  movementNow: string
+  equipment: string
+  week: string
+  energy: string
+  other: string
+  updatedAt: string
+}
+
+export type SpaceArchive = {
+  at: string
+  reason: string
+  goals: Goal[]
+  routines: Routine[]
+  series: Series[]
+  plan: PlanItem[]
+}
+
 export type TrainingPhaseDef = {
   id: number
   title: string
@@ -369,6 +390,11 @@ export type AppState = {
   trainingPhase?: number
   // A training plan Studio wrote for a purpose you chose. Without one, the built-in restart → Hackney plan applies.
   trainingPlan?: TrainingPlan
+  // What Studio knows about you: health goals, body, energy, your week. Shapes every plan.
+  aboutMe?: AboutMe
+  // Snapshots kept when you set up again from the top.
+  archives?: SpaceArchive[]
+  tourDone?: boolean
   pastPlans?: PastPlan[]
   events?: { fairplayConfirmed?: boolean; hackneyBooked?: boolean; fairplayBooked?: boolean }
   series?: Series[]

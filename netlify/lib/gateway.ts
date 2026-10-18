@@ -68,6 +68,8 @@ type ResponsesOptions = {
   input: string
   maxOutputTokens?: number
   schema?: { name: string; schema: Record<string, unknown> }
+  // Netlify allows 60s for synchronous functions; big drafts get longer than chat replies.
+  timeoutMs?: number
 }
 
 export async function callResponses({
@@ -75,11 +77,12 @@ export async function callResponses({
   input,
   maxOutputTokens = 1500,
   schema,
+  timeoutMs = 25000,
 }: ResponsesOptions): Promise<string> {
   const { url, key, resource, model } = gatewayConfig()
   const response = await fetch(`${url}/azure-openai/${resource}/openai/v1/responses`, {
     method: "POST",
-    signal: AbortSignal.timeout(25000),
+    signal: AbortSignal.timeout(timeoutMs),
     headers: {
       "Content-Type": "application/json",
       "cf-aig-authorization": key,

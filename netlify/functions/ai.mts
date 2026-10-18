@@ -32,6 +32,13 @@ const workoutItem = {
 
 const PLANNING = `How to plan well (apply to every suggestion that adds or moves something):
 
+ABOUT THEM
+- context.aboutMe is what they told you in their own words: long-term health goals, body (injuries,
+  conditions, what feels good or bad), how they move now, equipment, the shape of their week, energy
+  patterns, anything else. context.notesForStudio are extra notes they asked you to remember. Tailor
+  every suggestion to these: avoid or adapt movements their body notes flag, pick times that suit
+  their energy, and say in "why" how it serves their long-term health goals where it does.
+
 TIMING
 - context.busy lists every booked slot as "YYYY-MM-DD HH:MM-HH:MM title". A new or moved item's
   start-to-end range must not intersect ANY busy slot on that date. Check each one before choosing a
@@ -49,7 +56,7 @@ TIMING
   reply to 1-2 sentences, so answers stay quick.
 
 PHASE
-- context.phase is where they are in a running-gym-dance programme: its focus, the current week and
+- context.phase is where they are in their training plan (context.phase.trainingFor says what for): its focus, the current week and
   its planned length. Shape exercise suggestions to that phase's focus (e.g. walks and gentle strength
   in the Restart phase; no structured running before "Beginner running"). Never jump ahead to a later
   phase's training. Near the end of a phase, it's fine to suggest checking readiness for the next one.
@@ -72,7 +79,12 @@ WHY AND GOALS
 - "why": one sentence on why this, now. Mention the goal it serves by name.
 - "goalId": the id from context.goals it contributes to (Hackney Half, FairPlay Dance Camp,
   strength routine, money, creative goals), or null.
-- "kind": gym | walk | run | dance | create | money | social | journal | reset | recovery, or null.
+- "kind": gym | walk | run | dance | create | money | social | journal | reset | recovery. ANY
+  movement item (area move) MUST have a kind: gym for strength or a gym visit (and fill "workout"),
+  walk, run, dance, or recovery for stretching, yoga or mobility. Use null only for non-movement items
+  that fit none of these.
+- Before adding, check context.plan for something similar on the same day (e.g. a gym session when
+  one is already planned). If there is one, don't add a second: suggest moving or changing it instead.
 
 SAFETY
 - If context.profile.concern is "yes" or a recent log has concern true, suggest only gentle
@@ -379,6 +391,149 @@ the current plan they are leaving, busy calendar slots).
 - "cautions": one sentence of honest caveats (e.g. tight timelines, pain needing a professional), or "".
 - No calorie, weight-loss or body-shape targets.`
 
+const turnSchema = {
+  name: "onboarding_turn",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["reply", "followUp", "chips"],
+    properties: {
+      reply: { type: "string" },
+      followUp: nullable("string"),
+      chips: { type: "array", items: { type: "string" } },
+    },
+  },
+}
+
+const TURN_INSTRUCTIONS = `${TONE}
+
+You are getting to know the user in a short setup conversation, to set up their Life Studio.
+The context has the topic, the question you asked, the conversation so far, and how many follow-ups
+you have already asked on this topic. The request is their answer.
+- "reply": 1-2 short sentences that show you heard the specifics (name a detail they gave). Warm, not
+  gushing, no exclamation marks, no advice yet. If they skipped or said nothing to add, just accept it
+  kindly.
+- "followUp": ONE short question only if something important for planning safely or well is unclear
+  and context.followUpsAsked is 0 (e.g. which knee and what makes it worse; the date of an event; how
+  many hours they work). Otherwise null. Never ask about weight or calories.
+- "chips": if followUp is set, 2-4 short likely answers (max 5 words each), otherwise [].`
+
+const area = { type: "string", enum: ["reflect", "create", "connect", "move", "money", "home"] }
+
+const setupSchema = {
+  name: "space_setup",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["welcome", "aboutMe", "priorities", "density", "profile", "goals", "training", "routines"],
+    properties: {
+      welcome: { type: "string" },
+      aboutMe: {
+        type: "object",
+        additionalProperties: false,
+        required: ["workingTowards", "healthGoals", "body", "movementNow", "equipment", "week", "energy", "other"],
+        properties: {
+          workingTowards: { type: "string" },
+          healthGoals: { type: "string" },
+          body: { type: "string" },
+          movementNow: { type: "string" },
+          equipment: { type: "string" },
+          week: { type: "string" },
+          energy: { type: "string" },
+          other: { type: "string" },
+        },
+      },
+      priorities: { type: "array", items: area },
+      density: { type: "string", enum: ["one", "few", "full"] },
+      profile: {
+        type: "object",
+        additionalProperties: false,
+        required: ["equipment", "gymExperience", "days", "minutes", "concern", "concernNote"],
+        properties: {
+          equipment: { type: "string", enum: ["gym", "machines", "dumbbells", "home", "not-sure"] },
+          gymExperience: { type: "string", enum: ["new", "some", "confident", "not-sure"] },
+          days: { type: "array", items: { type: "string", enum: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] } },
+          minutes: { type: "string", enum: ["", "20", "30", "45", "60"] },
+          concern: { type: "string", enum: ["no", "yes", "not-sure"] },
+          concernNote: { type: "string" },
+        },
+      },
+      goals: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["title", "area", "scale", "date", "why", "milestones"],
+          properties: {
+            title: { type: "string" },
+            area,
+            scale: { type: "string", enum: ["small", "big"] },
+            date: nullable("string"),
+            why: { type: "string" },
+            milestones: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
+      training: {
+        type: "object",
+        additionalProperties: false,
+        required: ["include", "purpose", "targetDate", "summary", "phases", "week"],
+        properties: {
+          include: { type: "boolean" },
+          purpose: { type: "string" },
+          targetDate: nullable("string"),
+          summary: { type: "string" },
+          phases: replanSchema.schema.properties.phases,
+          week: replanSchema.schema.properties.week,
+        },
+      },
+      routines: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["title", "frequency", "time", "duration"],
+          properties: {
+            title: { type: "string" },
+            frequency: { type: "string", enum: ["daily", "weekdays", "weekly"] },
+            time: nullable("string"),
+            duration: { type: "integer" },
+          },
+        },
+      },
+    },
+  },
+}
+
+const SETUP_INSTRUCTIONS = `${TONE}
+
+From the setup conversation in the context, set up the user's Life Studio. Use only what they said;
+where they skipped something, stay gentle and general rather than inventing details.
+- "welcome": 2-3 sentences reflecting back what you heard and the shape of what you've set up.
+- "aboutMe": their own details in short plain notes (second person is fine: "Left knee aches on
+  stairs"). "" where they said nothing. This is what Studio will remember, so keep specifics: dates,
+  injuries, what feels good or bad, work hours, energy patterns, equipment.
+- "priorities": 1-3 areas they want more room for. "density": "one" if they want very light days,
+  "full" if they like full days, else "few".
+- "profile": training answers inferred from the conversation ("not-sure" when unclear; concern "yes"
+  for pain, injury or a health condition that affects exercise, with concernNote saying what).
+- "goals": 1-5 goals in their words. "big" for things that take months (an event, a long-term health
+  goal), "small" for things done in a few weeks. "date" YYYY-MM-DD only if they gave one. "why" is
+  their reason in one line. "milestones": 2-4 concrete, celebratable steps in order; for an event,
+  the last milestone is the event itself.
+- "training": include true if they want to move more or train for something. Then write a plan like a
+  careful coach: 3-6 phases (title 2-4 words, realistic weeks, body, ready = how they'll know they're
+  ready to move on, from how it feels and their logs) that start where they actually are, respect
+  their body notes, and fit their target date if any (phases before the last finish by it). "week" is
+  phase 1's typical week: 3-7 sessions on their realistic days and session length, recovery between
+  hard days, a 10-minute Sunday check-in (kind "journal"), concrete details (exact exercises, sets,
+  reps, effort), adapted to any injury or energy pattern they mentioned. If include is false, use
+  empty strings, null and empty arrays.
+- "routines": 0-4 small home or self-care routines they mentioned or would clearly help (e.g. a
+  Sunday reset). time "HH:MM" or null.
+- No calorie, weight-loss or body-shape targets. Pain or a condition means gentler starts and a note
+  to check with a professional, never a diagnosis.`
+
 const GUIDE_INSTRUCTIONS = `${TONE}
 
 You are a money learning guide. Explain personal-finance and investing concepts simply, with a small
@@ -440,6 +595,28 @@ export default async (req: Request) => {
         input: `Context:\n${context}\n\nRequest:\n${input}`,
         maxOutputTokens: 5000,
         schema: replanSchema,
+        timeoutMs: 50000,
+      })
+      return json(JSON.parse(text))
+    }
+
+    if (body?.task === "turn") {
+      const text = await callResponses({
+        instructions: TURN_INSTRUCTIONS,
+        input: `Context:\n${context}\n\nTheir answer:\n${input}`,
+        maxOutputTokens: 600,
+        schema: turnSchema,
+      })
+      return json(JSON.parse(text))
+    }
+
+    if (body?.task === "setup") {
+      const text = await callResponses({
+        instructions: SETUP_INSTRUCTIONS,
+        input: `Context:\n${context}\n\nRequest:\n${input}`,
+        maxOutputTokens: 8000,
+        schema: setupSchema,
+        timeoutMs: 50000,
       })
       return json(JSON.parse(text))
     }

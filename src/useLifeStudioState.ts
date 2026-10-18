@@ -12,6 +12,7 @@ import {
   uploadVoice,
   type Remote,
 } from "./sync"
+import { guessKind } from "./assistant"
 import type { AppState } from "./types"
 
 const STORAGE_KEY = "life-studio:v1"
@@ -21,7 +22,19 @@ export type SyncStatus = "off" | "syncing" | "synced" | "offline" | "locked" | "
 
 function normalise(value: Partial<AppState> | null | undefined): AppState | null {
   if (!value || value.version !== 1 || !Array.isArray(value.plan)) return null
-  return extendSeries(tidyProjects({ ...demoState, ...value } as AppState))
+  const state = { ...demoState, ...value } as AppState
+  // Movement plans without a kind can't be started or given exercises; work the kind out.
+  const plan = state.plan.map((item) =>
+    item.area === "move" &&
+    !item.kind &&
+    !item.milestoneId &&
+    !item.eventId &&
+    !item.seriesId &&
+    (item.status === "planned" || item.status === "proposed")
+      ? { ...item, kind: guessKind(item.title, item.area) }
+      : item,
+  )
+  return extendSeries(tidyProjects({ ...state, plan }))
 }
 
 function loadState(): AppState {

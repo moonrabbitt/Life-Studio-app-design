@@ -43,6 +43,16 @@ const QUICK: { label: string; send?: string; hint?: string }[] = [
   { label: "Check in", hint: "How are you feeling today?" },
 ]
 
+// When you come from Movement: Studio as your coach (same memory, same chat).
+const MOVE_QUICK: { label: string; send?: string; hint?: string }[] = [
+  { label: "A gym session today", send: "Plan a gym session for today that suits my body, energy and goals, with exact exercises, sets, reps and weights." },
+  { label: "Low energy, something gentle", send: "My energy is low. Suggest something gentle for today that still helps my long-term health." },
+  { label: "Progress my weights", send: "Look at my recent workouts and suggest what to progress next time: weights, reps or sets." },
+  { label: "Plan my training week", send: "Plan my movement for this week around my calendar, energy and recovery." },
+  { label: "Something hurts", hint: "e.g. my left knee aches after squats" },
+  { label: "Log a workout", hint: "e.g. gym 40 min: goblet squats 3×8 at 12 kg, felt good" },
+]
+
 export function StudioChat({
   state,
   update,
@@ -50,8 +60,10 @@ export function StudioChat({
   onGo,
   onVoiceNotes,
   initialHint = "",
+  focus,
 }: {
   initialHint?: string
+  focus?: "move"
   state: AppState
   update: Update
   onClose: () => void
@@ -180,7 +192,12 @@ export function StudioChat({
   }
 
   return (
-    <Modal title="Studio" eyebrow="Plan, move, log and capture by chatting" onClose={onClose} wide>
+    <Modal
+      title={focus === "move" ? "Studio · coach" : "Studio"}
+      eyebrow={focus === "move" ? "Workouts shaped by your body, energy and goals" : "Plan, move, log and capture by chatting"}
+      onClose={onClose}
+      wide
+    >
       <div className="studio-chat">
         <div className="studio-chat__toolbar">
           <button type="button" className="text-link" onClick={onVoiceNotes}>
@@ -323,7 +340,7 @@ export function StudioChat({
 
         <div className="studio-chat__footer">
         <div className="studio-chat__quick" role="list">
-          {QUICK.map((quick) => (
+          {(focus === "move" ? MOVE_QUICK : QUICK).map((quick) => (
             <button
               type="button"
               role="listitem"

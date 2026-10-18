@@ -124,6 +124,10 @@ import { PeopleSpace } from "./PeopleViews"
 import { PlanItemSheet, planSwipeActions } from "./PlanItemSheet"
 import { QuickMenu } from "./QuickMenu"
 import { StudioChat } from "./StudioChat"
+import { AboutMeSpace } from "./AboutMe"
+import { SetupChat } from "./SetupChat"
+import { applySetup } from "./setup"
+import { Tour } from "./Tour"
 import { VoiceNoteList } from "./VoiceNotes"
 import { WeekDigestCard } from "./WeekDigest"
 import { Art, Button, formatDate, IconButton, Modal, RemoveContext, SwipeHint, SwipeRow, today, uid, useRemove } from "./ui"
@@ -237,195 +241,6 @@ function EmptyState({
         </Button>
       </div>
     </div>
-  )
-}
-
-function Onboarding({
-  onFinish,
-}: {
-  onFinish: (
-    priorities: Area[],
-    density: AppState["density"],
-    examples: boolean,
-  ) => void
-}) {
-  const [step, setStep] = useState(1)
-  const [priorities, setPriorities] = useState<Area[]>([])
-  const [density, setDensity] = useState<AppState["density"]>("few")
-  const [examples, setExamples] = useState(true)
-
-  const toggleArea = (area: Area) => {
-    setPriorities((current) =>
-      current.includes(area)
-        ? current.filter((item) => item !== area)
-        : current.length < 3
-          ? [...current, area]
-          : current,
-    )
-  }
-
-  return (
-    <main className="onboarding">
-      <div className="onboarding__visual">
-        <img
-          src="/assets/life-studio-room.jpg"
-          alt="A sunlit creative room overlooking London"
-        />
-        <div className="onboarding__brand">
-          <LogoMark />
-          <div>
-            <span>Life Studio</span>
-            <p>A place to shape a life that feels like yours.</p>
-          </div>
-        </div>
-      </div>
-      <section className="onboarding__panel">
-        <div className="onboarding__progress">
-          <span>Getting started</span>
-          <span>{step} of 3</span>
-        </div>
-        <div className="progress-track">
-          <span style={{ width: `${(step / 3) * 100}%` }} />
-        </div>
-
-        {step === 1 && (
-          <div className="onboarding__content">
-            <p className="eyebrow">Your season, your emphasis</p>
-            <h1>What would you like more room for?</h1>
-            <p>
-              Choose up to three. This changes what appears first, not what
-              counts.
-            </p>
-            <div className="choice-grid">
-              {(Object.keys(areaMeta) as Area[]).map((area) => {
-                const Icon = areaIcon[area]
-                const selected = priorities.includes(area)
-                return (
-                  <button
-                    type="button"
-                    className={`choice-card area-${area} ${
-                      selected ? "is-selected" : ""
-                    }`}
-                    aria-pressed={selected}
-                    onClick={() => toggleArea(area)}
-                    key={area}
-                  >
-                    <Icon size={22} />
-                    <strong>{areaMeta[area].label}</strong>
-                    <small>{areaMeta[area].short}</small>
-                    {selected && (
-                      <Check className="choice-card__check" size={17} />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="onboarding__content">
-            <p className="eyebrow">Make it realistic</p>
-            <h1>How much should Today hold?</h1>
-            <p>
-              You can always make a day smaller, fuller, or completely open.
-            </p>
-            <div className="stacked-choices">
-              {[
-                ["one", "One clear focus", "Keep the day especially quiet."],
-                [
-                  "few",
-                  "A few gentle things",
-                  "A balanced shape with breathing room.",
-                ],
-                ["full", "A fuller view", "Show more of what is available."],
-              ].map(([value, label, description]) => (
-                <button
-                  type="button"
-                  className={`radio-card ${
-                    density === value ? "is-selected" : ""
-                  }`}
-                  aria-pressed={density === value}
-                  onClick={() => setDensity(value as AppState["density"])}
-                  key={value}
-                >
-                  <span className="radio-card__dot" />
-                  <span>
-                    <strong>{label}</strong>
-                    <small>{description}</small>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="onboarding__content">
-            <p className="eyebrow">Your first week</p>
-            <h1>Would examples make it easier?</h1>
-            <p>
-              Start with a few clearly labelled ideas, or open a fresh studio
-              and add only what matters.
-            </p>
-            <div className="preview-card">
-              <div className="preview-card__image">
-                <img src="/assets/samoyed.png" alt="" />
-              </div>
-              <button
-                type="button"
-                className={`radio-card ${examples ? "is-selected" : ""}`}
-                aria-pressed={examples}
-                onClick={() => setExamples(true)}
-              >
-                <span className="radio-card__dot" />
-                <span>
-                  <strong>Begin with editable examples</strong>
-                  <small>
-                    See how ideas, friends, home, and movement can sit together.
-                  </small>
-                </span>
-              </button>
-              <button
-                type="button"
-                className={`radio-card ${!examples ? "is-selected" : ""}`}
-                aria-pressed={!examples}
-                onClick={() => setExamples(false)}
-              >
-                <span className="radio-card__dot" />
-                <span>
-                  <strong>Start with open space</strong>
-                  <small>A calm empty studio with simple add actions.</small>
-                </span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        <footer className="onboarding__actions">
-          {step > 1 ? (
-            <Button
-              variant="ghost"
-              icon={ArrowLeft}
-              onClick={() => setStep(step - 1)}
-            >
-              Back
-            </Button>
-          ) : (
-            <span />
-          )}
-          {step < 3 ? (
-            <Button onClick={() => setStep(step + 1)}>
-              Continue <ArrowRight size={17} />
-            </Button>
-          ) : (
-            <Button onClick={() => onFinish(priorities, density, examples)}>
-              Open my studio <ArrowRight size={17} />
-            </Button>
-          )}
-        </footer>
-      </section>
-    </main>
   )
 }
 
@@ -1442,6 +1257,21 @@ function MySpaceView({
         </div>
       </header>
 
+      <button type="button" className="about-card" onClick={() => openSpace("about")}>
+        <span className="about-card__icon">
+          <Sparkles size={22} />
+        </span>
+        <span>
+          <strong>About me</strong>
+          <small>
+            {state.aboutMe
+              ? "What Studio knows about your body, health goals, energy and week. Keep it up to date."
+              : "Tell Studio about your body, health goals and energy, so plans fit you."}
+          </small>
+        </span>
+        <ChevronRight size={20} />
+      </button>
+
       <section className="space-grid">
         {spaceCards.map(({ key, title, description, icon: Icon, accent }) => {
           const count =
@@ -2384,18 +2214,7 @@ function MoneySpace({ state, update, close }: SpaceProps) {
 
 function MovementSpace({ state, update, close }: SpaceProps) {
   const [mode, setMode] =
-    useState<"landing" | "coach" | "strength" | "run" | "dance">("landing")
-  const [noteDraft, setNoteDraft] = useState("")
-  if (mode === "coach") {
-    return (
-      <GymCoach
-        state={state}
-        update={update}
-        onBack={() => setMode("landing")}
-        close={close}
-      />
-    )
-  }
+    useState<"landing" | "strength" | "run" | "dance">("landing")
   if (mode === "strength") {
     return (
       <StrengthPlayer
@@ -2449,11 +2268,11 @@ function MovementSpace({ state, update, close }: SpaceProps) {
         <button
           type="button"
           className="movement-grid__coach"
-          onClick={() => setMode("coach")}
+          onClick={() => window.dispatchEvent(new CustomEvent("studio:open", { detail: { focus: "move" } }))}
         >
           <WandSparkles size={24} />
-          <strong>Plan with your Studio coach</strong>
-          <small>Shape a gym session around your goal and energy</small>
+          <strong>Plan with Studio</strong>
+          <small>Workouts shaped by your body, energy and goals</small>
           <ChevronRight size={18} />
         </button>
         <button type="button" onClick={() => setMode("strength")}>
@@ -2507,52 +2326,19 @@ function MovementSpace({ state, update, close }: SpaceProps) {
       <section className="movement-notes">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Movement notes</p>
-            <h3>Keep what you want your coach to remember</h3>
+            <p className="eyebrow">What Studio knows</p>
+            <h3>Your body, health goals and energy</h3>
           </div>
           <PenLine size={20} />
         </div>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (!noteDraft.trim()) return
-            update(
-              (current) => ({
-                ...current,
-                movementNotes: [
-                  {
-                    id: uid(),
-                    text: noteDraft.trim(),
-                    createdAt: new Date().toISOString(),
-                  },
-                  ...(current.movementNotes ?? []),
-                ],
-              }),
-              "Movement note saved on this device.",
-            )
-            setNoteDraft("")
-          }}
-        >
-          <textarea
-            rows={3}
-            value={noteDraft}
-            onChange={(event) => setNoteDraft(event.target.value)}
-            placeholder="Equipment I liked, something that felt good, a question for next time…"
-          />
-          <Button type="submit" variant="secondary" icon={Plus}>
-            Save note
-          </Button>
-        </form>
-        {(state.movementNotes ?? []).length > 0 && (
-          <div className="movement-note-list">
-            {(state.movementNotes ?? []).slice(0, 3).map((note) => (
-              <article key={note.id}>
-                <p>{note.text}</p>
-                <span>{formatDate(note.createdAt.slice(0, 10))}</span>
-              </article>
-            ))}
-          </div>
-        )}
+        <p>
+          {state.aboutMe?.body || state.aboutMe?.healthGoals
+            ? [state.aboutMe.healthGoals, state.aboutMe.body].filter(Boolean).join(" · ")
+            : "Tell Studio about injuries, what feels good, your long-term health goals and energy, so every workout fits you."}
+        </p>
+        <Button variant="secondary" onClick={() => window.dispatchEvent(new CustomEvent("space:open", { detail: "about" }))}>
+          Open About me
+        </Button>
       </section>
       <section className="movement-goals">
         <div className="section-heading">
@@ -2573,320 +2359,6 @@ function MovementSpace({ state, update, close }: SpaceProps) {
             </article>
           ))}
       </section>
-    </Modal>
-  )
-}
-
-function GymCoach({
-  state,
-  update,
-  onBack,
-  close,
-}: SpaceProps & { onBack: () => void }) {
-  const movementGoals = state.goals.filter((goal) => goal.area === "move")
-  const [goal, setGoal] = useState(
-    movementGoals[0]?.title ?? "Everyday strength",
-  )
-  const [energy, setEnergy] = useState<CheckIn>("steady")
-  const [equipment, setEquipment] = useState("Gym machines and free weights")
-  const [note, setNote] = useState("")
-  const [planned, setPlanned] = useState<PlannedExercise[]>([])
-  const [editingPlanned, setEditingPlanned] = useState(false)
-  const preview = planned.map((item) => item.name)
-  const [headline, setHeadline] = useState({
-    title: "",
-    summary: "",
-    why: "",
-    goalId: "" as string | null,
-  })
-  const [coachLoading, setCoachLoading] = useState(false)
-  const [coachError, setCoachError] = useState("")
-
-  const buildOfflinePreview = () => {
-    const lower = goal.toLowerCase()
-    const exercises =
-      lower.includes("hackney") || lower.includes("run")
-        ? [
-            "Goblet squat or sit to stand",
-            "Supported cable row",
-            "Calf raise",
-            "Dead bug or comfortable trunk hold",
-          ]
-        : lower.includes("dance") || lower.includes("fairplay")
-          ? [
-              "Supported split squat",
-              "Cable or band row",
-              "Incline push",
-              "Single-leg balance with support",
-            ]
-          : [
-              "Sit to stand or leg press",
-              "Supported row",
-              "Incline push",
-              "Comfortable carry",
-            ]
-    setPlanned(
-      (energy === "low" ? exercises.slice(0, 3) : exercises).map((name) => ({
-        name,
-        sets: energy === "low" ? 1 : 2,
-        reps: "8-10",
-        rest: "60-90 seconds",
-        load: "A weight you could lift 3-4 more times; log it so next time can be specific",
-        why: "General full-body strength",
-      })),
-    )
-    setHeadline({ title: "", summary: "", why: "", goalId: null })
-  }
-
-  const buildPreview = async () => {
-    if (coachLoading) return
-    setCoachLoading(true)
-    setCoachError("")
-    try {
-      const suggestion = await suggestGymSession(
-        { goal, energy, equipment, note: note.trim() },
-        state,
-      )
-      const exercises = (suggestion.exercises ?? []).filter((item) =>
-        item?.name?.trim(),
-      )
-      if (!exercises.length) throw new Error("Studio returned no exercises.")
-      setPlanned(exercises)
-      setHeadline({
-        title: suggestion.title,
-        summary: suggestion.summary,
-        why: suggestion.why ?? "",
-        goalId:
-          state.goals.find((item) => item.id === suggestion.goalId)?.id ?? null,
-      })
-    } catch (error) {
-      setCoachError(
-        `${(error as Error).message} Showing a simple offline suggestion instead.`,
-      )
-      buildOfflinePreview()
-    }
-    setCoachLoading(false)
-  }
-
-  const savePlan = () => {
-    if (!planned.length) return
-    const sessionId = uid()
-    update(
-      (current) => ({
-        ...current,
-        gymSessionPlans: [
-          {
-            id: sessionId,
-            title: `${goal} gym session`,
-            createdAt: new Date().toISOString(),
-            goal,
-            note: note.trim() || undefined,
-            exercises: preview,
-          },
-          ...(current.gymSessionPlans ?? []),
-        ],
-        movementNotes: note.trim()
-          ? [
-              {
-                id: uid(),
-                text: note.trim(),
-                createdAt: new Date().toISOString(),
-              },
-              ...(current.movementNotes ?? []),
-            ]
-          : current.movementNotes,
-        workout: {
-          active: false,
-          current: 0,
-          sets: planned.flatMap((exercise) =>
-            Array.from({ length: Math.max(1, exercise.sets) }, (_, index) => ({
-              id: `${sessionId}-${exercise.name}-${index}`,
-              exercise: exercise.name,
-              reps: Number.parseInt(exercise.reps, 10) || 8,
-              complete: false,
-            })),
-          ),
-        },
-        plan: [
-          ...current.plan,
-          {
-            id: uid(),
-            title: headline.title || `${goal} gym session`,
-            area: "move",
-            kind: "gym",
-            intensity: "moderate",
-            date: today(),
-            duration: energy === "low" ? 25 : 40,
-            mode: "flexible",
-            status: "planned",
-            goalId: headline.goalId ?? undefined,
-            details: [headline.why, headline.summary].filter(Boolean),
-            workout: planned,
-            note: "Reviewed and saved from the Studio coach",
-          },
-        ],
-      }),
-      "Your reviewed gym session is on Today.",
-    )
-    onBack()
-  }
-
-  return (
-    <Modal
-      title="Plan a gym session"
-      eyebrow="Studio coach · review before saving"
-      onClose={close}
-      wide
-    >
-      <button type="button" className="back-link" onClick={onBack}>
-        <ArrowLeft size={17} /> Movement
-      </button>
-      <div className="coach-layout">
-        <section className="coach-companion">
-          <img src="/assets/samoyed.png" alt="" />
-          <div>
-            <p className="eyebrow">Your friendly organiser</p>
-            <h3>Let’s make the gym feel simpler.</h3>
-            <p>
-              Tell me what this session should support. I’ll suggest a gentle
-              structure for you to edit—not a medical prescription.
-            </p>
-          </div>
-        </section>
-
-        <form
-          className="coach-form"
-          onSubmit={(event) => {
-            event.preventDefault()
-            buildPreview()
-          }}
-        >
-          <label>
-            <span>What should this session support?</span>
-            <select
-              value={goal}
-              onChange={(event) => setGoal(event.target.value)}
-            >
-              {movementGoals.map((item) => (
-                <option value={item.title} key={item.id}>
-                  {item.title}
-                </option>
-              ))}
-              <option>Everyday strength</option>
-              <option>Return to the gym gently</option>
-            </select>
-          </label>
-          <fieldset className="coach-energy">
-            <legend>How much energy is available?</legend>
-            {[
-              ["low", "Keep it small"],
-              ["steady", "Steady"],
-              ["open", "Room for more"],
-            ].map(([value, label]) => (
-              <button
-                type="button"
-                className={energy === value ? "is-selected" : ""}
-                aria-pressed={energy === value}
-                onClick={() => setEnergy(value as CheckIn)}
-                key={value}
-              >
-                {label}
-              </button>
-            ))}
-          </fieldset>
-          <label>
-            <span>What equipment is available?</span>
-            <select
-              value={equipment}
-              onChange={(event) => setEquipment(event.target.value)}
-            >
-              <option>Gym machines and free weights</option>
-              <option>Mostly machines</option>
-              <option>Dumbbells and a bench</option>
-              <option>Minimal equipment</option>
-            </select>
-          </label>
-          <label>
-            <span>Anything to remember today?</span>
-            <textarea
-              rows={4}
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Something that felt good last time, equipment preferences, or a reason to keep it especially gentle…"
-            />
-          </label>
-          <div className="coach-boundary">
-            <ShieldCheck size={19} />
-            <p>
-              If you have pain, an injury, concerning symptoms, or health
-              restrictions, pause and seek qualified professional guidance.
-            </p>
-          </div>
-          <Button type="submit" icon={WandSparkles} disabled={coachLoading}>
-            {coachLoading ? "Shaping a session…" : "Suggest a session"}
-          </Button>
-          {coachError && (
-            <p className="capture-disclaimer" role="alert">
-              {coachError}
-            </p>
-          )}
-        </form>
-
-        {preview.length > 0 && (
-          <section className="coach-preview">
-            <div>
-              <p className="eyebrow">Coaching proposal · edit before use</p>
-              <h3>
-                {headline.title ||
-                  (energy === "low"
-                    ? "A shorter supportive session"
-                    : "A steady full-body session")}
-              </h3>
-              <p>
-                {headline.summary ||
-                  `${energy === "low" ? "One comfortable set" : "Two comfortable sets"} each. Finish with energy left.`}
-              </p>
-            </div>
-            {headline.why && <p className="coach-why">{headline.why}</p>}
-            {headline.goalId && (
-              <p className="coach-goal">
-                <Sparkles size={15} /> Supports{" "}
-                {state.goals.find((item) => item.id === headline.goalId)?.title}
-              </p>
-            )}
-            {editingPlanned ? (
-              <WorkoutEditor
-                workout={planned}
-                onCancel={() => setEditingPlanned(false)}
-                onSave={(workout) => {
-                  setPlanned(workout)
-                  setEditingPlanned(false)
-                }}
-              />
-            ) : (
-              <>
-                <PlannedWorkoutList workout={planned} />
-                <button type="button" className="text-link" onClick={() => setEditingPlanned(true)}>
-                  <PenLine size={14} /> Edit exercises before saving
-                </button>
-              </>
-            )}
-            <div className="inline-actions">
-              <Button icon={Check} onClick={savePlan}>
-                Save to Today
-              </Button>
-              <Button variant="secondary" onClick={buildPreview}>
-                Make another suggestion
-              </Button>
-            </div>
-            <p className="capture-disclaimer">
-              General educational guidance only. The AI coach does not
-              diagnose, treat, or replace a qualified health or fitness
-              professional.
-            </p>
-          </section>
-        )}
-      </div>
     </Modal>
   )
 }
@@ -4563,6 +4035,23 @@ export default function App() {
   }, [])
   const [restartSetup, setRestartSetup] = useState(false)
   const [editProfile, setEditProfile] = useState(false)
+  const [setupAgain, setSetupAgain] = useState(false)
+  const [chatFocus, setChatFocus] = useState<"move" | undefined>(undefined)
+  // Anywhere can open Studio (e.g. Movement's "Plan with Studio"), optionally focused on movement.
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      setChatFocus((event as CustomEvent<{ focus?: "move" }>).detail?.focus)
+      setSpace(null)
+      setCapture(true)
+    }
+    const onSpace = (event: Event) => setSpace((event as CustomEvent<SpaceKey>).detail)
+    window.addEventListener("studio:open", onOpen)
+    window.addEventListener("space:open", onSpace)
+    return () => {
+      window.removeEventListener("studio:open", onOpen)
+      window.removeEventListener("space:open", onSpace)
+    }
+  }, [])
   const openActivity = (id: string, mode: ActivityMode) =>
     setActivity({ id, mode })
 
@@ -4611,8 +4100,28 @@ export default function App() {
     )
   }
 
+  const finishConversation: Parameters<typeof SetupChat>[0]["onApply"] = (draft, choices, name) => {
+    update((current) => applySetup(current, draft, choices, name), "Your space is ready.")
+    setSetupAgain(false)
+    navigate("today")
+  }
+
   if (!state.onboarded) {
-    return <Onboarding onFinish={finishSetup} />
+    return (
+      <main className="setup-page">
+        <header className="setup-page__head">
+          <img src="/assets/life-studio-room.jpg" alt="" />
+          <div>
+            <p className="eyebrow">Life Studio</p>
+            <h1>Let’s set up your space</h1>
+          </div>
+        </header>
+        <SetupChat state={state} again={false} onApply={finishConversation} />
+        <button type="button" className="text-link setup-page__skip" onClick={() => finishSetup(["move", "create", "reflect"], "few", false)}>
+          Skip and start with an empty space
+        </button>
+      </main>
+    )
   }
 
   return (
@@ -4853,9 +4362,11 @@ export default function App() {
         <StudioChat
           state={state}
           initialHint={chatHint}
+          focus={chatFocus}
           onClose={() => {
             setCapture(false)
             setChatHint("")
+            setChatFocus(undefined)
           }}
           update={update}
           onVoiceNotes={() => {
@@ -4919,6 +4430,29 @@ export default function App() {
             navigate("plan")
           }}
         />
+      )}
+      {space === "about" && (
+        <AboutMeSpace
+          state={state}
+          update={update}
+          close={() => setSpace(null)}
+          onSetupAgain={() => {
+            setSpace(null)
+            setSetupAgain(true)
+          }}
+          onTour={() => {
+            setSpace(null)
+            update((current) => ({ ...current, tourDone: false }))
+          }}
+        />
+      )}
+      {setupAgain && (
+        <Modal title="Set up from the top" eyebrow="A conversation with Studio" onClose={() => setSetupAgain(false)} wide>
+          <SetupChat state={state} again onApply={finishConversation} />
+        </Modal>
+      )}
+      {state.tourDone === false && !setupAgain && (
+        <Tour onDone={() => update((current) => ({ ...current, tourDone: true }))} />
       )}
       {space === "move" && (
         <MovementSpace

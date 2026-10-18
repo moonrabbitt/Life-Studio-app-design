@@ -3,7 +3,7 @@ import { areaMeta } from "./data"
 import { checkPlacement } from "./training"
 import type { ActivityKind, AppState, Area, PlanItem } from "./types"
 
-export type SpaceKey = Area | "breathe" | "preferences"
+export type SpaceKey = Area | "breathe" | "preferences" | "about"
 import { formatDate, today, uid } from "./ui"
 
 export const areaKeys = Object.keys(areaMeta) as Area[]
@@ -148,8 +148,20 @@ export function offlineProposal(text: string, state: AppState): StudioProposal {
 export const EXERCISE_KINDS: ActivityKind[] = ["gym", "walk", "run", "dance"]
 
 // The planning details the AI attached: why, how, linked goal and exact workout.
+// If Studio forgets to say what kind of movement something is, work it out from the words,
+// so it still gets a workout, a timer and logging.
+export function guessKind(title: string, area?: string): ActivityKind | undefined {
+  const text = title.toLowerCase()
+  if (/\b(gym|strength|weights?|lift|squat|full[- ]body|workout)\b/.test(text)) return "gym"
+  if (/\b(run|jog|couch to 5k|c25k|5k|10k|half)\b/.test(text)) return "run"
+  if (/\b(walk|hike|stroll)\b/.test(text)) return "walk"
+  if (/\b(dance|class|choreo|salsa|ballet|heels)\b/.test(text)) return "dance"
+  if (/\b(stretch|yoga|mobility|pilates|foam roll|recovery)\b/.test(text)) return "recovery"
+  return area === "move" ? "recovery" : undefined
+}
+
 function plannedExtras(current: AppState, action: StudioAction) {
-  const kind = action.kind ?? undefined
+  const kind = action.kind ?? (action.area === "move" || action.workout?.length ? guessKind(action.title ?? "", action.area ?? undefined) ?? (action.workout?.length ? "gym" : undefined) : undefined)
   const workout = action.workout?.filter((item) => item?.name?.trim()) ?? []
   return {
     kind,
@@ -428,5 +440,18 @@ export function actionWarnings(state: AppState, action: StudioAction) {
     action.date,
     time ?? existing?.time,
   )
-  return [...conflicts.map((other) => `Overlaps ${other.title} at ${other.time}`), ...warnings]
+  const kind = candidate.kind ?? guessKind(candidate.title, action.area ?? undefined)
+  const twin =
+    !existing &&
+    state.plan.find(
+      (item) =>
+        item.date === action.date &&
+        (item.status === "planned" || item.status === "proposed") &&
+        ((kind && item.kind === kind && kind !== "walk") || item.title.trim().toLowerCase() === candidate.title.trim().toLowerCase()),
+    )
+  return [
+    ...(twin ? [`You already have “${twin.title}” that day`] : []),
+    ...conflicts.map((other) => `Overlaps ${other.title} at ${other.time}`),
+    ...warnings,
+  ]
 }

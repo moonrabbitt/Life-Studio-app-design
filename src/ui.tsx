@@ -13,11 +13,12 @@ export const uid = () => crypto.randomUUID()
 export const formatDate = (
   value: string,
   options?: Intl.DateTimeFormatOptions,
-) =>
-  new Intl.DateTimeFormat(
-    "en-GB",
-    options ?? { day: "numeric", month: "short" },
-  ).format(new Date(`${value}T12:00:00`))
+) => {
+  // A bad date shows as blank rather than crashing the whole screen.
+  const date = new Date(`${String(value).slice(0, 10)}T12:00:00`)
+  if (Number.isNaN(date.getTime())) return ""
+  return new Intl.DateTimeFormat("en-GB", options ?? { day: "numeric", month: "short" }).format(date)
+}
 
 export function Button({
   children,

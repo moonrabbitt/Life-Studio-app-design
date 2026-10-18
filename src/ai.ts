@@ -126,6 +126,9 @@ function studioContext(state: AppState) {
     energy: state.checkIn,
     trainingPhase: state.trainingPhase ?? 1,
     phase: phaseSummary(state),
+    // In their own words: health goals, body, energy, week. Tailor everything to this.
+    aboutMe: state.aboutMe && Object.fromEntries(Object.entries(state.aboutMe).filter(([key, value]) => key !== "updatedAt" && value)),
+    notesForStudio: (state.movementNotes ?? []).slice(0, 12).map((note) => note.text),
     profile: profile && {
       equipment: profile.equipment,
       gymExperience: profile.gymExperience,
@@ -334,4 +337,32 @@ export const draftTrainingPlan = (
       leavingPlan: { phase: base.phase, purpose: state.trainingPlan?.purpose ?? "Restart, then Hackney Half and dance camp" },
     },
   )
+}
+
+export type TurnReply = { reply: string; followUp: string | null; chips: string[] }
+
+// One step of the setup conversation: Studio reacts to your answer (and may ask one follow-up).
+export const onboardingTurn = (answer: string, context: { topic: string; question: string; transcript: { from: string; text: string }[]; followUpsAsked: number }) =>
+  ai<TurnReply>("turn", answer || "(skipped)", { today: localDate(), ...context })
+
+export type SetupDraft = {
+  welcome: string
+  aboutMe: { workingTowards: string; healthGoals: string; body: string; movementNow: string; equipment: string; week: string; energy: string; other: string }
+  priorities: ("reflect" | "create" | "connect" | "move" | "money" | "home")[]
+  density: "one" | "few" | "full"
+  profile: { equipment: "gym" | "machines" | "dumbbells" | "home" | "not-sure"; gymExperience: string; days: string[]; minutes: string; concern: "no" | "yes" | "not-sure"; concernNote: string }
+  goals: { title: string; area: "reflect" | "create" | "connect" | "move" | "money" | "home"; scale: "small" | "big"; date: string | null; why: string; milestones: string[] }[]
+  training: { include: boolean; purpose: string; targetDate: string | null; summary: string; phases: PlanDraft["phases"]; week: PlanDraft["week"] }
+  routines: { title: string; frequency: "daily" | "weekdays" | "weekly"; time: string | null; duration: number }[]
+}
+
+// Studio turns the whole setup conversation into your starting space.
+export const setupSpace = (transcript: { from: string; text: string }[], name: string) => {
+  const now = new Date()
+  return ai<SetupDraft>("setup", "Set up my Life Studio from our conversation.", {
+    today: localDate(now),
+    weekday: now.toLocaleDateString("en-GB", { weekday: "long" }),
+    name,
+    transcript,
+  })
 }

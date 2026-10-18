@@ -2743,11 +2743,16 @@ export function WeekAcceptBanner({ state, date, update }: { state: AppState; dat
   if (!batch) return null
   const proposed = state.plan.filter((item) => item.batch === batch && item.status === "proposed")
   if (!proposed.length) return null
-  const start = batch.replace("restart-", "")
+  const start = batch.replace(/^(restart|plan)-/, "")
+  const valid = /^\d{4}-\d{2}-\d{2}$/.test(start)
+  const label = batch.startsWith("plan-") ? phaseTimeline(state).current.title : "Restart phase"
   return (
     <div className="week-accept">
       <div>
-        <p className="eyebrow">Restart phase · week of {formatDate(start, { day: "numeric", month: "short" })}</p>
+        <p className="eyebrow">
+          {label}
+          {valid ? ` · week of ${formatDate(start, { day: "numeric", month: "short" })}` : ""}
+        </p>
         <strong>{proposed.length} proposed plans</strong>
       </div>
       <Button
