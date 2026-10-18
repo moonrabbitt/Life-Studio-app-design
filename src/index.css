@@ -9679,3 +9679,21 @@ label.setup-review__pick > span {
   background: var(--line);
   opacity: 0.5;
 }
+.about-me__concern {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface);
+}
+.about-me__concern h3 {
+  margin: 0;
+}
+.about-me__concern p {
+  margin: 0;
+}
+.about-me__save {
+  margin: 0;
+  color: var(--ink-soft);
+}

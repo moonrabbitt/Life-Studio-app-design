@@ -1,5 +1,5 @@
 import { Compass, Map, Plus, RotateCcw, Trash2 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { restoreArchive } from "./setup"
 import { ABOUT_LABELS } from "./SetupChat"
 import type { AboutMe, AppState } from "./types"
@@ -50,33 +50,101 @@ export function AboutMeSpace({
   const saved = state.aboutMe ?? { ...blank, updatedAt: "" }
   const changed = (Object.keys(blank) as (keyof typeof blank)[]).some((key) => (saved[key] ?? "") !== draft[key])
   const notes = state.movementNotes ?? []
+  const profile = state.trainingProfile
+  const concern = profile?.concern ?? "not-sure"
+
+  // Save as you type (and when you close), so an update is never lost.
+  const latest = useRef({ draft, changed })
+  latest.current = { draft, changed }
+  const persist = () => {
+    if (!latest.current.changed) return
+    const next = latest.current.draft
+    update((current) => ({ ...current, aboutMe: { ...next, updatedAt: new Date().toISOString() } }))
+  }
+  useEffect(() => {
+    if (!changed) return
+    const timer = window.setTimeout(persist, 700)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => persist(), [])
+
+  const setConcern = (value: "no" | "yes", note?: string) =>
+    update(
+      (current) => ({
+        ...current,
+        trainingProfile: {
+          ...(current.trainingProfile ?? {
+            completedAt: new Date().toISOString(),
+            activity: "",
+            walking: "",
+            gymExperience: "not-sure",
+            familiar: [],
+            equipment: "not-sure" as const,
+            danceFrequency: "",
+            danceIntensity: "",
+            days: [],
+            minutes: "",
+          }),
+          concern: value,
+          concernNote: value === "yes" ? (note ?? current.trainingProfile?.concernNote) : undefined,
+        },
+      }),
+      value === "no" ? "Got it. Studio will plan normally again." : "Got it. Studio will keep things gentle.",
+    )
 
   return (
-    <Modal title="About me" eyebrow="What Studio knows about you" onClose={close} wide>
+    <Modal
+      title="About me"
+      eyebrow="What Studio knows about you"
+      onClose={() => {
+        persist()
+        close()
+      }}
+      wide
+    >
       <div className="about-me">
         <p className="capture-disclaimer">
           Studio reads this every time it plans something or suggests exercises, so plans fit your body, energy and
           week. Change it whenever life changes.
         </p>
-        <form
-          className="about-me__form"
-          onSubmit={(event) => {
-            event.preventDefault()
-            update((current) => ({ ...current, aboutMe: { ...draft, updatedAt: new Date().toISOString() } }), "Saved. Studio will use this from now on.")
-          }}
-        >
+        <section className="about-me__concern">
+          <h3>Anything affecting exercise right now?</h3>
+          <p className="capture-disclaimer">Pain, an injury or a condition. When this is on, Studio only suggests gentle options.</p>
+          <div className="segmented" role="group" aria-label="Anything affecting exercise right now?">
+            <button type="button" className={concern === "no" ? "is-active" : ""} aria-pressed={concern === "no"} onClick={() => setConcern("no")}>
+              No, I’m fine
+            </button>
+            <button type="button" className={concern === "yes" ? "is-active" : ""} aria-pressed={concern === "yes"} onClick={() => setConcern("yes")}>
+              Yes
+            </button>
+          </div>
+          {concern === "yes" && (
+            <label>
+              <span>What is it?</span>
+              <input
+                defaultValue={profile?.concernNote ?? ""}
+                placeholder="e.g. sore left ankle"
+                onBlur={(event) => {
+                  if (event.target.value.trim() !== (profile?.concernNote ?? "")) setConcern("yes", event.target.value.trim())
+                }}
+              />
+            </label>
+          )}
+        </section>
+        <form className="about-me__form" onSubmit={(event) => { event.preventDefault(); persist() }}>
           {ABOUT_LABELS.map(([key, label]) => (
             <label key={key}>
               <span>{label}</span>
               <textarea rows={2} value={draft[key]} placeholder={PROMPTS[key]} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} />
             </label>
           ))}
-          <div className="about-me__save">
-            <Button type="submit" disabled={!changed}>
-              {changed ? "Save" : "Saved"}
-            </Button>
-            {saved.updatedAt && <small>Updated {formatDate(saved.updatedAt.slice(0, 10), { day: "numeric", month: "short", year: "numeric" })}</small>}
-          </div>
+          <p className="about-me__save">
+            <small>
+              {changed ? "Saving…" : saved.updatedAt ? `Saved automatically · updated ${formatDate(saved.updatedAt.slice(0, 10), { day: "numeric", month: "short", year: "numeric" })}` : "Saves automatically as you type"}
+            </small>
+          </p>
         </form>
 
         <section className="about-me__notes">

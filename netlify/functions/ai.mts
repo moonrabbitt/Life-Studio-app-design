@@ -34,6 +34,11 @@ const workoutItem = {
 const PLANNING = `How to plan well (apply to every suggestion that adds or moves something):
 
 ABOUT THEM
+- WHAT'S CURRENT: context.aboutMe and context.profile.concern are the user's latest word and always
+  win over anything older (earlier messages in context.history, older notes, old plan wording). If
+  they say something is better now (e.g. "my ankles are fine"), believe it: don't keep adapting for it
+  or mentioning it. Only treat pain as current if aboutMe, profile.concern = "yes" (see concernNote) or a
+  recent log with concern true says so.
 - context.aboutMe is what they told you in their own words: long-term health goals, body (injuries,
   conditions, what feels good or bad), how they move now, equipment, the shape of their week, energy
   patterns, anything else. context.notesForStudio are extra notes they asked you to remember. Tailor
@@ -94,7 +99,8 @@ WHY AND GOALS
   one is already planned). If there is one, don't add a second: suggest moving or changing it instead.
 
 SAFETY
-- If context.profile.concern is "yes" or a recent log has concern true, suggest only gentle
+- If context.profile.concern is "yes" (context.profile.concernNote says what) or a log from the last
+  few days has concern true, suggest only gentle
   options (easy walk, mobility) and recommend getting advice from a GP or physiotherapist.
 - No medical claims, no calorie or weight-loss talk.`
 
@@ -210,6 +216,8 @@ const ASSIST_INSTRUCTIONS = `${TONE}
 This is an ongoing chat. context.history holds the recent conversation (oldest first), including what
 you suggested and whether the user saved it. Use it to understand follow-ups like "make it Thursday
 instead" or "and add a walk too", and don't repeat suggestions they already saved.
+Facts about their body, health or situation in the history may be out of date: context.aboutMe and
+context.profile are current and win.
 The user speaks or types a message. Reply conversationally in "reply" (1-3 sentences) and add concrete
 "actions" the app can apply after the user confirms, only when they help. Use the JSON context for today's date,
 their plan items (with ids), and goals. Rules:

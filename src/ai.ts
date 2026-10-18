@@ -129,7 +129,7 @@ function studioContext(state: AppState) {
     trainingPhase: state.trainingPhase ?? 1,
     phase: phaseSummary(state),
     // In their own words: health goals, body, energy, week. Tailor everything to this.
-    aboutMe: state.aboutMe && Object.fromEntries(Object.entries(state.aboutMe).filter(([key, value]) => key !== "updatedAt" && value)),
+    aboutMe: state.aboutMe && { ...Object.fromEntries(Object.entries(state.aboutMe).filter(([key, value]) => key !== "updatedAt" && value)), lastUpdated: state.aboutMe.updatedAt },
     notesForStudio: (state.movementNotes ?? []).slice(0, 12).map((note) => note.text),
     sleep: sleepContext(state),
     profile: profile && {
@@ -140,6 +140,7 @@ function studioContext(state: AppState) {
       danceFrequency: profile.danceFrequency,
       danceIntensity: profile.danceIntensity,
       concern: profile.concern,
+      concernNote: profile.concern === "yes" ? profile.concernNote : undefined,
       days: profile.days,
       minutes: profile.minutes,
     },
