@@ -7322,3 +7322,8 @@ label.proposal-action > span {
 label.proposal-action .planned-workout li {
   background: var(--surface-soft);
 }
+
+.person-detail__footer {
+  border-top: 1px solid var(--line);
+  padding-top: 0.8rem;
+}

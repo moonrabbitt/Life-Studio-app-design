@@ -260,6 +260,19 @@ export function PeopleSpace({
     | { kind: "added"; id: string; item: PlanItem }
   >({ kind: "list" })
   const person = "id" in view ? state.people.find((candidate) => candidate.id === view.id) : undefined
+  const [confirmRemove, setConfirmRemove] = useState(false)
+  const removePerson = (target: Person) => {
+    update(
+      (current) => ({
+        ...current,
+        people: current.people.filter((candidate) => candidate.id !== target.id),
+        plan: current.plan.map((item) => (item.personId === target.id ? { ...item, personId: undefined } : item)),
+      }),
+      `${target.name} removed.`,
+    )
+    setConfirmRemove(false)
+    setView({ kind: "list" })
+  }
 
   const savePlan = (item: PlanItem) => {
     update((current) => ({ ...current, plan: [...current.plan, item] }))
@@ -312,19 +325,7 @@ export function PeopleSpace({
           )
           setView({ kind: "person", id: person.id })
         }}
-        onDelete={() => {
-          update(
-            (current) => ({
-              ...current,
-              people: current.people.filter((candidate) => candidate.id !== person.id),
-              plan: current.plan.map((item) =>
-                item.personId === person.id ? { ...item, personId: undefined } : item,
-              ),
-            }),
-            `${person.name} removed.`,
-          )
-          setView({ kind: "list" })
-        }}
+        onDelete={() => removePerson(person)}
       />
     )
   } else if (view.kind === "plan" && person) {
@@ -446,6 +447,28 @@ export function PeopleSpace({
             </ul>
           </section>
         )}
+        <div className="person-detail__footer">
+          {confirmRemove ? (
+            <div className="plan-edit__delete">
+              <p>Remove {person.name}? Plans with them stay in your Plan, just no longer linked.</p>
+              <Button variant="danger" icon={Trash2} onClick={() => removePerson(person)}>
+                Remove {person.name}
+              </Button>
+              <Button variant="ghost" onClick={() => setConfirmRemove(false)}>
+                Keep
+              </Button>
+            </div>
+          ) : (
+            <div className="inline-actions">
+              <Button variant="secondary" icon={Pencil} onClick={() => setView({ kind: "edit", id: person.id })}>
+                Edit details
+              </Button>
+              <Button variant="ghost" icon={Trash2} onClick={() => setConfirmRemove(true)}>
+                Remove {person.name}
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     )
   } else {
