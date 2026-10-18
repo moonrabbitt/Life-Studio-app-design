@@ -128,6 +128,7 @@ import { AboutMeSpace } from "./AboutMe"
 import { SetupChat } from "./SetupChat"
 import { applySetup } from "./setup"
 import { Tour } from "./Tour"
+import { NextWeekPlanner, nextWeekDue } from "./NextWeek"
 import { SessionPlanner, type PlannedSession } from "./SessionPlanner"
 import { VoiceNoteList } from "./VoiceNotes"
 import { WeekDigestCard } from "./WeekDigest"
@@ -447,6 +448,7 @@ function TodayView({
                 </Button>
               </div>
             )}
+            {nextWeekDue(state) && <NextWeekPlanner state={state} update={update} compact />}
             {visibleItems.length > 0 && (
               <button
                 type="button"

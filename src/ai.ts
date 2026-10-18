@@ -38,7 +38,7 @@ export type StudioAction = {
   workout?: PlannedExercise[] | null
 }
 
-export type StudioProposal = { reply: string; actions: StudioAction[] }
+export type StudioProposal = { reply: string; actions: StudioAction[]; sources?: { title: string; url: string }[] }
 
 export type CoachSuggestion = {
   title: string
@@ -217,8 +217,12 @@ function studioContext(state: AppState) {
 
 export type ChatTurn = { role: "user" | "studio"; text: string; suggested?: string[]; outcome?: string }
 
-export const askStudio = (input: string, state: AppState, history: ChatTurn[] = []) =>
-  ai<StudioProposal>("assist", input, { ...studioContext(state), history: history.slice(-12) })
+export const askStudio = (input: string, state: AppState, history: ChatTurn[] = [], search = false) =>
+  post<StudioProposal>(
+    "/api/ai",
+    JSON.stringify({ task: "assist", input, context: { ...studioContext(state), history: history.slice(-12) }, search }),
+    "application/json",
+  )
 
 export const askMoneyGuide = (question: string) =>
   ai<{ answer: string }>("guide", question).then((data) => data.answer)
@@ -381,5 +385,40 @@ export const setupSpace = (transcript: { from: string; text: string }[], name: s
     weekday: now.toLocaleDateString("en-GB", { weekday: "long" }),
     name,
     transcript,
+  })
+}
+
+export type NextWeekDraft = { review: string; phaseReady: boolean; phaseNote: string; week: PlanDraft["week"] }
+
+// Studio writes next week from what you actually did: progress small, repeat what was hard, ease pain.
+export const planNextWeek = (state: AppState, weekStart: string) => {
+  const base = studioContext(state)
+  const plan = state.trainingPlan
+  const from = localDate(new Date(new Date(`${weekStart}T12:00:00`).getTime() - 14 * 86400000))
+  const end = localDate(new Date(new Date(`${weekStart}T12:00:00`).getTime() + 6 * 86400000))
+  const goal = state.goals.find((item) => item.id === plan?.goalId)
+  return ai<NextWeekDraft>("nextweek", `Plan my week starting ${weekStart}.`, {
+    ...base,
+    weekStart,
+    template: plan?.week ?? [],
+    purpose: plan?.purpose,
+    goal: goal && { title: goal.title, date: goal.date, nextMilestone: goal.milestones.find((milestone) => !milestone.completedAt)?.title ?? null },
+    lastWeeks: state.plan
+      .filter((item) => item.kind && item.date >= from && item.date < weekStart)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((item) => ({
+        title: item.title,
+        kind: item.kind,
+        date: item.date,
+        status: item.status,
+        effort: item.log?.effort,
+        concern: item.log?.concern,
+        note: item.log?.note,
+        duration: item.log?.duration ?? item.duration,
+        workout: item.workout?.map((exercise) => `${exercise.name} ${exercise.sets}×${exercise.reps} ${exercise.load}`),
+      })),
+    commitments: state.plan
+      .filter((item) => item.seriesId && item.mode === "fixed" && item.date >= weekStart && item.date <= end)
+      .map((item) => ({ title: item.title, date: item.date, time: item.time, kind: item.kind })),
   })
 }

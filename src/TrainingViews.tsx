@@ -28,6 +28,7 @@ import { countdown, EventsList } from "./EventsViews"
 import { goalDate, goalFeeling, GoalMilestones } from "./MilestoneViews"
 import { celebrate } from "./GoalProjectViews"
 import { ChangeDirection, PastPlans } from "./PlanChange"
+import { NextWeekPlanner } from "./NextWeek"
 import { listen, speechSupported } from "./speech"
 import {
   acceptWeek,
@@ -1104,8 +1105,6 @@ export function Roadmap({
   const timeline = phaseTimeline(state)
   const custom = state.trainingPlan
   const phases = phasesOf(state)
-  const nextWeekStart = nextMonday(today())
-  const nextWeekAdded = state.plan.some((item) => item.batch === `plan-${nextWeekStart}`)
   const [reflection, setReflection] = useState("")
   const [showAll, setShowAll] = useState(false)
   const phase = state.trainingPhase ?? 1
@@ -1263,16 +1262,7 @@ export function Roadmap({
                 </li>
               ))}
             </ol>
-            {custom && (
-              <Button
-                variant="secondary"
-                icon={CalendarCheck}
-                disabled={nextWeekAdded}
-                onClick={() => update((current) => addPlanWeek(current, nextWeekStart), "Next week’s sessions are in your plan as suggestions.")}
-              >
-                {nextWeekAdded ? "Next week’s sessions are planned" : "Add next week’s sessions"}
-              </Button>
-            )}
+            {custom && <NextWeekPlanner state={state} update={update} />}
             {!custom && !state.plan.some((item) => item.phase === "restart") && (
               <Button variant="secondary" icon={CalendarCheck} onClick={onSetupRestart}>
                 Set up the starter fortnight

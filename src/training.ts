@@ -4,6 +4,7 @@ import type {
   Goal,
   PlanItem,
   PastPlan,
+  PlanWeekSession,
   PlannedExercise,
   TrainingPhaseDef,
   TrainingPlan,
@@ -270,11 +271,16 @@ export function addPlanWeek(state: AppState, monday: string): AppState {
   const plan = state.trainingPlan
   if (!plan) return state
   const existing = new Set(state.plan.map((item) => item.id))
+  // Each session says where it fits: the phase week, and the goal it builds towards.
+  const { current } = phaseTimeline(state)
+  const weekNumber = current.start ? Math.max(1, Math.floor((new Date(`${monday}T12:00:00`).getTime() - new Date(`${mondayOf(current.start)}T12:00:00`).getTime()) / (7 * 86400000)) + 1) : 1
+  const goal = state.goals.find((item) => item.id === plan.goalId)
+  const fits = `Week ${weekNumber} of ${current.title}${goal ? ` → ${goal.title}` : ""}`
   const items: PlanItem[] = plan.week
     .map((session, index) => {
       const date = addDays(monday, Math.max(0, Math.min(6, session.dayOffset)))
       return {
-        id: `plan-${plan.id}-${date}-${index}`,
+        id: `plan-${plan.id}${plan.lastReview ? `-${plan.lastReview.at.replace(/\D/g, "").slice(8, 14)}` : ""}-${date}-${index}`,
         title: session.title,
         area: AREA_OF[session.kind] ?? "move",
         kind: session.kind,
@@ -282,7 +288,7 @@ export function addPlanWeek(state: AppState, monday: string): AppState {
         time: session.time || undefined,
         duration: session.duration,
         intensity: session.intensity,
-        details: session.details,
+        details: session.kind === "recovery" || session.kind === "journal" ? session.details : [fits, ...session.details],
         workout: session.kind === "gym" && session.workout?.length ? session.workout : undefined,
         optional: session.optional || undefined,
         mode: session.optional ? "maybe" : "flexible",
@@ -292,7 +298,13 @@ export function addPlanWeek(state: AppState, monday: string): AppState {
         goalId: plan.goalId,
       } satisfies PlanItem
     })
-    .filter((item) => item.date >= today() && !existing.has(item.id))
+    // Skip anything you already accepted or did that day (same kind), so a re-plan never doubles up.
+    .filter(
+      (item) =>
+        item.date >= today() &&
+        !existing.has(item.id) &&
+        !state.plan.some((other) => other.phase === "plan" && other.date === item.date && other.kind === item.kind && other.status !== "proposed"),
+    )
   return { ...state, plan: [...state.plan, ...items] }
 }
 
@@ -302,6 +314,34 @@ const AREA_OF: Partial<Record<ActivityKind, PlanItem["area"]>> = {
   social: "connect",
   reset: "home",
   journal: "reflect",
+}
+
+// Use Studio's next week: it becomes the typical week from now on (so progress builds), and replaces
+// any untouched suggestions already in that week.
+export function applyNextWeek(state: AppState, weekStart: string, draft: { review: string; phaseReady: boolean; phaseNote: string; week: (Omit<PlanWeekSession, "time"> & { time?: string | null })[] }): AppState {
+  const plan = state.trainingPlan
+  if (!plan) return state
+  const commitmentDays = state.plan
+    .filter((item) => item.seriesId && item.mode === "fixed" && item.date >= weekStart && item.date <= addDays(weekStart, 6))
+    .map((item) => (new Date(`${item.date}T12:00:00`).getDay() + 6) % 7)
+  const week = cleanWeek(
+    draft.week.map((session) => ({
+      ...session,
+      time: session.time && /^\d{2}:\d{2}$/.test(session.time) ? session.time : undefined,
+      duration: Math.max(5, Math.min(240, session.duration || 30)),
+    })),
+    commitmentDays,
+  )
+  const next: AppState = {
+    ...state,
+    trainingPlan: {
+      ...plan,
+      week,
+      lastReview: { weekStart, text: draft.review, phaseReady: draft.phaseReady, phaseNote: draft.phaseNote, at: new Date().toISOString() },
+    },
+    plan: state.plan.filter((item) => !(item.batch === `plan-${weekStart}` && item.status === "proposed")),
+  }
+  return addPlanWeek(next, weekStart)
 }
 
 // Switch to a new plan: archive the current one, clear future training proposals, start at phase 1.

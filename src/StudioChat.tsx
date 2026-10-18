@@ -3,6 +3,8 @@ import {
   AudioLines,
   Check,
   ChevronRight,
+  ExternalLink,
+  Globe,
   Mic,
   RotateCcw,
   ShieldCheck,
@@ -80,6 +82,8 @@ export function StudioChat({
   const [listening, setListening] = useState(false)
   const [live, setLive] = useState("")
   const [keyboardHint, setKeyboardHint] = useState(false)
+  // "Search the web" for the next message: Studio looks it up and shows its sources.
+  const [web, setWeb] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const listener = useRef<ReturnType<typeof listen> | null>(null)
@@ -113,7 +117,8 @@ export function StudioChat({
     pushMessage({ id: uid(), role: "user", text, at: new Date().toISOString() })
     setLoading(true)
     try {
-      const result = await askStudio(text, state, turns)
+      const result = await askStudio(text, state, turns, web)
+      setWeb(false)
       const actions = Array.isArray(result.actions) ? result.actions : []
       pushMessage({
         id: uid(),
@@ -122,6 +127,7 @@ export function StudioChat({
         at: new Date().toISOString(),
         actions,
         status: actions.length ? "pending" : undefined,
+        sources: result.sources?.length ? result.sources.slice(0, 5) : undefined,
       })
     } catch (error) {
       setFailed({ text, error: (error as Error).message })
@@ -236,6 +242,17 @@ export function StudioChat({
             return (
               <div className={`chat-bubble chat-bubble--${message.role}`} key={message.id}>
                 <p>{message.text}</p>
+                {message.sources && message.sources.length > 0 && (
+                  <ul className="chat-sources">
+                    {message.sources.map((source) => (
+                      <li key={source.url}>
+                        <a href={source.url} target="_blank" rel="noreferrer">
+                          {source.title} <ExternalLink size={12} />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {actions.length > 0 && message.status === "pending" && (
                   <div className="chat-proposal">
                     {actions.map((action, index) => {
@@ -389,9 +406,19 @@ export function StudioChat({
                 send(input)
               }
             }}
-            placeholder={listening ? "Listening…" : hint || "Message Studio…"}
+            placeholder={listening ? "Listening…" : web ? "What should Studio look up?" : hint || "Message Studio…"}
             aria-label="Message Studio"
           />
+          <button
+            type="button"
+            className={`studio-chat__web ${web ? "is-active" : ""}`}
+            aria-label={web ? "Web search on for this message" : "Search the web for this message"}
+            aria-pressed={web}
+            title="Search the web"
+            onClick={() => setWeb(!web)}
+          >
+            <Globe size={19} />
+          </button>
           {canListen && (
           <button
             type="button"

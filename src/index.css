@@ -9406,3 +9406,93 @@ label.setup-review__pick > span {
   color: var(--ink-soft);
   font-size: 0.85rem;
 }
+/* Plan next week with Studio */
+.next-week {
+  display: grid;
+  gap: 0.7rem;
+  min-width: 0;
+  margin: 0 0 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  background: var(--surface);
+}
+.next-week p {
+  margin: 0;
+}
+.next-week__note {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+.next-week__ready {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border-radius: 0.9rem;
+  background: var(--surface-soft);
+}
+.next-week__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.next-week__list li {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.92rem;
+}
+.next-week__list li > span {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.next-week__list li span small {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+.next-week__list li > small {
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.next-week__list li.is-rest {
+  color: var(--ink-soft);
+}
+/* Web search in Studio chat */
+.studio-chat__web {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.studio-chat__web.is-active {
+  border-color: var(--moss);
+  background: var(--moss);
+  color: var(--surface);
+}
+.chat-sources {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.82rem;
+}
+.chat-sources a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--moss);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}

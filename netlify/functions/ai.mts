@@ -7,6 +7,7 @@ import {
   errorResponse,
   json,
 } from "../lib/gateway"
+import { webSearch, type WebResult } from "../lib/search"
 
 const TONE = `You are the companion inside Life Studio, a calm personal life app for Avika in London.
 Tone: warm, encouraging, practical, brief. British English. Never use guilt, streaks, punishment
@@ -619,6 +620,49 @@ where they skipped something, stay gentle and general rather than inventing deta
   or leg press instead of deep squats or lunges for sore knees). Different gym days in the week use
   different exercises or emphasis. Non-gym sessions have "workout": [].`
 
+const nextWeekSchema = {
+  name: "next_week",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["review", "phaseReady", "phaseNote", "week"],
+    properties: {
+      review: { type: "string" },
+      phaseReady: { type: "boolean" },
+      phaseNote: { type: "string" },
+      week: replanSchema.schema.properties.week,
+    },
+  },
+}
+
+const NEXT_WEEK_INSTRUCTIONS = `${TONE}
+
+Write next week of the user's training plan (the week starting context.weekStart), building on what
+they ACTUALLY did. context.lastWeeks lists their recent plan sessions with status (complete,
+let-go = skipped, planned/proposed = not done), effort, concern (pain), notes and logged sets.
+context.template is the current typical week. context.phase is where they are (week n of about N,
+its focus and how they know they're ready). context.goal is the goal it builds towards and its next
+milestone. context.commitments are fixed things already in that week.
+
+Progress like a careful coach: start small, build gradually.
+- A session done and felt easy or comfortable with no pain: progress ONE small thing (one more rep
+  within the range, then a set, then the smallest weight step: 1-2 kg dumbbells, 2.5 kg machines;
+  runs/walks +5 minutes or one more interval; never more than about 10% more total time a week).
+- Felt hard or very hard: repeat it as it was. Pain or a concern: ease off that movement (swap or
+  reduce) and suggest checking with a professional if it persists. Skipped or missed: repeat, never
+  add the missed work on top. Mostly missed week: make next week a bit smaller, kindly.
+- Use logged weights (context.recentWorkouts) for loads. Keep the same rhythm of days unless the logs
+  show a day keeps getting skipped (then suggest a better day). Commitments stay exactly where they
+  are; rest and recovery days stay after hard days; every day without a session or commitment has a
+  rest or recovery entry; every gym session has a full "workout".
+- Each session's first detail line says how it builds on last week, concretely ("Last week 2×8 at
+  10 kg felt comfortable → 2×10 this week"; "New: first run-walk intervals"). Its "why" names how it
+  moves them towards context.goal's next milestone.
+- "review": 2-3 warm, honest sentences: how last week went (real things from the logs, no invented
+  numbers) and what changes next week and why.
+- "phaseReady": true only if the logs clearly meet context.phase.readyWhen; "phaseNote" says why, or
+  what to keep doing. Never move them on yourself.`
+
 const GUIDE_INSTRUCTIONS = `${TONE}
 
 You are a money learning guide. Explain personal-finance and investing concepts simply, with a small
@@ -638,6 +682,7 @@ export default async (req: Request) => {
       task?: string
       input?: string
       context?: unknown
+      search?: boolean
     } | null
     const input = body?.input?.trim()
     if (!input) throw new HttpError(400, "Please say or type something first.")
@@ -645,13 +690,21 @@ export default async (req: Request) => {
     const context = JSON.stringify(body?.context ?? {}).slice(0, 20000)
 
     if (body?.task === "assist") {
+      // "Search the web" in chat: look it up first, then answer from those pages.
+      const sources: WebResult[] = body.search ? await webSearch(input) : []
+      const web = sources.length
+        ? `\n\nWeb results (searched just now; answer from these, name the source you used, and say if they don't answer it):\n${JSON.stringify(sources)}`
+        : body.search
+          ? "\n\nA web search found nothing useful; say so plainly."
+          : ""
       const text = await callResponses({
         instructions: ASSIST_INSTRUCTIONS,
-        input: `Context:\n${context}\n\nRequest:\n${input}`,
+        input: `Context:\n${context}${web}\n\nRequest:\n${input}`,
         maxOutputTokens: 4000,
         schema: assistSchema,
+        timeoutMs: body.search ? 40000 : 25000,
       })
-      return json(JSON.parse(text))
+      return json({ ...JSON.parse(text), sources: sources.map(({ title, url }) => ({ title, url })) })
     }
 
     if (body?.task === "coach") {
@@ -701,6 +754,17 @@ export default async (req: Request) => {
         input: `Context:\n${context}\n\nRequest:\n${input}`,
         maxOutputTokens: 8000,
         schema: setupSchema,
+        timeoutMs: 50000,
+      })
+      return json(JSON.parse(text))
+    }
+
+    if (body?.task === "nextweek") {
+      const text = await callResponses({
+        instructions: NEXT_WEEK_INSTRUCTIONS,
+        input: `Context:\n${context}\n\nRequest:\n${input}`,
+        maxOutputTokens: 6000,
+        schema: nextWeekSchema,
         timeoutMs: 50000,
       })
       return json(JSON.parse(text))

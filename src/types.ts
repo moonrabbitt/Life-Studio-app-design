@@ -89,6 +89,8 @@ export type ChatMessage = {
   actions?: unknown[]
   status?: "pending" | "saved" | "dismissed"
   saved?: { summary: string; label: string; to: unknown }[]
+  // Pages Studio read when you asked it to search the web.
+  sources?: { title: string; url: string }[]
 }
 
 // A reflection, or a moment you add yourself (with a title), on your journey.
@@ -341,6 +343,8 @@ export type TrainingPlan = {
   phases: TrainingPhaseDef[]
   week: PlanWeekSession[]
   goalId?: string
+  // Studio's latest look back at a week, and whether you look ready for the next phase.
+  lastReview?: { weekStart: string; text: string; phaseReady: boolean; phaseNote: string; at: string }
 }
 
 // A plan you moved on from, kept so you can see it (or go back to it).
