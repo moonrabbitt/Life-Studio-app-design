@@ -634,6 +634,15 @@ export function PlanItemSheet({
             </p>
           )}
           {item.note && <p className="plan-sheet__note">{item.note}</p>}
+          {(item.links ?? []).length > 0 && (
+            <div className="events__links">
+              {item.links!.map((link) => (
+                <a href={link.url} target="_blank" rel="noreferrer" key={link.url}>
+                  {link.label} ↗
+                </a>
+              ))}
+            </div>
+          )}
           {item.log && (
             <div className="plan-sheet__log">
               <Check size={16} />

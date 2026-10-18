@@ -9,9 +9,45 @@ export const projectSteps = (project: Project): ProjectStep[] =>
 export const nextStep = (project: Project) =>
   projectSteps(project).find((step) => !step.done)
 
+// Hackney Half and FairPlay used to be special cases; they become ordinary events.
+function seedEvents(state: AppState): AppState {
+  if (state.journeyEvents) return state
+  const flags = state.events ?? {}
+  return {
+    ...state,
+    journeyEvents: [
+      {
+        id: "event-hackney",
+        title: "Race day",
+        date: "2027-05-16",
+        location: "Hackney Marshes, London",
+        links: [{ label: "Official site", url: "https://www.hackneymoves.com/2027" }],
+        note: "Date confirmed on the official site.",
+        feeling: "nervous",
+        booked: !!flags.hackneyBooked,
+        goalId: state.goals.some((goal) => goal.id === "goal-race") ? "goal-race" : undefined,
+      },
+      {
+        id: "event-fairplay",
+        title: "The camp",
+        date: flags.fairplayConfirmed ? "2027-08-01" : undefined,
+        endDate: flags.fairplayConfirmed ? "2027-08-08" : undefined,
+        dateTBC: !flags.fairplayConfirmed,
+        location: "Kraków, Poland",
+        links: [{ label: "Official site", url: "https://fpdancecamp.com/en/" }],
+        note: flags.fairplayConfirmed
+          ? "Dates confirmed by you."
+          : "Reported as 1–8 Aug 2027 in Kraków, but not yet verified on the official site.",
+        booked: !!flags.fairplayBooked,
+        goalId: state.goals.some((goal) => goal.id === "goal-dance") ? "goal-dance" : undefined,
+      },
+    ],
+  }
+}
+
 // One-time tidy: each idea lives in one place, and old "next action" text becomes a step.
-export function tidyProjects(state: AppState): AppState {
-  let next = state
+export function tidyProjects(input: AppState): AppState {
+  let next = seedEvents(input)
   const filmGoal = next.goals.find((goal) => goal.id === "goal-film")
   const filmProject = next.projects.find((project) => project.id === "project-1")
   if (filmGoal && filmProject && !filmProject.steps) {

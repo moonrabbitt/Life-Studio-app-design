@@ -20,6 +20,7 @@ import {
   Zap,
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { countdown, EventsList } from "./EventsViews"
 import { celebrate } from "./GoalProjectViews"
 import { listen, speechSupported } from "./speech"
 import {
@@ -607,55 +608,53 @@ const dateLabelFor = (date: string) =>
 
 // What's ahead: dated goals counting down, events, and goals still waiting for a date.
 export function JourneyAhead({ state, update }: { state: AppState; update: Update }) {
-  const events = state.events ?? {}
-  const setEvents = (patch: Partial<NonNullable<AppState["events"]>>, message: string) =>
-    update((current) => {
-      const next = { ...current.events, ...patch }
-      return {
-        ...current,
-        events: next,
-        goals: current.goals.map((goal) =>
-          goal.id === "goal-race"
-            ? { ...goal, dateLabel: next.hackneyBooked ? "Sun 16 May 2027 · entry booked" : HACKNEY_LABEL }
-            : goal.id === "goal-dance"
-              ? {
-                  ...goal,
-                  date: next.fairplayConfirmed ? "2027-08-01" : goal.date === "2027-08-01" ? undefined : goal.date,
-                  dateLabel: next.fairplayConfirmed
-                    ? `1–8 Aug 2027, Kraków · dates confirmed by you · ${next.fairplayBooked ? "booked" : "not booked"}`
-                    : FAIRPLAY_REPORTED,
-                }
-              : goal,
-        ),
-      }
-    }, message)
-  const ahead = state.goals
-    .filter((goal) => goal.status !== "complete" && goal.date && goal.date >= today())
-    .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
-  const undated = state.goals.filter((goal) => goal.status !== "complete" && goal.scale === "big" && !goal.date)
-  const [showEvents, setShowEvents] = useState(false)
+  const events = state.journeyEvents ?? []
+  // A goal's countdown uses its own date, or the date of an event that's part of it.
+  const dateOf = (goal: AppState["goals"][number]) =>
+    goal.date ??
+    events
+      .filter((event) => event.goalId === goal.id && event.date && event.date >= today())
+      .map((event) => event.date!)
+      .sort()[0]
+  const active = state.goals.filter((goal) => goal.status !== "complete")
+  const ahead = active
+    .filter((goal) => {
+      const date = dateOf(goal)
+      return (date && date >= today()) || events.some((event) => event.goalId === goal.id)
+    })
+    .sort((a, b) => (dateOf(a) ?? "9999").localeCompare(dateOf(b) ?? "9999"))
+  const undated = active.filter((goal) => goal.scale === "big" && !dateOf(goal) && !ahead.includes(goal))
 
   return (
     <section className="journey-section">
       <div className="journey-section__head">
         <h2>Ahead</h2>
       </div>
-      {ahead.length === 0 && <p className="capture-disclaimer">No dated goals yet. Add a date to a goal below.</p>}
+      {ahead.length === 0 && <p className="capture-disclaimer">No dated goals yet. Add a date to a goal below, or an event to look forward to.</p>}
       <ul className="journey-ahead">
         {ahead.map((goal) => {
           const done = goal.milestones.filter((milestone) => milestone.completedAt).length
+          const date = dateOf(goal)
           return (
             <li key={goal.id}>
-              <div>
-                <strong>{goal.title}</strong>
-                <small>{goal.dateLabel ?? dateLabelFor(goal.date!)}</small>
-                {goal.milestones.length > 0 && (
-                  <small>
-                    {done} of {goal.milestones.length} milestones · next: {goal.milestones.find((milestone) => !milestone.completedAt)?.title ?? "reach it"}
-                  </small>
+              <div className="journey-ahead__goal">
+                <div>
+                  <small className="journey-ahead__kind">{goal.scale === "big" ? "Bigger goal" : "Smaller goal"}</small>
+                  <strong>{goal.title}</strong>
+                  {goal.date && <small>Target: {formatDate(goal.date, { day: "numeric", month: "long", year: "numeric" })}</small>}
+                  {goal.milestones.length > 0 && (
+                    <small>
+                      {done} of {goal.milestones.length} milestones · next: {goal.milestones.find((milestone) => !milestone.completedAt)?.title ?? "reach it"}
+                    </small>
+                  )}
+                </div>
+                {date && !events.some((event) => event.goalId === goal.id && event.hideCountdown) && (
+                  <span className={`roadmap__countdown ${events.some((event) => event.goalId === goal.id && event.feeling === "nervous") ? "is-gentle" : ""}`}>
+                    {countdown(date, events.find((event) => event.goalId === goal.id && event.feeling)?.feeling)}
+                  </span>
                 )}
               </div>
-              <span className="roadmap__countdown">{weeksUntil(goal.date!)}</span>
+              <EventsList state={state} update={update} goalId={goal.id} />
             </li>
           )
         })}
@@ -687,49 +686,7 @@ export function JourneyAhead({ state, update }: { state: AppState; update: Updat
           ))}
         </div>
       )}
-      <button type="button" className="text-link" onClick={() => setShowEvents(!showEvents)}>
-        {showEvents ? "Hide event details" : "Event details: Hackney Half and FairPlay"} <ChevronRight size={14} />
-      </button>
-      {showEvents && (
-        <div className="roadmap__events">
-          <article>
-            <strong>Hackney Half Marathon</strong>
-            <p>{events.hackneyBooked ? "Sun 16 May 2027 · entry booked" : HACKNEY_LABEL}</p>
-            <a href="https://www.hackneymoves.com/2027" target="_blank" rel="noreferrer">
-              Official site <ExternalLink size={13} />
-            </a>
-            <label className="sync-replace">
-              <input type="checkbox" checked={!!events.hackneyBooked} onChange={(event) => setEvents({ hackneyBooked: event.target.checked }, "Hackney Half updated.")} />
-              <span>I have an entry</span>
-            </label>
-          </article>
-          <article>
-            <strong>FairPlay Dance Camp 2027</strong>
-            <p>
-              {events.fairplayConfirmed
-                ? "1–8 Aug 2027, Kraków · confirmed by you"
-                : "Dates TBC. Reported as 1–8 Aug 2027 in Kraków, but not yet verified on the official site."}
-            </p>
-            <a href="https://fpdancecamp.com/en/" target="_blank" rel="noreferrer">
-              Official site <ExternalLink size={13} />
-            </a>
-            <label className="sync-replace">
-              <input
-                type="checkbox"
-                checked={!!events.fairplayConfirmed}
-                onChange={(event) => setEvents({ fairplayConfirmed: event.target.checked }, event.target.checked ? "Dance camp dates confirmed." : "Dance camp dates back to TBC.")}
-              />
-              <span>I’ve checked the official site and these dates are right</span>
-            </label>
-            {events.fairplayConfirmed && (
-              <label className="sync-replace">
-                <input type="checkbox" checked={!!events.fairplayBooked} onChange={(event) => setEvents({ fairplayBooked: event.target.checked }, "Dance camp updated.")} />
-                <span>I have a ticket</span>
-              </label>
-            )}
-          </article>
-        </div>
-      )}
+      <EventsList state={state} update={update} />
     </section>
   )
 }

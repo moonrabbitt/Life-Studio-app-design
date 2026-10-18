@@ -54,6 +54,25 @@ export type Series = {
   routineId?: string
 }
 
+export type EventLink = { label: string; url: string }
+
+// Something on a date to look forward to (a race day, camp, trip, concert…).
+export type JourneyEvent = {
+  id: string
+  title: string
+  date?: string
+  endDate?: string
+  dateTBC?: boolean
+  location?: string
+  links: EventLink[]
+  note?: string
+  booked?: boolean
+  goalId?: string
+  planItemId?: string
+  feeling?: "excited" | "nervous" | "mixed" | "not-sure"
+  hideCountdown?: boolean
+}
+
 // A pre-planned workout you can reuse and add to any day.
 export type WorkoutTemplate = {
   id: string
@@ -112,6 +131,8 @@ export type PlanItem = {
   milestoneId?: string
   personId?: string
   seriesId?: string
+  eventId?: string
+  links?: EventLink[]
   log?: ActivityLog
 }
 
@@ -301,6 +322,7 @@ export type AppState = {
   series?: Series[]
   chat?: ChatMessage[]
   workoutTemplates?: WorkoutTemplate[]
+  journeyEvents?: JourneyEvent[]
   roadmap?: {
     phaseDates?: Record<string, string>
     reflections?: RoadmapReflection[]
