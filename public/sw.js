@@ -1,4 +1,4 @@
-const CACHE = "life-studio-shell-v2"
+const CACHE = "life-studio-shell-v3"
 const SHELL = ["/", "/manifest.webmanifest", "/life-studio-icon.svg"]
 
 self.addEventListener("install", (event) => {
