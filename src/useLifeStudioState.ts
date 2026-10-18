@@ -13,6 +13,7 @@ import {
   type Remote,
 } from "./sync"
 import { guessKind } from "./assistant"
+import { exercisesFromDetails } from "./training"
 import type { AppState } from "./types"
 
 const STORAGE_KEY = "life-studio:v1"
@@ -34,7 +35,21 @@ function normalise(value: Partial<AppState> | null | undefined): AppState | null
       ? { ...item, kind: guessKind(item.title, item.area) }
       : item,
   )
-  return extendSeries(tidyProjects({ ...state, plan }))
+  // Gym sessions from older plans had their exercises as text: make them a real exercise list.
+  const withExercises = plan.map((item) => {
+    if (item.kind !== "gym" || item.workout?.length || !item.details?.length || item.status === "complete") return item
+    const { workout, rest } = exercisesFromDetails(item.details)
+    return workout.length ? { ...item, workout, details: rest } : item
+  })
+  const trainingPlan = state.trainingPlan && {
+    ...state.trainingPlan,
+    week: state.trainingPlan.week.map((session) => {
+      if (session.kind !== "gym" || session.workout?.length) return session
+      const { workout, rest } = exercisesFromDetails(session.details)
+      return workout.length ? { ...session, workout, details: rest } : session
+    }),
+  }
+  return extendSeries(tidyProjects({ ...state, plan: withExercises, trainingPlan }))
 }
 
 function loadState(): AppState {

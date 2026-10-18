@@ -254,6 +254,35 @@ export function buildRestartFortnight(start: string): PlanItem[] {
   )
 }
 
+// Older plans wrote gym exercises as text ("Seated chest press: 2 sets of 8–10 reps."). Turn those
+// lines into a real, editable exercise list, and keep any other lines as notes.
+export function exercisesFromDetails(details: string[] = []): { workout: PlannedExercise[]; rest: string[] } {
+  const workout: PlannedExercise[] = []
+  const rest: string[] = []
+  for (const line of details) {
+    const reps = String.raw`(\d+(?:\s*[–-]\s*\d+)?(?:\s*(?:seconds?|secs?|s|min))?)(?:\s*reps?)?((?:\s*(?:per|each)\s+(?:side|leg|arm))?)`
+    const colon = line.match(new RegExp(String.raw`^\s*([^:]{3,80}?)\s*:\s*(\d+)(?:\s*[–-]\s*\d+)?\s*sets?\s+of\s+` + reps + String.raw`(.*)$`, "i"))
+    const times = line.match(new RegExp(String.raw`^\s*(\d+)\s*[×x]\s*` + reps + String.raw`\s+(?:of\s+)?([a-z][^,.;]{2,60})(.*)$`, "i"))
+    const load = (name: string, extra: string) =>
+      /dead bug|bird dog|plank|bridge|push-?up|clam|crunch|bodyweight|sit-to-stand/i.test(`${name} ${extra}`)
+        ? "Bodyweight"
+        : /very light|light/i.test(extra)
+          ? "Very light"
+          : "A weight you could lift 3-4 more times"
+    const tidy = (text: string) => text.replace(/^[\s,.;]+|[\s.]+$/g, "")
+    if (colon) {
+      const [, rawName, sets, count, side, tail] = colon
+      const [name, ...notes] = rawName.split(",")
+      const extra = [notes.join(",").trim(), tidy(tail)].filter(Boolean).join("; ")
+      workout.push({ name: name.trim(), sets: Number(sets), reps: `${count.replace(/\s+/g, "")}${side}`.trim(), rest: "60-90 seconds", load: load(name, extra), why: extra || "Part of this session", ...(extra ? { cue: extra } : {}) })
+    } else if (times) {
+      const [, sets, count, side, name, tail] = times
+      workout.push({ name: name.trim().replace(/^\w/, (c) => c.toUpperCase()), sets: Number(sets), reps: `${count.replace(/\s+/g, "")}${side}`.trim(), rest: "60-90 seconds", load: load(name, tail), why: tidy(tail) || "Part of this session" })
+    } else rest.push(line)
+  }
+  return workout.length >= 2 ? { workout, rest } : { workout: [], rest: details }
+}
+
 // Tidy a drafted week: one entry per kind per day (prefer the one with exercises), and no rest
 // or recovery entry on a day that already has a regular commitment.
 export function cleanWeek<T extends { dayOffset: number; kind: string; workout?: unknown[] }>(week: T[], commitmentDays: number[] = []): T[] {
