@@ -1081,38 +1081,29 @@ function ProgressView({
 
   return (
     <div className="page">
-      <header className="page-header progress-header">
+      <header className="page-header progress-header journey-header">
         <div>
           <p className="eyebrow">Where you’re going, and how far you’ve come</p>
           <h1>Your journey</h1>
-          <p>
-            Goals, training, milestones and the moments in between. It grows as you live, and you
-            can edit any of it.
-          </p>
         </div>
-        <Button variant="secondary" icon={PenLine} onClick={() => setReviewing(true)}>
-          Weekly reflection
-        </Button>
       </header>
 
-      <JourneyPhase state={state} onOpenPlan={onJourney} />
-      <JourneyGoals
-        state={state}
-        update={update}
-        onOpenGoal={setSelectedGoalId}
-        onNewGoal={() => setAddingGoal(true)}
-      />
-
-      <div className="progress-grid">
-        <div className="progress-stack">
+      <div className="journey-layout">
+        <WeekDigestCard state={state} update={update} />
+        <JourneyGoals
+          state={state}
+          update={update}
+          onOpenGoal={setSelectedGoalId}
+          onNewGoal={() => setAddingGoal(true)}
+        />
+        <JourneyPhase state={state} onOpenPlan={onJourney} />
+        <JourneyStory state={state} update={update} />
+        <details className="journey-records">
+          <summary>Your records: activity and strength</summary>
           <ActivityHistory state={state} onEditLog={setEditLogId} />
           <StrengthProgress state={state} />
-        </div>
-
-        <WeekDigestCard state={state} update={update} />
+        </details>
       </div>
-
-      <JourneyStory state={state} update={update} />
 
       {reviewing && (
         <WeeklyReview

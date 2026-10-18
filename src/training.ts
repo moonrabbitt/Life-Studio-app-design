@@ -867,7 +867,7 @@ export const PHASES = [
   },
   {
     id: 2,
-    weeks: 8,
+    weeks: 6,
     title: "Base building",
     body: "Build a walking and running base, and develop strength gradually towards two sessions a week.",
     ready: "Move on when walks feel easy and strength sessions are routine.",
@@ -881,7 +881,7 @@ export const PHASES = [
   },
   {
     id: 4,
-    weeks: 16,
+    weeks: 12,
     title: "Half-marathon build",
     body: "Move to a suitable half-marathon programme once current fitness and the time left support it, alongside strength and dance.",
     ready: "If preparation falls behind, reassess the race or plan rather than squeezing training.",

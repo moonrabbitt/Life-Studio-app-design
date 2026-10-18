@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Mic,
   MoveRight,
+  PenLine,
   Pause,
   Play,
   Plus,
@@ -609,7 +610,7 @@ const dateLabelFor = (date: string) =>
   formatDate(date, { weekday: "short", day: "numeric", month: "long", year: "numeric" })
 
 // What's ahead: dated goals counting down, events, and goals still waiting for a date.
-// Goals on the journey: each with its countdown and milestones (some of which are dated events).
+// Where you're heading: one calm row per goal (next milestone, progress, countdown); details are a tap away.
 export function JourneyGoals({
   state,
   update,
@@ -621,6 +622,8 @@ export function JourneyGoals({
   onOpenGoal: (id: string) => void
   onNewGoal: () => void
 }) {
+  const [eventsOpen, setEventsOpen] = useState(false)
+  const [showReached, setShowReached] = useState(false)
   const active = state.goals
     .filter((goal) => goal.status !== "complete")
     .sort((a, b) => {
@@ -630,61 +633,80 @@ export function JourneyGoals({
       return (a.scale === "big" ? 0 : 1) - (b.scale === "big" ? 0 : 1)
     })
   const reached = state.goals.filter((goal) => goal.status === "complete")
+  const goalIds = new Set(active.map((goal) => goal.id))
+  const loose = (state.journeyEvents ?? [])
+    .filter((event) => (!event.goalId || !goalIds.has(event.goalId)) && (!event.date || (event.endDate ?? event.date) >= today()))
+    .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"))
+
   return (
-    <section className="journey-section">
-      <div className="journey-section__head journey-section__head--row">
-        <h2>Goals</h2>
-        <Button variant="secondary" icon={Plus} onClick={onNewGoal}>
-          New goal
-        </Button>
+    <section className="journey-block">
+      <div className="journey-block__head">
+        <h2>Heading towards</h2>
+        <button type="button" className="text-link" onClick={onNewGoal}>
+          <Plus size={14} /> New goal
+        </button>
       </div>
-      {active.length === 0 && <p className="capture-disclaimer">No goals yet. What would you like to grow towards?</p>}
-      <ul className="journey-ahead">
+      {active.length === 0 && loose.length === 0 && (
+        <p className="capture-disclaimer">Nothing yet. Add a goal, or something with a date coming up.</p>
+      )}
+      <ul className="journey-rows">
         {active.map((goal) => {
           const date = goalDate(goal)
           const feeling = goalFeeling(goal)
           const hide = goal.milestones.some((milestone) => milestone.event?.hideCountdown && milestone.event.date === date)
+          const done = goal.milestones.filter((milestone) => milestone.completedAt).length
+          const next = goal.milestones.find((milestone) => !milestone.completedAt)
           return (
             <li key={goal.id}>
-              <div className="journey-ahead__goal">
-                <button type="button" className="journey-ahead__title" onClick={() => onOpenGoal(goal.id)}>
-                  <small className="journey-ahead__kind">{goal.scale === "big" ? "Bigger goal" : "Smaller goal"}</small>
+              <button type="button" className="journey-row" onClick={() => onOpenGoal(goal.id)}>
+                <span className="journey-row__main">
                   <strong>{goal.title}</strong>
-                  {goal.date && <small>Target: {formatDate(goal.date, { day: "numeric", month: "long", year: "numeric" })}</small>}
-                </button>
-                {date && !hide && <span className={`roadmap__countdown ${feeling === "nervous" ? "is-gentle" : ""}`}>{countdown(date, feeling)}</span>}
-              </div>
-              <GoalMilestones goal={goal} state={state} update={update} limit={5} onSeeAll={() => onOpenGoal(goal.id)} />
-              {goal.scale === "big" && !date && (
-                <label className="journey-ahead__date">
-                  <span>Target date (optional)</span>
-                  <input
-                    type="date"
-                    min={today()}
-                    aria-label={`Target date for ${goal.title}`}
-                    onChange={(event) =>
-                      event.target.value &&
-                      update(
-                        (current) => ({
-                          ...current,
-                          goals: current.goals.map((item) =>
-                            item.id === goal.id ? { ...item, date: event.target.value, dateLabel: dateLabelFor(event.target.value) } : item,
-                          ),
-                        }),
-                        "Date added to your journey.",
-                      )
-                    }
-                  />
-                </label>
-              )}
+                  <small>{next ? `Next: ${next.title}` : goal.milestones.length ? "Every milestone done" : goal.nextStep}</small>
+                  {goal.milestones.length > 0 && (
+                    <span className="journey-row__dots" aria-label={`${done} of ${goal.milestones.length} milestones`}>
+                      {goal.milestones.map((milestone) => (
+                        <i key={milestone.id} className={`${milestone.completedAt ? "is-done" : ""} ${milestone.event ? "is-event" : ""}`} />
+                      ))}
+                    </span>
+                  )}
+                </span>
+                {date && !hide ? (
+                  <span className={`roadmap__countdown ${feeling === "nervous" ? "is-gentle" : ""}`}>{countdown(date, feeling)}</span>
+                ) : (
+                  <ChevronRight size={18} className="journey-row__chevron" />
+                )}
+              </button>
             </li>
           )
         })}
+        {loose.map((event) => (
+          <li key={event.id}>
+            <button type="button" className="journey-row journey-row--event" onClick={() => setEventsOpen(true)}>
+              <span className="journey-row__main">
+                <strong>{event.title}</strong>
+                <small>{event.date ? formatDate(event.date, { weekday: "short", day: "numeric", month: "short" }) : "Date TBC"}{event.location ? ` · ${event.location}` : ""}</small>
+              </span>
+              {event.date && !event.hideCountdown ? (
+                <span className={`roadmap__countdown ${event.feeling === "nervous" ? "is-gentle" : ""}`}>{countdown(event.date, event.feeling)}</span>
+              ) : (
+                <ChevronRight size={18} className="journey-row__chevron" />
+              )}
+            </button>
+          </li>
+        ))}
       </ul>
-      <EventsList state={state} update={update} />
-      {reached.length > 0 && (
+      <div className="journey-block__links">
+        <button type="button" className="text-link" onClick={() => setEventsOpen(true)}>
+          <CalendarCheck size={14} /> Events coming up
+        </button>
+        {reached.length > 0 && (
+          <button type="button" className="text-link" onClick={() => setShowReached(!showReached)}>
+            <Sparkles size={14} /> {reached.length} reached
+          </button>
+        )}
+      </div>
+      {showReached && (
         <div className="finished-shelf">
-          <p className="eyebrow">Reached shelf</p>
           <ul>
             {reached.map((goal) => (
               <li key={goal.id}>
@@ -692,9 +714,7 @@ export function JourneyGoals({
                   <Sparkles size={16} />
                   <span>
                     <strong>{goal.title}</strong>
-                    <small>
-                      {goal.milestones.filter((item) => item.completedAt).length} of {goal.milestones.length} {goal.scale === "big" ? "milestones" : "steps"}
-                    </small>
+                    <small>{goal.reachedAt ? `Reached ${formatDate(goal.reachedAt.slice(0, 10), { day: "numeric", month: "short", year: "numeric" })}` : "Reached"}</small>
                   </span>
                 </button>
               </li>
@@ -702,54 +722,51 @@ export function JourneyGoals({
           </ul>
         </div>
       )}
+      {eventsOpen && (
+        <Modal title="Events" eyebrow="Things with a date that aren’t part of a goal" onClose={() => setEventsOpen(false)}>
+          <EventsList state={state} update={update} />
+        </Modal>
+      )}
     </section>
   )
 }
 
 // Where you are in the training programme.
+// Training at a glance: one strip, details in the plan.
 export function JourneyPhase({ state, onOpenPlan }: { state: AppState; onOpenPlan: () => void }) {
-  const { rows, current, week, overRace } = phaseTimeline(state)
-  const next = rows.find((row) => row.id === current.id + 1)
+  const { current, week, overRace } = phaseTimeline(state)
   const percent = Math.round((week / current.weeks) * 100)
   return (
-    <section className="journey-section journey-phase">
-      <div className="journey-section__head">
-        <h2>Where you are</h2>
-      </div>
-      <p className="eyebrow">
-        Phase {current.id} of {rows.length} · week {week} of about {current.weeks}
-      </p>
-      <h3>{current.title}</h3>
-      <div className="goal-progress__track" role="progressbar" aria-label="Through this phase" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-        <span style={{ width: `${percent}%` }} />
-      </div>
-      <small>
-        Started {formatDate(current.start, { day: "numeric", month: "short" })} · until about{" "}
-        {formatDate(current.end, { day: "numeric", month: "short", year: "numeric" })}
-      </small>
-      <p>{current.body}</p>
-      <small>{current.ready} Dates are a guide; move on when you’re ready, not when the calendar says.</small>
-      {next && (
-        <small className="journey-phase__next">
-          Next: {next.title}, from about {formatDate(next.start, { day: "numeric", month: "short" })}
+    <button type="button" className="journey-phase-strip" onClick={onOpenPlan}>
+      <span className="journey-phase-strip__text">
+        <small>Training · phase {current.id} of 5</small>
+        <strong>{current.title}</strong>
+        <small>
+          Week {week} of about {current.weeks} · until {formatDate(current.end, { day: "numeric", month: "short" })}
+          {overRace ? " · may run past race day" : ""}
         </small>
-      )}
-      {overRace && (
-        <p className="events__reassure">
-          At these lengths the half-marathon build would finish after race day. You could shorten a phase, or
-          decide later whether this race is the right one. Either is fine.
-        </p>
-      )}
-      <button type="button" className="text-link" onClick={onOpenPlan}>
-        Adjust phases and lengths <ChevronRight size={14} />
-      </button>
-    </section>
+      </span>
+      <span className="journey-phase-strip__ring" style={{ ["--p" as string]: `${percent}%` }} aria-hidden="true" />
+      <ChevronRight size={18} />
+    </button>
   )
 }
 
 // Your story: everything that happened, plus reflections and moments you add and edit.
 export function JourneyStory({ state, update }: { state: AppState; update: Update }) {
   const [mode, setMode] = useState<"reflect" | "moment">("reflect")
+  const [composing, setComposing] = useState(false)
+  const storyRef = useRef<HTMLElement>(null)
+  // "Reflect" elsewhere on the page (This week card) opens the composer here.
+  useEffect(() => {
+    const open = (event: Event) => {
+      setMode(((event as CustomEvent).detail as "reflect" | "moment") ?? "reflect")
+      setComposing(true)
+      window.setTimeout(() => storyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50)
+    }
+    window.addEventListener("journey:compose", open)
+    return () => window.removeEventListener("journey:compose", open)
+  }, [])
   const [text, setText] = useState("")
   const [title, setTitle] = useState("")
   const [date, setDate] = useState(today())
@@ -767,10 +784,21 @@ export function JourneyStory({ state, update }: { state: AppState; update: Updat
     update((current) => ({ ...current, roadmap: { ...current.roadmap, reflections: recipe(current.roadmap?.reflections ?? []) } }), message)
 
   return (
-    <section className="journey-section">
-      <div className="journey-section__head">
+    <section className="journey-block" ref={storyRef}>
+      <div className="journey-block__head">
         <h2>Your story</h2>
+        {!composing && (
+          <div className="journey-block__head-actions">
+            <button type="button" className="text-link" onClick={() => { setMode("reflect"); setComposing(true) }}>
+              <PenLine size={14} /> Reflect
+            </button>
+            <button type="button" className="text-link" onClick={() => { setMode("moment"); setComposing(true) }}>
+              <Plus size={14} /> Add a moment
+            </button>
+          </div>
+        )}
       </div>
+      {composing && (
       <form
         className="roadmap__reflect"
         onSubmit={(event) => {
@@ -786,6 +814,7 @@ export function JourneyStory({ state, update }: { state: AppState; update: Updat
           setText("")
           setTitle("")
           setDate(today())
+          setComposing(false)
         }}
       >
         <div className="segmented">
@@ -816,12 +845,18 @@ export function JourneyStory({ state, update }: { state: AppState; update: Updat
           aria-label={mode === "moment" ? "About this moment" : "Reflection"}
         />
         <DictateButton onText={(spoken) => setText((current) => (current ? `${current} ${spoken}` : spoken))} />
-        <Button type="submit" variant="secondary" icon={Plus} disabled={mode === "moment" ? !title.trim() : !text.trim()}>
-          {mode === "moment" ? "Add moment" : "Add reflection"}
-        </Button>
+        <div className="inline-actions">
+          <Button type="submit" icon={Plus} disabled={mode === "moment" ? !title.trim() : !text.trim()}>
+            {mode === "moment" ? "Add moment" : "Add reflection"}
+          </Button>
+          <Button variant="ghost" onClick={() => setComposing(false)}>
+            Cancel
+          </Button>
+        </div>
       </form>
+      )}
 
-      {kinds.length > 2 && (
+      {showAll && kinds.length > 2 && (
         <div className="journey-filter" role="group" aria-label="Filter your story">
           {kinds.map((kind) => (
             <button type="button" key={kind} className={filter === kind ? "is-selected" : ""} aria-pressed={filter === kind} onClick={() => setFilter(kind)}>
@@ -834,7 +869,7 @@ export function JourneyStory({ state, update }: { state: AppState; update: Updat
         <p className="capture-disclaimer">Milestones, workouts, reviews, finished projects, reflections and moments gather here as you live.</p>
       ) : (
         <ol className="roadmap__story">
-          {(showAll ? shown : shown.slice(0, 15)).map((entry, index) => (
+          {(showAll ? shown : shown.slice(0, 5)).map((entry, index) => (
             <li key={`${entry.date}-${index}`}>
               <span className="roadmap__story-date">{formatDate(entry.date, { day: "numeric", month: "short" })}</span>
               {editing && editing === entry.reflectionId ? (
@@ -901,9 +936,9 @@ export function JourneyStory({ state, update }: { state: AppState; update: Updat
           ))}
         </ol>
       )}
-      {shown.length > 15 && !showAll && (
-        <button type="button" className="text-link" onClick={() => setShowAll(true)}>
-          Show all {shown.length}
+      {shown.length > 5 && (
+        <button type="button" className="text-link" onClick={() => { setShowAll(!showAll); setFilter("All") }}>
+          {showAll ? "Show less" : `See all ${shown.length}`}
         </button>
       )}
     </section>
