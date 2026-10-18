@@ -1,7 +1,7 @@
 import { ArrowLeft, Compass, RefreshCw, Sparkles, X } from "lucide-react"
 import { useState } from "react"
 import { draftTrainingPlan, type PlanDraft } from "./ai"
-import { startNewPlan } from "./training"
+import { cleanWeek, startNewPlan } from "./training"
 import type { AppState, Goal, TrainingPlan } from "./types"
 import { Button, formatDate, today, uid } from "./ui"
 
@@ -58,7 +58,7 @@ export function ChangeDirection({ state, update, onDone, onCancel, onEditProfile
       summary: draft.summary,
       createdAt: new Date().toISOString(),
       phases: draft.phases.map((phase, index) => ({ ...phase, id: index + 1, weeks: Math.max(1, Math.min(52, phase.weeks || 1)) })),
-      week: draft.week.map((session) => ({
+      week: cleanWeek(draft.week).map((session) => ({
         ...session,
         time: session.time && /^\d{2}:\d{2}$/.test(session.time) ? session.time : undefined,
         duration: Math.max(5, Math.min(240, session.duration || 30)),

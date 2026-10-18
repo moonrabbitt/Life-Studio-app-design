@@ -207,12 +207,15 @@ export function applyAction(current: AppState, action: StudioAction): AppState {
     }
     case "move_plan":
     case "complete_plan":
+    case "set_aside_plan":
       return {
         ...current,
         plan: current.plan.map((item) =>
           item.id !== action.planId
             ? item
-            : action.type === "complete_plan"
+            : action.type === "set_aside_plan"
+              ? { ...item, status: "let-go" }
+              : action.type === "complete_plan"
               ? { ...item, status: "complete" }
               : {
                   ...item,
@@ -398,6 +401,10 @@ export function destinationOf(action: StudioAction, state: AppState): { label: s
         to: { kind: "plan", date: target },
       }
     }
+    case "set_aside_plan": {
+      const item = state.plan.find((candidate) => candidate.id === action.planId)
+      return { label: "Set aside · it’s under Plan → Set aside", to: { kind: "plan", date: item?.date ?? date } }
+    }
     case "log_activity":
       return { label: "Logged in your Plan and Journey", to: { kind: "plan", date } }
     default:
@@ -408,7 +415,7 @@ export function destinationOf(action: StudioAction, state: AppState): { label: s
 
 // Moving or completing needs a real, still-open plan item.
 export function isValidAction(state: AppState, action: StudioAction) {
-  if (action.type === "move_plan" || action.type === "complete_plan")
+  if (action.type === "move_plan" || action.type === "complete_plan" || action.type === "set_aside_plan")
     return state.plan.some((item) => item.id === action.planId && item.status !== "complete")
   if (action.type === "log_activity" && action.planId)
     return state.plan.some((item) => item.id === action.planId && item.status !== "complete")

@@ -327,6 +327,7 @@ export type PlanWeekSession = {
   intensity: "light" | "moderate" | "hard"
   details: string[]
   optional?: boolean
+  workout?: PlannedExercise[]
 }
 
 export type TrainingPlan = {

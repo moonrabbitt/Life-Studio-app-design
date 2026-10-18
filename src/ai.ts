@@ -7,6 +7,7 @@ export type StudioAction = {
     | "add_plan"
     | "move_plan"
     | "complete_plan"
+    | "set_aside_plan"
     | "add_journal"
     | "add_project"
     | "add_goal"
@@ -233,6 +234,19 @@ export const suggestGymSession = (
     equipmentToday: details.equipment,
   })
 
+export type SessionPlan = CoachSuggestion & { duration: number; details: string[] }
+
+// Studio plans one session (gym, run, walk or dance) with the whole week, phase, goals and body in mind.
+export const planSession = (
+  state: AppState,
+  session: { kind: ActivityKind; date: string; time?: string; duration?: number; title?: string; note?: string },
+) =>
+  ai<SessionPlan>("coach", session.note || `Plan this ${session.kind} session for ${session.date}.`, {
+    ...studioContext(state),
+    session,
+    energy: state.checkIn,
+  })
+
 export const suggestProjectSteps = (project: {
   title: string
   note: string
@@ -311,6 +325,7 @@ export type PlanDraft = {
     intensity: "light" | "moderate" | "hard"
     details: string[]
     optional: boolean
+    workout: PlannedExercise[]
   }[]
 }
 
@@ -352,6 +367,8 @@ export type SetupDraft = {
   density: "one" | "few" | "full"
   profile: { equipment: "gym" | "machines" | "dumbbells" | "home" | "not-sure"; gymExperience: string; days: string[]; minutes: string; concern: "no" | "yes" | "not-sure"; concernNote: string }
   goals: { title: string; area: "reflect" | "create" | "connect" | "move" | "money" | "home"; scale: "small" | "big"; date: string | null; why: string; milestones: string[] }[]
+  // Things they already do on a set day: stay on that day, every week.
+  commitments: { title: string; kind: "gym" | "walk" | "run" | "dance" | "recovery" | "social" | "create" | "none"; area: "reflect" | "create" | "connect" | "move" | "money" | "home"; dayOffset: number; frequency: "weekly" | "fortnightly"; time: string | null; duration: number }[]
   training: { include: boolean; purpose: string; targetDate: string | null; summary: string; phases: PlanDraft["phases"]; week: PlanDraft["week"] }
   routines: { title: string; frequency: "daily" | "weekdays" | "weekly"; time: string | null; duration: number }[]
 }

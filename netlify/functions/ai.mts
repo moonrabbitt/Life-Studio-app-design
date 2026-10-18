@@ -49,6 +49,9 @@ TIMING
 - Do not put two moderate or hard sessions (gym, run, dance class) on the same day. Keep the day
   after a dance class (wasClass) or a hard/very-hard log light. Respect recovery days (kind recovery).
 - Leave space: no more than one exercise session a day, and not every day.
+- Look at the shape of the whole fortnight (context.recentLogs behind, context.plan ahead): after two
+  or three active days in a row, the next day is rest or recovery; spread hard days out; and keep
+  the total sensible for their phase.
 - Never pile missed or skipped sessions onto later days. Do not raise workload just because a week
   has passed; base it on recent logs (effort, concern) in context.recentLogs.
 - In "details", the first line explains the timing choice in plain words (e.g. "Thursday 18:30:
@@ -136,6 +139,7 @@ const assistSchema = {
                 "add_plan",
                 "move_plan",
                 "complete_plan",
+                "set_aside_plan",
                 "add_journal",
                 "add_project",
                 "add_goal",
@@ -210,7 +214,16 @@ their plan items (with ids), and goals. Rules:
 - Dates are YYYY-MM-DD, resolved relative to context.today. Times are 24h HH:MM. Duration in minutes.
 - add_plan: title, date, time, duration, area, mode (fixed = appointment, flexible = can move,
   maybe = optional), kind, goalId, why, details. For a gym session also fill workout.
-- move_plan / complete_plan: planId MUST be an id from context.plan; move_plan needs the new date (and time if given).
+- move_plan / complete_plan / set_aside_plan: planId MUST be an id from context.plan; move_plan needs
+  the new date (and time if given). set_aside_plan lets an item go (it waits on the Set aside shelf,
+  no catching up).
+- SOMETHING CAME UP: when the user says plans changed ("working late Thursday", "I'm ill", "friends
+  are visiting this weekend", "I'm exhausted"), look at every plan item affected (in context.plan,
+  with ids) and propose the reshuffle as several actions: move_plan for what still matters to a day and
+  time that fits (check context.busy, keep rest days after hard ones, never two hard sessions on one
+  day, never stack missed sessions), and set_aside_plan for optional or less important items rather than
+  cramming them in. Fixed commitments stay unless they say otherwise. If they're ill or exhausted,
+  prefer setting things aside and suggest rest. In "reply", say plainly what moves where and why.
 - add_journal: title + body in the user's own words (lightly tidied, never invented feelings).
 - add_project: creative idea; title, body (note), nextAction.
 - add_goal: title, area, scale, nextStep in nextAction, 0-4 milestone titles.
@@ -234,8 +247,10 @@ const coachSchema = {
   schema: {
     type: "object",
     additionalProperties: false,
-    required: ["title", "summary", "why", "goalId", "exercises"],
+    required: ["title", "summary", "why", "goalId", "duration", "details", "exercises"],
     properties: {
+      duration: { type: "integer" },
+      details: { type: "array", items: { type: "string" } },
       title: { type: "string" },
       summary: { type: "string" },
       why: { type: "string" },
@@ -254,11 +269,29 @@ const coachSchema = {
 
 const COACH_INSTRUCTIONS = `${TONE}
 
-Suggest one gentle, editable gym session for someone returning to movement. Return a short title,
-a one-sentence summary (effort guidance like "finish with energy left"), "why" (one sentence on how
-this session serves their goal), goalId (from context.goals, or null), and 3-5 exercises. Each
-exercise has an exact name, sets, reps, rest, load, a one-line why, and a cue (one technique tip).
-Respect the energy level and equipment: low energy means 3 exercises and one set.
+Plan ONE session of kind context.session.kind on context.session.date (a gym, run, walk or dance
+session the user is adding or already has in their calendar). Base it on the whole picture, not just
+this day:
+- The week around it: context.recentLogs (what they actually did, with effort) and context.plan (what
+  else is planned). If they have trained hard two or three days running, or a hard session or dance
+  class is the day before or after, make this one lighter and say so; if they have rested for a while,
+  start gently. Their training phase (context.phase), goals, About me (body, energy, health goals) and
+  notes always apply.
+Return: a short title; a one-sentence summary with effort guidance ("finish with energy left");
+"why" (how this session serves their goal, naming it, and how it fits this week); goalId (from
+context.goals, or null); "duration" in minutes (keep within context.session.duration if given);
+"details": 2-4 short, concrete lines.
+- gym: 3-6 "exercises", each with an exact name, sets, reps, rest, load (from their recent workouts if
+  there; otherwise "a weight you could lift 3-4 more times" or "bodyweight"), a one-line why and a cue
+  (one technique tip). Adapt to their body notes and equipment. Low energy means 3 exercises, one set.
+  "details" covers the warm-up and cool-down.
+- run or walk: "exercises": []. "details" gives the exact shape: total time, any run/walk intervals
+  (e.g. "5 min brisk walk, then 6 × (1 min run, 90 s walk), 5 min walk"), effort by feel
+  ("conversational pace"), and where it sits in their progression (from recent runs and their phase:
+  no structured running before their plan or logs show they can run a little). For a race goal, keep
+  long-run growth gradual.
+- dance: "exercises": []. "details" gives duration, one focus (technique, stamina, a routine) and a
+  warm-up.
 
 ${PLANNING}`
 
@@ -349,8 +382,9 @@ const replanSchema = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["dayOffset", "title", "kind", "time", "duration", "intensity", "details", "optional"],
+          required: ["dayOffset", "title", "kind", "time", "duration", "intensity", "details", "optional", "workout"],
           properties: {
+            workout: { type: "array", items: workoutItem },
             dayOffset: { type: "integer" },
             title: { type: "string" },
             kind: { type: "string", enum: ["gym", "walk", "run", "dance", "recovery", "journal", "reset"] },
@@ -386,6 +420,23 @@ the current plan they are leaving, busy calendar slots).
   e.g. "3 sets of 8 goblet squats, a weight that leaves 2-3 reps in reserve"). Mark extras "optional".
 - Keep anything from their other goals that still matters (for example dance) as part of the week,
   unless the request says to drop it.
+- Things they already do on a set day (a regular class, a club, a standing plan, anything in "Keep in
+  my week" or already repeating in context.plan) stay on EXACTLY that day and time. Do not move them
+  and do not add a second one; count them in the week's load (e.g. yoga is recovery or mobility, a
+  dance class is a hard day) and plan the other sessions around them.
+- Plan the WHOLE week, all seven days: every day that has no session and no commitment gets an entry
+  that says what that day is for: kind "recovery", title "Rest day" (duration 5, details like "Full
+  rest: sleep, eat well, an easy stroll if you fancy it") or "Recovery: gentle mobility" (10-20 min,
+  light, with 2-3 named stretches or mobility moves), optional true. Put recovery after hard days.
+  The user can still add extra sessions on top.
+- Every "gym" session MUST have "workout": 4-6 exercises, each with an exact name ("Goblet squat",
+  "Seated cable row"), sets (2 at the start; 1 if they are new or low on energy), reps ("8-10" or
+  "20-30 seconds"), rest ("60-90 seconds"), load ("bodyweight", or "a weight you could lift 3-4 more
+  times" when there is no record, or the weight from their recent workouts), and a one-line why that
+  names what it strengthens and the goal it helps. Cover legs (squat or leg press), a hinge or bridge,
+  a push, a pull and core, matched to their equipment and adapted to their body notes (e.g. box squats
+  or leg press instead of deep squats or lunges for sore knees). Different gym days in the week use
+  different exercises or emphasis. Non-gym sessions have "workout": [].
 - "summary": 2-3 warm sentences on the shape of the plan and why it suits them now.
 - "goalTitle": a short goal title for the purpose, in their words where possible.
 - "cautions": one sentence of honest caveats (e.g. tight timelines, pain needing a professional), or "".
@@ -425,7 +476,7 @@ const setupSchema = {
   schema: {
     type: "object",
     additionalProperties: false,
-    required: ["welcome", "aboutMe", "priorities", "density", "profile", "goals", "training", "routines"],
+    required: ["welcome", "aboutMe", "priorities", "density", "profile", "goals", "commitments", "training", "routines"],
     properties: {
       welcome: { type: "string" },
       aboutMe: {
@@ -487,6 +538,23 @@ const setupSchema = {
           week: replanSchema.schema.properties.week,
         },
       },
+      commitments: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["title", "kind", "area", "dayOffset", "frequency", "time", "duration"],
+          properties: {
+            title: { type: "string" },
+            kind: { type: "string", enum: ["gym", "walk", "run", "dance", "recovery", "social", "create", "none"] },
+            area,
+            dayOffset: { type: "integer" },
+            frequency: { type: "string", enum: ["weekly", "fortnightly"] },
+            time: nullable("string"),
+            duration: { type: "integer" },
+          },
+        },
+      },
       routines: {
         type: "array",
         items: {
@@ -521,18 +589,35 @@ where they skipped something, stay gentle and general rather than inventing deta
   goal), "small" for things done in a few weeks. "date" YYYY-MM-DD only if they gave one. "why" is
   their reason in one line. "milestones": 2-4 concrete, celebratable steps in order; for an event,
   the last milestone is the event itself.
+- "commitments": things they ALREADY do regularly on a set day: classes (yoga with their sister on
+  Tuesdays, a dance class), clubs, standing plans. dayOffset 0 = Monday … 6 = Sunday, the exact day they
+  said; time "HH:MM" if they gave one, else null; duration in minutes (60 if unsaid). kind "recovery" for
+  yoga, pilates or stretching, "dance" for dance classes, "social" for plans with people, "none" if not
+  movement. These go into their calendar on that day every week; never put them in training.week too.
 - "training": include true if they want to move more or train for something. Then write a plan like a
   careful coach: 3-6 phases (title 2-4 words, realistic weeks, body, ready = how they'll know they're
   ready to move on, from how it feels and their logs) that start where they actually are, respect
   their body notes, and fit their target date if any (phases before the last finish by it). "week" is
-  phase 1's typical week: 3-7 sessions on their realistic days and session length, recovery between
-  hard days, a 10-minute Sunday check-in (kind "journal"), concrete details (exact exercises, sets,
-  reps, effort), adapted to any injury or energy pattern they mentioned. If include is false, use
+  phase 1's typical week: 3-7 sessions on their realistic days and session length, planned around
+  their commitments (never on top of them or duplicating them; count them in the week's load), recovery
+  between hard days, a rest or recovery entry on every day without a session or commitment (kind
+  "recovery", optional, "Rest day" or "Recovery: gentle mobility" with named moves), a 10-minute Sunday
+  check-in (kind "journal"), concrete details, adapted to any
+  injury or energy pattern they mentioned. Every gym session has a full "workout" (see the gym rule
+  below). If include is false, use
   empty strings, null and empty arrays.
 - "routines": 0-4 small home or self-care routines they mentioned or would clearly help (e.g. a
   Sunday reset). time "HH:MM" or null.
 - No calorie, weight-loss or body-shape targets. Pain or a condition means gentler starts and a note
-  to check with a professional, never a diagnosis.`
+  to check with a professional, never a diagnosis.
+- Every "gym" session MUST have "workout": 4-6 exercises, each with an exact name ("Goblet squat",
+  "Seated cable row"), sets (2 at the start; 1 if they are new or low on energy), reps ("8-10" or
+  "20-30 seconds"), rest ("60-90 seconds"), load ("bodyweight", or "a weight you could lift 3-4 more
+  times" when there is no record, or the weight from their recent workouts), and a one-line why that
+  names what it strengthens and the goal it helps. Cover legs (squat or leg press), a hinge or bridge,
+  a push, a pull and core, matched to their equipment and adapted to their body notes (e.g. box squats
+  or leg press instead of deep squats or lunges for sore knees). Different gym days in the week use
+  different exercises or emphasis. Non-gym sessions have "workout": [].`
 
 const GUIDE_INSTRUCTIONS = `${TONE}
 

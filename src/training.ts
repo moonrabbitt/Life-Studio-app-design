@@ -253,6 +253,18 @@ export function buildRestartFortnight(start: string): PlanItem[] {
   )
 }
 
+// Tidy a drafted week: one entry per kind per day (prefer the one with exercises), and no rest
+// or recovery entry on a day that already has a regular commitment.
+export function cleanWeek<T extends { dayOffset: number; kind: string; workout?: unknown[] }>(week: T[], commitmentDays: number[] = []): T[] {
+  const kept: T[] = []
+  for (const session of [...week].sort((a, b) => (b.workout?.length ?? 0) - (a.workout?.length ?? 0))) {
+    if (session.kind === "recovery" && commitmentDays.includes(session.dayOffset)) continue
+    if (kept.some((other) => other.dayOffset === session.dayOffset && other.kind === session.kind)) continue
+    kept.push(session)
+  }
+  return kept.sort((a, b) => a.dayOffset - b.dayOffset)
+}
+
 // Adds one week of your plan's sessions as proposals, from the Monday given (skipping duplicates).
 export function addPlanWeek(state: AppState, monday: string): AppState {
   const plan = state.trainingPlan
@@ -271,6 +283,7 @@ export function addPlanWeek(state: AppState, monday: string): AppState {
         duration: session.duration,
         intensity: session.intensity,
         details: session.details,
+        workout: session.kind === "gym" && session.workout?.length ? session.workout : undefined,
         optional: session.optional || undefined,
         mode: session.optional ? "maybe" : "flexible",
         status: "proposed",
@@ -393,6 +406,9 @@ export function acceptWeek(state: AppState, batch: string): AppState {
 
 const open = (item: PlanItem) =>
   item.status === "planned" || item.status === "proposed"
+
+// A planned rest day: part of the plan, nothing to start.
+export const isRestDay = (item: PlanItem) => item.kind === "recovery" && /^rest( day)?\b/i.test(item.title.trim())
 
 export function nextUsefulAction(plan: PlanItem[], todayDate: string, now = new Date()) {
   const minutes = now.getHours() * 60 + now.getMinutes()

@@ -1,11 +1,12 @@
 import type { SetupDraft } from "./ai"
 import { createSeries, REPEAT_LABELS } from "./series"
-import { startNewPlan } from "./training"
+import { cleanWeek, startNewPlan } from "./training"
 import type { AboutMe, AppState, Goal, TrainingPlan } from "./types"
 import { formatDate, today, uid } from "./ui"
 
 export type SetupChoices = {
   goals: boolean[]
+  commitments: boolean[]
   training: boolean
   routines: boolean[]
   aboutMe: Omit<AboutMe, "updatedAt">
@@ -86,7 +87,7 @@ export function applySetup(state: AppState, draft: SetupDraft, choices: SetupCho
       summary: training.summary,
       createdAt: new Date().toISOString(),
       phases: training.phases.slice(0, 6).map((phase, index) => ({ ...phase, id: index + 1, weeks: Math.max(1, Math.min(52, phase.weeks || 1)) })),
-      week: training.week.map((session) => ({
+      week: cleanWeek(training.week, (draft.commitments ?? []).filter((_, index) => choices.commitments?.[index]).map((item) => item.dayOffset)).map((session) => ({
         ...session,
         time: session.time && /^\d{2}:\d{2}$/.test(session.time) ? session.time : undefined,
         duration: Math.max(5, Math.min(240, session.duration || 30)),
@@ -95,6 +96,28 @@ export function applySetup(state: AppState, draft: SetupDraft, choices: SetupCho
     }
     next = startNewPlan(next, plan, "Set up again from the top")
   }
+
+  // Regular commitments go in on their own day, every week (fixed, so nothing gets planned on top).
+  ;(draft.commitments ?? [])
+    .filter((_, index) => choices.commitments?.[index])
+    .forEach((commitment) => {
+      const created = createSeries(
+        next,
+        {
+          title: commitment.title,
+          area: commitment.area,
+          kind: commitment.kind === "none" ? undefined : commitment.kind,
+          intensity: commitment.kind === "recovery" || commitment.kind === "walk" ? "light" : commitment.kind === "none" || commitment.kind === "social" || commitment.kind === "create" ? undefined : "moderate",
+          mode: "fixed",
+          time: commitment.time && /^\d{2}:\d{2}$/.test(commitment.time) ? commitment.time : undefined,
+          duration: commitment.duration || 60,
+          details: ["Something you already do every week."],
+        },
+        commitment.frequency,
+        nextWeekday(now, commitment.dayOffset),
+      )
+      next = created.state
+    })
 
   draft.routines
     .filter((_, index) => choices.routines[index])
@@ -119,6 +142,14 @@ export function applySetup(state: AppState, draft: SetupDraft, choices: SetupCho
     })
 
   return next
+}
+
+// The first date on or after `from` that falls on dayOffset (0 = Monday … 6 = Sunday).
+export function nextWeekday(from: string, dayOffset: number) {
+  const date = new Date(`${from}T12:00:00`)
+  const target = Math.max(0, Math.min(6, Math.round(dayOffset)))
+  while ((date.getDay() + 6) % 7 !== target) date.setDate(date.getDate() + 1)
+  return date.toISOString().slice(0, 10)
 }
 
 // Bring back what was archived when you set up again (anything not already there).

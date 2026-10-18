@@ -36,6 +36,7 @@ const QUICK: { label: string; send?: string; hint?: string }[] = [
   { label: "Plan my day", send: "Help me plan a balanced day with what I already have." },
   { label: "What’s next?", send: "What would be the most useful thing to do next?" },
   { label: "Log what I did", hint: "e.g. walked 25 minutes, felt easy" },
+  { label: "Something came up", hint: "e.g. I’m working late Thursday and away Saturday" },
   { label: "Move something", hint: "e.g. move tonight’s gym to Thursday" },
   { label: "Plan a gym session", send: "Plan a gentle gym session for this week that supports my goals." },
   { label: "Add a goal", hint: "e.g. a goal to run 5k by March" },

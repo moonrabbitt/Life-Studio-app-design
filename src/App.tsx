@@ -128,6 +128,7 @@ import { AboutMeSpace } from "./AboutMe"
 import { SetupChat } from "./SetupChat"
 import { applySetup } from "./setup"
 import { Tour } from "./Tour"
+import { SessionPlanner, type PlannedSession } from "./SessionPlanner"
 import { VoiceNoteList } from "./VoiceNotes"
 import { WeekDigestCard } from "./WeekDigest"
 import { Art, Button, formatDate, IconButton, Modal, RemoveContext, SwipeHint, SwipeRow, today, uid, useRemove } from "./ui"
@@ -445,6 +446,17 @@ function TodayView({
                   Add to today
                 </Button>
               </div>
+            )}
+            {visibleItems.length > 0 && (
+              <button
+                type="button"
+                className="text-link today-came-up"
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent("studio:open", { detail: { hint: "What came up? e.g. working late tonight, away Saturday" } }))
+                }
+              >
+                Something came up? Studio can reshuffle
+              </button>
             )}
             {visibleItems.length ? (
               <div className="today-list">
@@ -2895,12 +2907,14 @@ function PreferencesSpace({
 }
 
 function AddPlanModal({
+  state,
   date,
   goals,
   plan,
   onClose,
   onSave,
 }: {
+  state: AppState
   date: string
   goals: Goal[]
   plan: PlanItem[]
@@ -2914,6 +2928,9 @@ function AddPlanModal({
     kind?: ActivityKind
     repeat?: RepeatFrequency
   }>({ date })
+  // A session Studio planned (or a saved workout) for this slot.
+  const [planned, setPlanned] = useState<PlannedSession | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const preview = checkPlacement(
     plan,
     {
@@ -2937,6 +2954,7 @@ function AddPlanModal({
       onClose={onClose}
     >
       <form
+        ref={formRef}
         className="plan-form"
         onChange={(event) => {
           const data = new FormData(event.currentTarget)
@@ -2974,6 +2992,9 @@ function AddPlanModal({
             mode: String(data.get("mode")) as PlanItem["mode"],
             status: "planned",
             goalId: String(data.get("goalId") || "") || undefined,
+            ...(planned && kind
+              ? { details: planned.details.length ? planned.details : undefined, workout: kind === "gym" ? planned.workout : undefined }
+              : {}),
             steps: steps.map((title) => ({
               id: uid(),
               title,
@@ -3060,6 +3081,41 @@ function AddPlanModal({
             <option value="dance">Dance</option>
           </select>
         </label>
+        {draft.kind && ["gym", "run", "walk", "dance"].includes(draft.kind) && (
+          planned ? (
+            <div className="session-planner is-result">
+              <p className="eyebrow">Session planned</p>
+              <strong>{planned.title}</strong>
+              <small>
+                {planned.workout?.length ? `${planned.workout.length} exercises, ready to follow` : "Details added"}
+              </small>
+              <button type="button" className="text-link" onClick={() => setPlanned(null)}>
+                Change
+              </button>
+            </div>
+          ) : (
+            <SessionPlanner
+              state={state}
+              kind={draft.kind}
+              date={draft.date}
+              time={draft.time}
+              duration={draft.duration}
+              title={String(new FormData(formRef.current ?? undefined).get("title") || "") || undefined}
+              onUse={(session) => {
+                setPlanned(session)
+                const form = formRef.current
+                if (!form) return
+                const titleInput = form.elements.namedItem("title") as HTMLInputElement | null
+                const durationInput = form.elements.namedItem("duration") as HTMLInputElement | null
+                if (titleInput && !titleInput.value.trim() && session.title) titleInput.value = session.title
+                if (durationInput && !durationInput.value && session.duration) {
+                  durationInput.value = String(session.duration)
+                  setDraft((current) => ({ ...current, duration: session.duration }))
+                }
+              }}
+            />
+          )
+        )}
         {(preview.conflicts.length > 0 || preview.warnings.length > 0) && (
           <div className="move-sheet__preview" role="status">
             <p className="eyebrow">Before you add it</p>
@@ -4040,7 +4096,9 @@ export default function App() {
   // Anywhere can open Studio (e.g. Movement's "Plan with Studio"), optionally focused on movement.
   useEffect(() => {
     const onOpen = (event: Event) => {
-      setChatFocus((event as CustomEvent<{ focus?: "move" }>).detail?.focus)
+      const detail = (event as CustomEvent<{ focus?: "move"; hint?: string }>).detail
+      setChatFocus(detail?.focus)
+      if (detail?.hint) setChatHint(detail.hint)
       setSpace(null)
       setCapture(true)
     }
@@ -4254,6 +4312,7 @@ export default function App() {
 
       {addDate && (
         <AddPlanModal
+          state={state}
           date={addDate}
           goals={state.goals}
           plan={state.plan}

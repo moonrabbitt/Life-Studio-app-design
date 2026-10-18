@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react"
 import { useState, type ReactNode } from "react"
+import { SessionPlanner } from "./SessionPlanner"
 import { areaMeta } from "./data"
 import { celebrateDone } from "./GoalProjectViews"
 import { projectSteps } from "./projects"
@@ -24,7 +25,7 @@ import {
   removePlanItem,
   skipOccurrence,
 } from "./series"
-import { buildIntroSession, checkPlacement } from "./training"
+import { buildIntroSession, checkPlacement, isRestDay } from "./training"
 import {
   ActivityButtons,
   DictateButton,
@@ -308,6 +309,17 @@ export function PlanItemSheet({
             ))}
           </ul>
         )}
+        {open && !isRestDay(item) && (item.kind === "run" || item.kind === "walk" || item.kind === "dance") && (
+          <SessionPlanner
+            state={state}
+            kind={item.kind}
+            date={item.date}
+            time={item.time}
+            duration={item.duration}
+            title={item.title}
+            onUse={(session) => patch({ details: session.details, duration: item.duration ?? session.duration }, "Session planned. Change anything you like.")}
+          />
+        )}
         {item.workout?.length ? (
           editingWorkout ? (
             <WorkoutEditor
@@ -351,8 +363,22 @@ export function PlanItemSheet({
             />
           ) : (
             <div className="plan-sheet__gym-tools">
+              <SessionPlanner
+                state={state}
+                kind="gym"
+                date={item.date}
+                time={item.time}
+                duration={item.duration}
+                title={item.title}
+                onUse={(session) =>
+                  patch(
+                    { workout: session.workout, details: session.details.length ? session.details : item.details, duration: item.duration ?? session.duration },
+                    "Exercises added. Change anything you like.",
+                  )
+                }
+              />
               <button type="button" className="text-link" onClick={() => setEditingWorkout(true)}>
-                <Pencil size={14} /> Customise exercises
+                <Pencil size={14} /> Or write your own
               </button>
               {(state.workoutTemplates ?? []).length > 0 && (
                 <label className="plan-sheet__field">

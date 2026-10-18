@@ -48,6 +48,7 @@ import {
   nextMonday,
   nextUsefulAction,
   addPlanWeek,
+  isRestDay,
   phasesOf,
   phaseTimeline,
   RESTART_START,
@@ -298,6 +299,7 @@ export function ActivityButtons({
   preferShort?: boolean
 }) {
   if (item.status === "complete" || item.status === "let-go") return null
+  if (isRestDay(item)) return <p className="activity-buttons__rest">Rest is part of the plan. Add something on top if you feel like it.</p>
   const shortFirst = preferShort && !!item.shortVersion
   return (
     <div className="activity-buttons">

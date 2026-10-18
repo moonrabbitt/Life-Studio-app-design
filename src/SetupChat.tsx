@@ -14,6 +14,7 @@ type Topic = {
 }
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+const FULL_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 const TOPICS: Topic[] = [
   { key: "name", question: "First, what should I call you?", chips: [] },
@@ -49,7 +50,7 @@ const TOPICS: Topic[] = [
   },
   {
     key: "week",
-    question: "What does a normal week look like? Your work hours, and which days could realistically have a session (and for how long)?",
+    question: "What does a normal week look like? Your work hours, anything you already do on a set day (like a Tuesday class), and which days could realistically have a session?",
     chips: [...DAYS, "About 30 min", "About 45 min", "An hour"],
     multi: true,
   },
@@ -102,6 +103,7 @@ function basicDraft(answers: Record<string, string[]>): SetupDraft {
     density: /one/i.test(density) ? "one" : /full/i.test(density) ? "full" : "few",
     profile: { equipment: "not-sure", gymExperience: "not-sure", days: DAYS.filter((day) => said("week").includes(day)), minutes: "", concern: /nothing/i.test(said("body")) || !said("body") ? "no" : "not-sure", concernNote: "" },
     goals: [],
+    commitments: [],
     training: { include: false, purpose: "", targetDate: null, summary: "", phases: [], week: [] },
     routines: [],
   }
@@ -183,6 +185,7 @@ export function SetupChat({
     setDraft(result)
     setChoices({
       goals: result.goals.map(() => true),
+      commitments: (result.commitments ?? []).map(() => true),
       training: result.training.include,
       routines: result.routines.map(() => true),
       aboutMe: { ...result.aboutMe },
@@ -277,6 +280,28 @@ export function SetupChat({
             ))}
           </section>
         )}
+        {(draft.commitments ?? []).length > 0 && (
+          <section>
+            <h3>Already in your week</h3>
+            <p className="capture-disclaimer">These stay on their day every week, and training is planned around them.</p>
+            {draft.commitments.map((commitment, index) => (
+              <label className="setup-review__pick" key={index}>
+                <input
+                  type="checkbox"
+                  checked={choices.commitments[index]}
+                  onChange={() => setChoices({ ...choices, commitments: choices.commitments.map((value, position) => (position === index ? !value : value)) })}
+                />
+                <span>
+                  <strong>{commitment.title}</strong>
+                  <small>
+                    {commitment.frequency === "fortnightly" ? "Every other" : "Every"} {FULL_DAYS[Math.max(0, Math.min(6, commitment.dayOffset))]}
+                    {commitment.time ? ` · ${commitment.time}` : ""} · {commitment.duration} min
+                  </small>
+                </span>
+              </label>
+            ))}
+          </section>
+        )}
         {draft.training.include && draft.training.phases.length > 0 && (
           <section>
             <h3>Training plan</h3>
@@ -301,7 +326,10 @@ export function SetupChat({
                 .map((session, index) => (
                   <li key={index}>
                     <b>{DAYS[Math.max(0, Math.min(6, session.dayOffset))]}</b>
-                    <span>{session.title}</span>
+                    <span>
+                      {session.title}
+                      {session.workout?.length ? <small> · {session.workout.length} exercises</small> : null}
+                    </span>
                     <small>{session.duration} min</small>
                   </li>
                 ))}
