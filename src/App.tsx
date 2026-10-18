@@ -2881,7 +2881,7 @@ function PreferencesSpace({
               variant="danger"
               onClick={() =>
                 window.confirm(
-                  "Start a fresh studio? This clears this journey.",
+                  "Start completely fresh? This clears everything (goals, plans, logs, journal, people, projects) on every synced device, then takes you through setup again. Download a backup first if you might want any of it.",
                 ) && reset?.("empty")
               }
             >
@@ -4093,6 +4093,7 @@ export default function App() {
               goals: demoState.goals,
             }),
         onboarded: true,
+        tourDone: false,
         priorities,
         density,
       }),

@@ -254,7 +254,8 @@ export function useLifeStudioState() {
   const reset = useCallback(
     (kind: "demo" | "empty") => {
       commit(() =>
-        kind === "demo" ? tidyProjects(demoState) : { ...emptyState, onboarded: true },
+        // Starting fresh goes back to the setup conversation (and then the tour).
+        kind === "demo" ? tidyProjects(demoState) : { ...emptyState, name: stateRef.current.name, onboarded: false },
       )
       flash(
         kind === "demo"
