@@ -94,6 +94,9 @@ function phaseSummary(state: AppState) {
   const { current, week, rows } = phaseTimeline(state)
   const next = rows.find((row) => row.id === current.id + 1)
   return {
+    trainingFor: state.trainingPlan
+      ? { purpose: state.trainingPlan.purpose, targetDate: state.trainingPlan.targetDate, typicalWeek: state.trainingPlan.week }
+      : "Restart, then Hackney Half (16 May 2027) and FairPlay dance camp",
     number: current.id,
     title: current.title,
     focus: current.body,
@@ -290,3 +293,45 @@ export function digestContext(state: AppState, weekStart: string) {
 
 export const weeklyDigest = (state: AppState, weekStart: string) =>
   ai<WeeklyDigest>("digest", "Write my weekly digest.", digestContext(state, weekStart))
+
+export type PlanDraft = {
+  summary: string
+  goalTitle: string
+  cautions: string
+  phases: { title: string; weeks: number; body: string; ready: string }[]
+  week: {
+    dayOffset: number
+    title: string
+    kind: "gym" | "walk" | "run" | "dance" | "recovery" | "journal" | "reset"
+    time: string | null
+    duration: number
+    intensity: "light" | "moderate" | "hard"
+    details: string[]
+    optional: boolean
+  }[]
+}
+
+// Studio writes a new training plan for a new purpose.
+export const draftTrainingPlan = (
+  state: AppState,
+  request: { purpose: string; why: string; targetDate: string; days: string[]; minutes: string; keep: string },
+) => {
+  const base = studioContext(state)
+  return ai<PlanDraft>(
+    "replan",
+    [
+      `My new purpose: ${request.purpose}`,
+      request.why && `Why it's changed: ${request.why}`,
+      request.targetDate && `Target date: ${request.targetDate}`,
+      request.keep && `Keep in my week: ${request.keep}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    {
+      ...base,
+      targetDate: request.targetDate || null,
+      profile: { ...base.profile, days: request.days.length ? request.days : base.profile?.days, minutes: request.minutes || base.profile?.minutes },
+      leavingPlan: { phase: base.phase, purpose: state.trainingPlan?.purpose ?? "Restart, then Hackney Half and dance camp" },
+    },
+  )
+}

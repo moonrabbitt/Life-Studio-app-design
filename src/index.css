@@ -8674,3 +8674,192 @@ label.proposal-action .planned-workout li {
   color: var(--ink-soft);
   font-size: 0.75rem;
 }
+
+/* Change direction: a deliberate, AI-drafted new training plan */
+.roadmap__purpose {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+.roadmap__purpose h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.roadmap__purpose small {
+  color: var(--ink-soft);
+}
+.roadmap__change {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.roadmap__change > .text-link {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+.plan-change {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+}
+.plan-change > .text-link {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.plan-change h3 {
+  margin: 0;
+}
+.plan-change p {
+  margin: 0;
+}
+.plan-change textarea,
+.plan-change input:not([type="checkbox"]),
+.plan-change select {
+  width: 100%;
+  min-width: 0;
+}
+.plan-change__phases,
+.plan-change__week {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plan-change__phases li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: start;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.plan-change__phases li > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--moss);
+  color: var(--surface);
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+.plan-change__phases li > div {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.plan-change__phases li > div > input {
+  font-weight: 700;
+}
+.plan-change__phases p {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+label.plan-change__weeks {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.plan-change .plan-change__weeks input[type="number"] {
+  width: 4.5rem;
+  flex: none;
+}
+.plan-change__remove {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.plan-change__week li {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.92rem;
+}
+.plan-change__week small {
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.plan-change__confirm {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+.plan-change__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.plan-change__past {
+  width: 100%;
+}
+.plan-change__past summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  text-align: center;
+}
+.plan-change__past ul {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.plan-change__past li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.plan-change__past li > div {
+  display: grid;
+  min-width: 0;
+}
+.plan-change__past small {
+  color: var(--ink-soft);
+}
+.plan-change__inline {
+  display: inline-flex;
+  gap: 0.9rem;
+}
+label.check-row {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+}
+label.check-row input {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  margin-top: 0.1rem;
+  accent-color: var(--moss);
+}

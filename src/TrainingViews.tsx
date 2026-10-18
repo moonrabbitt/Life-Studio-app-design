@@ -27,6 +27,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { countdown, EventsList } from "./EventsViews"
 import { goalDate, goalFeeling, GoalMilestones } from "./MilestoneViews"
 import { celebrate } from "./GoalProjectViews"
+import { ChangeDirection, PastPlans } from "./PlanChange"
 import { listen, speechSupported } from "./speech"
 import {
   acceptWeek,
@@ -46,7 +47,8 @@ import {
   mondayOf,
   nextMonday,
   nextUsefulAction,
-  PHASES,
+  addPlanWeek,
+  phasesOf,
   phaseTimeline,
   RESTART_START,
   SOURCES,
@@ -612,7 +614,7 @@ function journeyEntries(state: AppState): JourneyEntry[] {
         : { date: reflection.date, title: reflection.text, kind: "Reflection", reflectionId: reflection.id },
     )
   for (const change of state.roadmap?.phaseLog ?? [])
-    entries.push({ date: change.date, title: `Started phase ${change.phase}: ${PHASES.find((phase) => phase.id === change.phase)?.title ?? ""}`, kind: "Phase" })
+    entries.push({ date: change.date, title: change.title ?? `Started phase ${change.phase}: ${phasesOf(state).find((phase) => phase.id === change.phase)?.title ?? ""}`, kind: "Phase" })
   return entries.sort((a, b) => b.date.localeCompare(a.date))
 }
 
@@ -1087,7 +1089,12 @@ export function Roadmap({
   onEditProfile: () => void
 }) {
   const [tab, setTab] = useState<"phases" | "why">("phases")
+  const [changing, setChanging] = useState(false)
   const timeline = phaseTimeline(state)
+  const custom = state.trainingPlan
+  const phases = phasesOf(state)
+  const nextWeekStart = nextMonday(today())
+  const nextWeekAdded = state.plan.some((item) => item.batch === `plan-${nextWeekStart}`)
   const [reflection, setReflection] = useState("")
   const [showAll, setShowAll] = useState(false)
   const phase = state.trainingPhase ?? 1
@@ -1124,9 +1131,26 @@ export function Roadmap({
   const story = journeyEntries(state)
 
   return (
-    <Modal title="Training plan" eyebrow="Running, gym and dance as one programme" onClose={onClose} wide>
+    <Modal title="Training plan" eyebrow={custom ? "Your plan, one phase at a time" : "Running, gym and dance as one programme"} onClose={onClose} wide>
       <div className="roadmap">
         <Art className="roadmap__art" src="/assets/movement-path.jpg" />
+        {changing ? (
+          <ChangeDirection
+            state={state}
+            update={update}
+            onDone={() => setChanging(false)}
+            onCancel={() => setChanging(false)}
+            onEditProfile={onEditProfile}
+          />
+        ) : (
+        <>
+        {custom && (
+          <section className="roadmap__purpose">
+            <p className="eyebrow">Training for</p>
+            <h3>{custom.purpose}</h3>
+            {custom.targetLabel && <small>Target · {custom.targetLabel}</small>}
+          </section>
+        )}
         <div className="segmented roadmap__tabs" role="tablist">
           {(
             [
@@ -1148,12 +1172,13 @@ export function Roadmap({
             </p>
             {timeline.overRace && (
               <p className="events__reassure">
-                At these lengths the half-marathon build would finish after race day ({formatDate(timeline.raceDate!, { day: "numeric", month: "short" })}).
-                Shorten a phase, or decide later whether this race is the right one.
+                {custom
+                  ? `At these lengths you'd still be building after your target date (${formatDate(timeline.raceDate!, { day: "numeric", month: "short" })}). Shorten a phase, or move the date.`
+                  : `At these lengths the half-marathon build would finish after race day (${formatDate(timeline.raceDate!, { day: "numeric", month: "short" })}). Shorten a phase, or decide later whether this race is the right one.`}
               </p>
             )}
             <ol className="roadmap__phases">
-              {PHASES.map((item) => (
+              {phases.map((item) => (
                 <li key={item.id} className={item.id === phase ? "is-current" : item.id < phase ? "is-done" : ""}>
                   <span>{item.id}</span>
                   <div>
@@ -1227,7 +1252,17 @@ export function Roadmap({
                 </li>
               ))}
             </ol>
-            {!state.plan.some((item) => item.phase === "restart") && (
+            {custom && (
+              <Button
+                variant="secondary"
+                icon={CalendarCheck}
+                disabled={nextWeekAdded}
+                onClick={() => update((current) => addPlanWeek(current, nextWeekStart), "Next week’s sessions are in your plan as suggestions.")}
+              >
+                {nextWeekAdded ? "Next week’s sessions are planned" : "Add next week’s sessions"}
+              </Button>
+            )}
+            {!custom && !state.plan.some((item) => item.phase === "restart") && (
               <Button variant="secondary" icon={CalendarCheck} onClick={onSetupRestart}>
                 Set up the starter fortnight
               </Button>
@@ -1249,6 +1284,13 @@ export function Roadmap({
         {tab === "why" && (
           <section className="roadmap__why">
             <h3>Why this plan?</h3>
+            {custom && (
+              <>
+                <p>{custom.summary}</p>
+                {custom.why && <p className="capture-disclaimer">You changed direction because: {custom.why}</p>}
+                <p className="eyebrow">The principles behind every plan</p>
+              </>
+            )}
             <ul>
               {WHY_THIS_PLAN.map((line) => (
                 <li key={line}>{line}</li>
@@ -1269,6 +1311,14 @@ export function Roadmap({
               ))}
             </ul>
           </section>
+        )}
+        <div className="roadmap__change">
+          <PastPlans state={state} update={update} />
+          <button type="button" className="text-link" onClick={() => setChanging(true)}>
+            Change direction…
+          </button>
+        </div>
+        </>
         )}
       </div>
     </Modal>

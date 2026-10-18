@@ -308,6 +308,77 @@ coming up next week.
 - "encouragement": one short line, genuine and not cheesy, no exclamation-mark overload.
 - No guilt, no streaks, no comparison, no calorie or body talk.`
 
+const replanSchema = {
+  name: "training_plan",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["summary", "goalTitle", "cautions", "phases", "week"],
+    properties: {
+      summary: { type: "string" },
+      goalTitle: { type: "string" },
+      cautions: { type: "string" },
+      phases: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["title", "weeks", "body", "ready"],
+          properties: {
+            title: { type: "string" },
+            weeks: { type: "integer" },
+            body: { type: "string" },
+            ready: { type: "string" },
+          },
+        },
+      },
+      week: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["dayOffset", "title", "kind", "time", "duration", "intensity", "details", "optional"],
+          properties: {
+            dayOffset: { type: "integer" },
+            title: { type: "string" },
+            kind: { type: "string", enum: ["gym", "walk", "run", "dance", "recovery", "journal", "reset"] },
+            time: nullable("string"),
+            duration: { type: "integer" },
+            intensity: { type: "string", enum: ["light", "moderate", "hard"] },
+            details: { type: "array", items: { type: "string" } },
+            optional: { type: "boolean" },
+          },
+        },
+      },
+    },
+  },
+}
+
+const REPLAN_INSTRUCTIONS = `${TONE}
+
+The user wants a new training plan because their purpose has changed. Write a plan for the purpose
+in the request, using the JSON context (today, training answers, recent activity, other goals,
+the current plan they are leaving, busy calendar slots).
+- "phases": 3-6 phases in order. "title" is 2-4 words. "weeks" is realistic; if context.targetDate is
+  set, the phases before the last one must finish by that date (count weeks from context.today), and
+  the last phase is the event itself plus recovery or what comes after. Without a date, the plan builds
+  steadily and the last phase is about keeping it going. "body" is 1-2 sentences on what happens in
+  this phase. "ready" is one sentence on how they know they are ready to move on (based on how it feels
+  and their logs, never on a week passing).
+- Start where they actually are (training answers and recent logs), not where they wish they were.
+  The first phase is gentle and repeatable.
+- "week": the typical week for phase 1 only, 3-7 sessions. dayOffset 0 = Monday … 6 = Sunday. Respect
+  context.profile.days and context.profile.minutes when given; keep a rest or recovery day between hard
+  days; put a short weekly check-in (kind "journal", 10 minutes) on Sunday. "time" is "HH:MM" only if a
+  time clearly suits them, otherwise null. "details" are 2-4 short concrete lines (what exactly to do,
+  e.g. "3 sets of 8 goblet squats, a weight that leaves 2-3 reps in reserve"). Mark extras "optional".
+- Keep anything from their other goals that still matters (for example dance) as part of the week,
+  unless the request says to drop it.
+- "summary": 2-3 warm sentences on the shape of the plan and why it suits them now.
+- "goalTitle": a short goal title for the purpose, in their words where possible.
+- "cautions": one sentence of honest caveats (e.g. tight timelines, pain needing a professional), or "".
+- No calorie, weight-loss or body-shape targets.`
+
 const GUIDE_INSTRUCTIONS = `${TONE}
 
 You are a money learning guide. Explain personal-finance and investing concepts simply, with a small
@@ -359,6 +430,16 @@ export default async (req: Request) => {
         input: `Context:\n${context}\n\nRequest:\n${input}`,
         maxOutputTokens: 900,
         schema: digestSchema,
+      })
+      return json(JSON.parse(text))
+    }
+
+    if (body?.task === "replan") {
+      const text = await callResponses({
+        instructions: REPLAN_INSTRUCTIONS,
+        input: `Context:\n${context}\n\nRequest:\n${input}`,
+        maxOutputTokens: 5000,
+        schema: replanSchema,
       })
       return json(JSON.parse(text))
     }

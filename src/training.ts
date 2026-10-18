@@ -3,7 +3,10 @@ import type {
   AppState,
   Goal,
   PlanItem,
+  PastPlan,
   PlannedExercise,
+  TrainingPhaseDef,
+  TrainingPlan,
   TrainingProfile,
   WorkoutRecord,
 } from "./types"
@@ -248,6 +251,90 @@ export function buildRestartFortnight(start: string): PlanItem[] {
       }
     }),
   )
+}
+
+// Adds one week of your plan's sessions as proposals, from the Monday given (skipping duplicates).
+export function addPlanWeek(state: AppState, monday: string): AppState {
+  const plan = state.trainingPlan
+  if (!plan) return state
+  const existing = new Set(state.plan.map((item) => item.id))
+  const items: PlanItem[] = plan.week
+    .map((session, index) => {
+      const date = addDays(monday, Math.max(0, Math.min(6, session.dayOffset)))
+      return {
+        id: `plan-${plan.id}-${date}-${index}`,
+        title: session.title,
+        area: AREA_OF[session.kind] ?? "move",
+        kind: session.kind,
+        date,
+        time: session.time || undefined,
+        duration: session.duration,
+        intensity: session.intensity,
+        details: session.details,
+        optional: session.optional || undefined,
+        mode: session.optional ? "maybe" : "flexible",
+        status: "proposed",
+        phase: "plan",
+        batch: `plan-${monday}`,
+        goalId: plan.goalId,
+      } satisfies PlanItem
+    })
+    .filter((item) => item.date >= today() && !existing.has(item.id))
+  return { ...state, plan: [...state.plan, ...items] }
+}
+
+const AREA_OF: Partial<Record<ActivityKind, PlanItem["area"]>> = {
+  money: "money",
+  create: "create",
+  social: "connect",
+  reset: "home",
+  journal: "reflect",
+}
+
+// Switch to a new plan: archive the current one, clear future training proposals, start at phase 1.
+// Your logs, done sessions and story are untouched.
+export function startNewPlan(state: AppState, plan: TrainingPlan | null, reason: string, restore?: PastPlan): AppState {
+  const now = today()
+  const past: PastPlan = {
+    plan: state.trainingPlan ?? null,
+    phase: state.trainingPhase ?? 1,
+    endedAt: now,
+    reason,
+    phaseWeeks: state.roadmap?.phaseWeeks,
+    phaseDates: state.roadmap?.phaseDates,
+  }
+  const isTraining = (item: PlanItem) => item.phase === "restart" || item.phase === "plan"
+  let next: AppState = {
+    ...state,
+    trainingPlan: plan ?? undefined,
+    trainingPhase: restore?.phase ?? 1,
+    pastPlans: [past, ...(state.pastPlans ?? []).filter((item) => item !== restore)].slice(0, 10),
+    plan: state.plan.filter(
+      (item) => !(isTraining(item) && item.date >= now && (item.status === "proposed" || item.status === "planned")),
+    ),
+    roadmap: {
+      ...state.roadmap,
+      phaseWeeks: restore?.phaseWeeks ?? {},
+      phaseDates: restore?.phaseDates ?? { "1": now },
+      // Name past phase changes now, while we still know which plan they belonged to.
+      phaseLog: [
+        ...(state.roadmap?.phaseLog ?? []).map((entry) => ({
+          ...entry,
+          title: entry.title ?? `Started phase ${entry.phase}: ${phasesOf(state).find((phase) => phase.id === entry.phase)?.title ?? ""}`,
+        })),
+        {
+          phase: restore?.phase ?? 1,
+          date: now,
+          title: plan ? `New direction: ${plan.purpose}` : "Back to the original training plan",
+        },
+      ],
+    },
+  }
+  if (plan) {
+    next = addPlanWeek(next, mondayOf(now))
+    next = addPlanWeek(next, nextMonday(now))
+  }
+  return next
 }
 
 export const STRENGTH_GOAL: Goal = {
@@ -1050,17 +1137,23 @@ const today = () => {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
 }
 
+// The phases of whichever plan you're on: one Studio wrote for you, or the built-in one.
+export function phasesOf(state: AppState): TrainingPhaseDef[] {
+  return state.trainingPlan?.phases?.length ? state.trainingPlan.phases : PHASES
+}
+
 // Where you are in the programme: phase, week within it, and the planned timeline ahead.
 export function phaseTimeline(state: AppState) {
   const roadmap = state.roadmap ?? {}
-  const current = state.trainingPhase ?? 1
-  const weeksOf = (id: number) => roadmap.phaseWeeks?.[String(id)] ?? PHASES.find((phase) => phase.id === id)!.weeks
+  const phases = phasesOf(state)
+  const current = Math.min(state.trainingPhase ?? 1, phases.length)
+  const weeksOf = (id: number) => roadmap.phaseWeeks?.[String(id)] ?? phases.find((phase) => phase.id === id)!.weeks
   const loggedStart = (id: number) =>
     [...(roadmap.phaseLog ?? [])].reverse().find((entry) => entry.phase === id)?.date
   const restartStart = state.plan.filter((item) => item.phase === "restart").map((item) => item.date).sort()[0]
   const currentStart =
     roadmap.phaseDates?.[String(current)] || loggedStart(current) || (current === 1 ? restartStart : undefined) || today()
-  const rows = PHASES.map((phase) => ({ ...phase, weeks: weeksOf(phase.id), start: "", end: "" }))
+  const rows = phases.map((phase) => ({ ...phase, weeks: weeksOf(phase.id), start: "", end: "" }))
   let cursor = currentStart
   for (const row of rows) {
     if (row.id < current) {
@@ -1074,9 +1167,11 @@ export function phaseTimeline(state: AppState) {
   const now = rows.find((row) => row.id === current)!
   const elapsed = Math.floor((new Date(`${today()}T12:00:00`).getTime() - new Date(`${now.start}T12:00:00`).getTime()) / 86400000)
   const week = Math.min(now.weeks, Math.max(1, Math.floor(elapsed / 7) + 1))
-  const race = state.goals.find((goal) => goal.id === "goal-race")
-  const raceDate = race?.date
-  const build = rows.find((row) => row.id === 4)
+  // The phase that should be finished by the big day: the build before the taper (or, for
+  // a plan Studio wrote, the one before the last).
+  const plan = state.trainingPlan
+  const raceDate = plan ? plan.targetDate : state.goals.find((goal) => goal.id === "goal-race")?.date
+  const build = plan ? rows[Math.max(0, rows.length - 2)] : rows.find((row) => row.id === 4)
   const overRace = !!(raceDate && build?.end && build.end > raceDate)
   return { rows, current: now, week, overRace, raceDate }
 }

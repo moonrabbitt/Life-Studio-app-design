@@ -119,7 +119,7 @@ export type PlanItem = {
   goalId?: string
   steps?: PlanStep[]
   kind?: ActivityKind
-  phase?: "restart"
+  phase?: "restart" | "plan"
   batch?: string
   details?: string[]
   shortVersion?: { duration: number; note: string }
@@ -288,6 +288,49 @@ export type TrainingProfile = {
   minutes: string
 }
 
+export type TrainingPhaseDef = {
+  id: number
+  title: string
+  weeks: number
+  body: string
+  ready: string
+}
+
+// One session in the plan's typical week. dayOffset: 0 = Monday … 6 = Sunday.
+export type PlanWeekSession = {
+  dayOffset: number
+  title: string
+  kind: ActivityKind
+  time?: string
+  duration: number
+  intensity: "light" | "moderate" | "hard"
+  details: string[]
+  optional?: boolean
+}
+
+export type TrainingPlan = {
+  id: string
+  purpose: string
+  why?: string
+  targetDate?: string
+  targetLabel?: string
+  summary: string
+  createdAt: string
+  phases: TrainingPhaseDef[]
+  week: PlanWeekSession[]
+  goalId?: string
+}
+
+// A plan you moved on from, kept so you can see it (or go back to it).
+export type PastPlan = {
+  plan: TrainingPlan | null // null = the original built-in plan
+  phase: number
+  endedAt: string
+  reason: string
+  phaseWeeks?: Record<string, number>
+  phaseDates?: Record<string, string>
+}
+
 export type WeeklyReview = {
   id: string
   weekStart: string
@@ -323,7 +366,10 @@ export type AppState = {
   weeklyReviews: WeeklyReview[]
   trainingProfile?: TrainingProfile
   restartOffer?: "dismissed" | "added"
-  trainingPhase?: 1 | 2 | 3 | 4 | 5
+  trainingPhase?: number
+  // A training plan Studio wrote for a purpose you chose. Without one, the built-in restart → Hackney plan applies.
+  trainingPlan?: TrainingPlan
+  pastPlans?: PastPlan[]
   events?: { fairplayConfirmed?: boolean; hackneyBooked?: boolean; fairplayBooked?: boolean }
   series?: Series[]
   chat?: ChatMessage[]
@@ -341,6 +387,6 @@ export type AppState = {
     phaseDates?: Record<string, string>
     phaseWeeks?: Record<string, number>
     reflections?: RoadmapReflection[]
-    phaseLog?: { phase: number; date: string }[]
+    phaseLog?: { phase: number; date: string; title?: string }[]
   }
 }
