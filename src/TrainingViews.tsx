@@ -129,12 +129,8 @@ export function DictateButton({ onText }: { onText: (text: string) => void }) {
   const session = useRef<ReturnType<typeof listen> | null>(null)
   useEffect(() => () => session.current?.cancel(), [])
 
-  if (!speechSupported())
-    return (
-      <p className="dictate__text">
-        <Mic size={14} /> To speak instead, tap the 🎤 on your keyboard.
-      </p>
-    )
+  // Where the app can't listen, the keyboard's own mic does the job; no extra button.
+  if (!speechSupported()) return null
   return (
     <div className="dictate">
       <button

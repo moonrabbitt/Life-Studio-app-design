@@ -49,7 +49,9 @@ export function StudioChat({
   onClose,
   onGo,
   onVoiceNotes,
+  initialHint = "",
 }: {
+  initialHint?: string
   state: AppState
   update: Update
   onClose: () => void
@@ -58,7 +60,7 @@ export function StudioChat({
 }) {
   const chat = state.chat ?? []
   const [input, setInput] = useState("")
-  const [hint, setHint] = useState("")
+  const [hint, setHint] = useState(initialHint)
   const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState<{ text: string; error: string } | null>(null)
   const [selected, setSelected] = useState<Record<string, boolean[]>>({})
@@ -68,6 +70,8 @@ export function StudioChat({
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const listener = useRef<ReturnType<typeof listen> | null>(null)
+  // The home-screen app can't listen directly; the keyboard's own mic covers it, so no extra button.
+  const canListen = speechSupported()
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" })
@@ -370,6 +374,7 @@ export function StudioChat({
             placeholder={listening ? "Listening…" : hint || "Message Studio…"}
             aria-label="Message Studio"
           />
+          {canListen && (
           <button
             type="button"
             className={`studio-chat__mic ${listening ? "is-active" : ""}`}
@@ -378,6 +383,7 @@ export function StudioChat({
           >
             {listening ? <Square size={18} /> : <Mic size={20} />}
           </button>
+          )}
           <button type="submit" className="studio-chat__send" aria-label="Send" disabled={!input.trim() || loading}>
             <ArrowUp size={20} />
           </button>

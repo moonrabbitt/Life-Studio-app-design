@@ -124,15 +124,16 @@ export function useLifeStudioState() {
   }
 
   const syncNow = useCallback(
-    async (mode: "auto" | "load" | "upload" = "auto") => {
+    async (mode: "auto" | "load" | "upload" = "auto"): Promise<SyncStatus> => {
       if (!getPasscode()) {
         setSyncStatus("off")
-        return
+        return "off"
       }
       if (syncing.current) {
         again.current = true
-        return
+        return "syncing"
       }
+      let result: SyncStatus = "synced"
       syncing.current = true
       setSyncStatus("syncing")
       try {
@@ -157,9 +158,8 @@ export function useLifeStudioState() {
         setLastSynced(Date.now())
       } catch (error) {
         const status = error instanceof SyncError ? error.status : -1
-        setSyncStatus(
-          status === 401 ? "locked" : status === 0 ? "offline" : "error",
-        )
+        result = status === 401 ? "locked" : status === 0 ? "offline" : "error"
+        setSyncStatus(result)
         setSyncMessage((error as Error).message)
       } finally {
         syncing.current = false
@@ -168,6 +168,7 @@ export function useLifeStudioState() {
           window.setTimeout(() => syncNow(), 0)
         }
       }
+      return result
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [commit],
@@ -232,7 +233,7 @@ export function useLifeStudioState() {
     state,
     update,
     notice,
-    setNotice,
+    setNotice: flash,
     reset,
     sync: {
       status: syncStatus,

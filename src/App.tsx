@@ -118,6 +118,7 @@ import {
 } from "./assistant"
 import { PeopleSpace } from "./PeopleViews"
 import { PlanItemSheet } from "./PlanItemSheet"
+import { QuickMenu } from "./QuickMenu"
 import { StudioChat } from "./StudioChat"
 import { Art, Button, formatDate, IconButton, Modal, today, uid } from "./ui"
 import { useLifeStudioState, type SyncStatus } from "./useLifeStudioState"
@@ -747,8 +748,9 @@ function PlanView({
   useEffect(() => {
     if (focusDate && days.includes(focusDate)) setSelected(focusDate)
   }, [focusDate, days])
+  // Skipped things live on the Set aside shelf, not in the day's list.
   const items = state.plan
-    .filter((item) => item.date === selected)
+    .filter((item) => item.date === selected && item.status !== "let-go")
     .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""))
 
   const moveTomorrow = (item: PlanItem) => {
@@ -1679,7 +1681,7 @@ function MySpaceView({
           icon={Settings}
           onClick={() => openSpace("preferences")}
         >
-          My Studio settings
+          Settings, sync & backup
         </Button>
       </section>
     </div>
@@ -4688,7 +4690,25 @@ function VoiceCapture({
 }
 
 export default function App() {
-  const { state, update, notice, reset, sync } = useLifeStudioState()
+  const { state, update, notice, setNotice, reset, sync } = useLifeStudioState()
+  const [quickMenu, setQuickMenu] = useState(false)
+  const [chatHint, setChatHint] = useState("")
+  const manualSync = async () => {
+    const result = await sync.syncNow()
+    setNotice(
+      result === "synced"
+        ? "Synced. Everything is up to date."
+        : result === "offline"
+          ? "You’re offline. It will sync when you’re back online."
+          : result === "off"
+            ? "Sync isn’t set up yet. Find it in My space → Settings."
+            : result === "locked"
+              ? "Sync needs your passcode. Enter it in My space → Settings."
+              : result === "syncing"
+                ? "Already syncing…"
+                : "Couldn’t sync right now. Try again in a moment.",
+    )
+  }
   const [route, setRoute] = useState<Route>(routeFromPath)
   const [space, setSpace] = useState<SpaceKey | null>(null)
   const [capture, setCapture] = useState(false)
@@ -4811,9 +4831,9 @@ export default function App() {
             <strong>Life Studio</strong>
           </button>
           <IconButton
-            label="Open preferences"
+            label="Open quick menu"
             icon={Menu}
-            onClick={() => setSpace("preferences")}
+            onClick={() => setQuickMenu(true)}
           />
         </header>
 
@@ -4861,11 +4881,11 @@ export default function App() {
         <button
           type="button"
           className="bottom-nav__capture"
-          aria-label="Open Studio assistant by voice or typing"
+          aria-label="Open Studio chat"
           onClick={() => setCapture(true)}
         >
           <span className="assistant-glyph" aria-hidden="true">
-            <Mic size={24} strokeWidth={1.8} />
+            <MessageCircle size={24} strokeWidth={1.8} />
             <Sparkles size={12} strokeWidth={2} />
           </span>
         </button>
@@ -4899,6 +4919,26 @@ export default function App() {
               )
             setAddDate(null)
           }}
+        />
+      )}
+      {quickMenu && (
+        <QuickMenu
+          state={state}
+          sync={{ ...sync, syncNow: manualSync }}
+          onClose={() => setQuickMenu(false)}
+          onStudio={() => {
+            setChatHint("")
+            setCapture(true)
+          }}
+          onLog={() => {
+            setChatHint("Tell Studio what you did, e.g. walked 25 minutes, felt easy")
+            setCapture(true)
+          }}
+          onAdd={() => setAddDate(today())}
+          onSpace={(key) => setSpace(key)}
+          onVoiceNotes={() => setVoiceNotes(true)}
+          onJourney={() => setRoadmap(true)}
+          onStartNext={(id) => openActivity(id, "start")}
         />
       )}
       {openItemId && (
@@ -4968,7 +5008,11 @@ export default function App() {
       {capture && (
         <StudioChat
           state={state}
-          onClose={() => setCapture(false)}
+          initialHint={chatHint}
+          onClose={() => {
+            setCapture(false)
+            setChatHint("")
+          }}
           update={update}
           onVoiceNotes={() => {
             setCapture(false)
@@ -5055,7 +5099,13 @@ export default function App() {
           update={update}
           close={() => setSpace(null)}
           reset={reset}
-          sync={sync}
+          sync={{
+            ...sync,
+            syncNow: async () => {
+              await manualSync()
+              return sync.status
+            },
+          }}
         />
       )}
     </div>
