@@ -314,7 +314,7 @@ export function StudioChat({
               </div>
             </div>
           )}
-          <div ref={endRef} />
+          <div ref={endRef} className="studio-chat__end" />
         </div>
 
         <div className="studio-chat__footer">

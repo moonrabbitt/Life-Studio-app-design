@@ -7277,3 +7277,48 @@ input[type="time"]::-webkit-date-and-time-value {
 .step-list__text strong {
   overflow-wrap: anywhere;
 }
+
+/* Keep short action labels on one line; let headings wrap instead. */
+.section-heading > div {
+  min-width: 0;
+}
+
+.section-heading > .button,
+.section-heading .inline-actions .button,
+.activity-buttons .button {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* The newest message scrolls clear of the pinned message box. */
+.studio-chat__end {
+  height: 1px;
+  scroll-margin-bottom: 13rem;
+}
+
+/* Suggestion rows: tick box beside the text (labels stack by default). */
+label.proposal-action {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.6rem;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 400;
+}
+
+label.proposal-action > input {
+  margin-top: 0.15rem;
+}
+
+label.proposal-action > svg {
+  display: none;
+}
+
+label.proposal-action > span {
+  flex: 1;
+  min-width: 0;
+}
+
+label.proposal-action .planned-workout li {
+  background: var(--surface-soft);
+}
