@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Clock3,
   ExternalLink,
+  MoreHorizontal,
   Mic,
   MoveRight,
   PenLine,
@@ -1561,6 +1562,9 @@ function WorkoutSession({
     plan.exercises.map((exercise) => ({ chosen: exercise.id, ...prefill(exercise, exercise.sets ?? plan.sets, history) })),
   )
   const [renaming, setRenaming] = useState<number | null>(null)
+  // Rename / swap / remove live behind a small ⋯ so the card stays calm.
+  const [toolsFor, setToolsFor] = useState<number | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const [renameText, setRenameText] = useState("")
   const [adding, setAdding] = useState("")
   const [addCustom, setAddCustom] = useState("")
@@ -1591,7 +1595,7 @@ function WorkoutSession({
     <div className="workout">
       <p className="capture-disclaimer">
         {custom?.length ? "Your suggested session" : `${plan.setsLabel} of each · built from your answers`}. Change
-        anything: swap, rename, add or remove exercises and sets ·{" "}
+        anything with <b>⋯</b> on each exercise ·{" "}
         <button type="button" className="text-link" onClick={onEditProfile}>
           edit answers
         </button>
@@ -1648,19 +1652,76 @@ function WorkoutSession({
                   previous && <small className="workout__last">{previous}</small>
                 )}
               </div>
-            </div>
-            <div className="workout__tools">
-              <button type="button" className="text-link" onClick={() => { setRenaming(rowIndex); setRenameText(exercise.name) }}>
-                Rename
-              </button>
               <button
                 type="button"
-                className="text-link plan-edit__delete-link"
-                onClick={() => setRows((current) => current.filter((_, position) => position !== rowIndex))}
+                className={`workout__more ${toolsFor === rowIndex ? "is-open" : ""}`}
+                aria-label={`Change ${exercise.name}`}
+                aria-expanded={toolsFor === rowIndex}
+                onClick={() => {
+                  setToolsFor(toolsFor === rowIndex ? null : rowIndex)
+                  setConfirmRemove(false)
+                }}
               >
-                Remove exercise
+                <MoreHorizontal size={18} />
               </button>
             </div>
+            {toolsFor === rowIndex && (
+              <div className="workout__tools">
+                {exercise.alternatives.length > 0 && (
+                  <div className="workout__swap">
+                    <span>Swap for</span>
+                    {exercise.alternatives.map((id) => (
+                      <button
+                        type="button"
+                        key={id}
+                        onClick={() => {
+                          swapTo(rowIndex, EXERCISES[id])
+                          setToolsFor(null)
+                        }}
+                      >
+                        {EXERCISES[id].name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="workout__tool-row">
+                  <button
+                    type="button"
+                    className="text-link"
+                    onClick={() => {
+                      setRenaming(rowIndex)
+                      setRenameText(exercise.name)
+                      setToolsFor(null)
+                    }}
+                  >
+                    <Pencil size={13} /> Rename
+                  </button>
+                  {confirmRemove ? (
+                    <span className="workout__confirm">
+                      Remove it?
+                      <button
+                        type="button"
+                        className="text-link plan-edit__delete-link"
+                        onClick={() => {
+                          setRows((current) => current.filter((_, position) => position !== rowIndex))
+                          setToolsFor(null)
+                          setConfirmRemove(false)
+                        }}
+                      >
+                        Yes, remove
+                      </button>
+                      <button type="button" className="text-link" onClick={() => setConfirmRemove(false)}>
+                        Keep
+                      </button>
+                    </span>
+                  ) : (
+                    <button type="button" className="text-link plan-edit__delete-link" onClick={() => setConfirmRemove(true)}>
+                      <Trash2 size={13} /> Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             {(exercise.setup.length > 0 || exercise.technique.length > 0 || exercise.demo) && (
               <details open={rowIndex === 0}>
                 <summary>How to do it</summary>
@@ -1693,16 +1754,6 @@ function WorkoutSession({
                   <p className="capture-disclaimer">No trusted demonstration link yet. Gym staff can show you the setup.</p>
                 )}
               </details>
-            )}
-            {exercise.alternatives.length > 0 && (
-              <div className="workout__swap">
-                <span>Swap for</span>
-                {exercise.alternatives.map((id) => (
-                  <button type="button" key={id} onClick={() => swapTo(rowIndex, EXERCISES[id])}>
-                    {EXERCISES[id].name}
-                  </button>
-                ))}
-              </div>
             )}
             <div className="workout__sets">
               {row.sets.map((set, setIndex) => (

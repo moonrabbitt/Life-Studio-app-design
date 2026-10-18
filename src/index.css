@@ -5612,6 +5612,61 @@ textarea::placeholder {
   margin: 0;
 }
 
+.workout__head > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.workout__more {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  margin: -0.2rem -0.35rem 0 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.workout__more.is-open,
+.workout__more:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.workout__tools {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.workout__tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.25rem;
+}
+
+.workout__tool-row .text-link,
+.workout__confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.workout__confirm {
+  gap: 0.9rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
 .workout__head small {
   display: block;
   color: var(--ink-soft);
