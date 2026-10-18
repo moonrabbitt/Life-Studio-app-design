@@ -11,7 +11,16 @@ export const nextStep = (project: Project) =>
 
 // Hackney Half and FairPlay used to be special cases; they become ordinary events.
 function seedEvents(state: AppState): AppState {
-  if (state.journeyEvents) return state
+  // Both seeded events are ones you've said you feel nervous about; keep any feeling you set yourself.
+  if (state.journeyEvents)
+    return state.journeyEvents.some((event) => (event.id === "event-fairplay" || event.id === "event-hackney") && !event.feeling)
+      ? {
+          ...state,
+          journeyEvents: state.journeyEvents.map((event) =>
+            (event.id === "event-fairplay" || event.id === "event-hackney") && !event.feeling ? { ...event, feeling: "nervous" as const } : event,
+          ),
+        }
+      : state
   const flags = state.events ?? {}
   return {
     ...state,
@@ -40,6 +49,7 @@ function seedEvents(state: AppState): AppState {
           : "Reported as 1–8 Aug 2027 in Kraków, but not yet verified on the official site.",
         booked: !!flags.fairplayBooked,
         goalId: state.goals.some((goal) => goal.id === "goal-dance") ? "goal-dance" : undefined,
+        feeling: "nervous",
       },
     ],
   }

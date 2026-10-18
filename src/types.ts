@@ -323,6 +323,14 @@ export type AppState = {
   chat?: ChatMessage[]
   workoutTemplates?: WorkoutTemplate[]
   journeyEvents?: JourneyEvent[]
+  weeklyDigest?: {
+    weekStart: string
+    generatedAt: string
+    headline: string
+    thisWeek: string
+    nextWeek: string
+    encouragement: string
+  }
   roadmap?: {
     phaseDates?: Record<string, string>
     reflections?: RoadmapReflection[]

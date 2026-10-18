@@ -186,7 +186,7 @@ function EventForm({
         <legend>How do you feel about it? (optional)</legend>
         <div>
           {FEELINGS.map(([key, label]) => (
-            <button type="button" key={key} className={feeling === key ? "is-selected" : ""} aria-pressed={feeling === key} onClick={() => setFeeling(feeling === key ? undefined : key)}>
+            <button type="button" key={key} className={feeling === key ? "is-selected" : ""} aria-pressed={feeling === key} onClick={() => setFeeling(feeling === key ? "not-sure" : key)}>
               {label}
             </button>
           ))}

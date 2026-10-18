@@ -272,6 +272,35 @@ Break a creative project (something the user is making) into 3-6 small, concrete
 - The first step is tiny and easy to start. The last step moves towards finishing or sharing.
 - Skip anything already in the existing steps. "minutes" is a realistic estimate.`
 
+const digestSchema = {
+  name: "weekly_digest",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["headline", "thisWeek", "nextWeek", "encouragement"],
+    properties: {
+      headline: { type: "string" },
+      thisWeek: { type: "string" },
+      nextWeek: { type: "string" },
+      encouragement: { type: "string" },
+    },
+  },
+}
+
+const DIGEST_INSTRUCTIONS = `${TONE}
+
+Write a short weekly digest from the JSON context: what the user actually did this week, and what is
+coming up next week.
+- "headline": 3-8 words, warm and specific (e.g. "Two runs closer to Hackney").
+- "thisWeek": 2-3 sentences. Name real things they did and which goals they fed (e.g. "You did two
+  strength sessions for your Hackney Half goal and finished a step of London light"). Notice effort and
+  courage honestly; if something they are nervous about is ahead, acknowledge that showing up anyway
+  matters. If little happened, be kind: rest and quiet weeks count. Never invent anything not in the
+  context, never use numbers that are not there.
+- "nextWeek": 1-2 sentences on what is planned next week, gently; suggest one small focus if useful.
+- "encouragement": one short line, genuine and not cheesy, no exclamation-mark overload.
+- No guilt, no streaks, no comparison, no calorie or body talk.`
+
 const GUIDE_INSTRUCTIONS = `${TONE}
 
 You are a money learning guide. Explain personal-finance and investing concepts simply, with a small
@@ -313,6 +342,16 @@ export default async (req: Request) => {
         input: `Session details:\n${context}\n\nNotes from the user:\n${input}`,
         maxOutputTokens: 2500,
         schema: coachSchema,
+      })
+      return json(JSON.parse(text))
+    }
+
+    if (body?.task === "digest") {
+      const text = await callResponses({
+        instructions: DIGEST_INSTRUCTIONS,
+        input: `Context:\n${context}\n\nRequest:\n${input}`,
+        maxOutputTokens: 900,
+        schema: digestSchema,
       })
       return json(JSON.parse(text))
     }

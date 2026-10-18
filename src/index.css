@@ -7888,3 +7888,49 @@ label.proposal-action .planned-workout li {
   background: var(--paper-deep);
   color: var(--ink-soft);
 }
+
+.this-week__facts {
+  margin: 0 0 0.4rem !important;
+  color: var(--olive) !important;
+  font-size: 0.8rem !important;
+  font-weight: 800;
+}
+
+.this-week__digest {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.this-week__digest h3 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.this-week__digest p {
+  margin: 0;
+  color: var(--ink) !important;
+  font-size: 0.9rem !important;
+  line-height: 1.5;
+}
+
+.this-week__cheer {
+  border-left: 3px solid var(--honey);
+  padding-left: 0.6rem;
+  font-style: italic;
+}
+
+.this-week__loading {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--olive) !important;
+}
+
+.this-week__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.8rem;
+  margin-top: 0.3rem;
+}

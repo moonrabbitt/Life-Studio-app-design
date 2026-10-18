@@ -124,6 +124,7 @@ import { PeopleSpace } from "./PeopleViews"
 import { PlanItemSheet } from "./PlanItemSheet"
 import { QuickMenu } from "./QuickMenu"
 import { StudioChat } from "./StudioChat"
+import { WeekDigestCard } from "./WeekDigest"
 import { Art, Button, formatDate, IconButton, Modal, today, uid } from "./ui"
 import { useLifeStudioState, type SyncStatus } from "./useLifeStudioState"
 
@@ -1246,45 +1247,7 @@ function ProgressView({
           <StrengthProgress state={state} />
         </div>
 
-        <aside className="week-note this-week">
-          <p className="eyebrow">This week</p>
-          {(() => {
-            const weekStart = mondayOf(today())
-            const done = state.plan.filter(
-              (item) => item.status === "complete" && item.date >= weekStart && item.date <= today(),
-            )
-            const sessions = done.filter((item) => item.kind && ["gym", "walk", "run", "dance"].includes(item.kind))
-            const latest = (state.roadmap?.reflections ?? []).find((item) => !item.title && item.date >= weekStart)
-            return (
-              <>
-                <h3>
-                  {done.length
-                    ? `${done.length} thing${done.length === 1 ? "" : "s"} done`
-                    : "A quiet week so far"}
-                  {sessions.length ? ` · ${sessions.length} movement session${sessions.length === 1 ? "" : "s"}` : ""}
-                </h3>
-                {latest ? (
-                  <blockquote>“{latest.text}”</blockquote>
-                ) : (
-                  <p>
-                    {done.length
-                      ? "How did it feel? A line or two in Your story keeps this week in your own words."
-                      : "An empty week is information, not a verdict."}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  className="text-link"
-                  onClick={() =>
-                    document.querySelector(".roadmap__reflect textarea")?.scrollIntoView({ behavior: "smooth", block: "center" })
-                  }
-                >
-                  {latest ? "Add another reflection" : "Write this week’s reflection"}
-                </button>
-              </>
-            )
-          })()}
-        </aside>
+        <WeekDigestCard state={state} update={update} />
       </div>
 
       <JourneyStory state={state} update={update} />

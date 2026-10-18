@@ -218,3 +218,55 @@ export const suggestProjectSteps = (project: {
     "Suggest the next small steps for this project.",
     project,
   ).then((data) => (Array.isArray(data.steps) ? data.steps : []))
+
+export type WeeklyDigest = { headline: string; thisWeek: string; nextWeek: string; encouragement: string }
+
+// Everything the weekly digest needs: this week's real activity and next week's plan.
+export function digestContext(state: AppState, weekStart: string) {
+  const today = localDate()
+  const nextEnd = localDate(new Date(new Date(`${today}T12:00:00`).getTime() + 7 * 86400000))
+  const goalTitle = (id?: string) => state.goals.find((goal) => goal.id === id)?.title
+  const week = state.plan.filter((item) => item.date >= weekStart && item.date <= today)
+  return {
+    today,
+    weekStart,
+    name: state.name,
+    done: week
+      .filter((item) => item.status === "complete")
+      .map((item) => ({
+        title: item.log?.summary ?? item.title,
+        kind: item.kind,
+        area: item.area,
+        goal: goalTitle(item.goalId),
+        project: state.projects.find((project) => project.id === item.projectId)?.title,
+        minutes: item.log?.duration,
+        effort: item.log?.effort,
+        concern: item.log?.concern,
+        danceClass: item.log?.wasClass,
+      })),
+    setAside: week.filter((item) => item.status === "let-go").length,
+    stepsDone: state.projects.flatMap((project) =>
+      (project.steps ?? [])
+        .filter((step) => step.doneAt && step.doneAt.slice(0, 10) >= weekStart)
+        .map((step) => ({ project: project.title, step: step.title })),
+    ),
+    milestonesDone: state.goals.flatMap((goal) =>
+      goal.milestones
+        .filter((milestone) => milestone.completedAt && milestone.completedAt.slice(0, 10) >= weekStart)
+        .map((milestone) => ({ goal: goal.title, milestone: milestone.title })),
+    ),
+    reflections: (state.roadmap?.reflections ?? [])
+      .filter((item) => item.date >= weekStart)
+      .map((item) => (item.title ? `${item.title}: ${item.text}` : item.text)),
+    nextWeek: state.plan
+      .filter((item) => item.date > today && item.date <= nextEnd && (item.status === "planned" || item.status === "proposed"))
+      .map((item) => ({ title: item.title, date: item.date, kind: item.kind, goal: goalTitle(item.goalId), optional: item.optional || item.mode === "maybe" })),
+    events: (state.journeyEvents ?? [])
+      .filter((event) => event.date && event.date >= today)
+      .map((event) => ({ title: event.title, date: event.date, feeling: event.feeling, goal: goalTitle(event.goalId) })),
+    energy: state.checkIn,
+  }
+}
+
+export const weeklyDigest = (state: AppState, weekStart: string) =>
+  ai<WeeklyDigest>("digest", "Write my weekly digest.", digestContext(state, weekStart))
