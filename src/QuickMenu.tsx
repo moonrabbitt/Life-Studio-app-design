@@ -6,6 +6,8 @@ import {
   Feather,
   Map,
   MessageCircle,
+  Moon,
+  Sun,
   NotebookPen,
   Play,
   RefreshCw,
@@ -13,6 +15,7 @@ import {
   Wind,
   type LucideIcon,
 } from "lucide-react"
+import { openSleep } from "./SleepViews"
 import { nextUsefulAction } from "./training"
 import type { AppState } from "./types"
 import { Modal, today } from "./ui"
@@ -47,6 +50,7 @@ export function QuickMenu({
   onVoiceNotes,
   onJourney,
   onStartNext,
+  onSleep,
 }: {
   state: AppState
   sync: Sync
@@ -58,13 +62,18 @@ export function QuickMenu({
   onVoiceNotes: () => void
   onJourney: () => void
   onStartNext: (id: string) => void
+  onSleep: () => void
 }) {
+  const asleep = openSleep(state)
   const next = nextUsefulAction(state.plan, today())
   const go = (action: () => void) => () => {
     onClose()
     action()
   }
   const tiles: { label: string; hint: string; icon: LucideIcon; onClick: () => void }[] = [
+    asleep
+      ? { label: "Lights on", hint: "Good morning", icon: Sun, onClick: go(onSleep) }
+      : { label: "Lights out", hint: "Off to sleep", icon: Moon, onClick: go(onSleep) },
     { label: "Talk to Studio", hint: "Plan, move or ask", icon: MessageCircle, onClick: go(onStudio) },
     { label: "Log what I did", hint: "Quick note of an activity", icon: Check, onClick: go(onLog) },
     { label: "Add to plan", hint: "Something for today", icon: CalendarPlus, onClick: go(onAdd) },

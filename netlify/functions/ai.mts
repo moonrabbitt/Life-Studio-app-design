@@ -39,6 +39,9 @@ ABOUT THEM
   patterns, anything else. context.notesForStudio are extra notes they asked you to remember. Tailor
   every suggestion to these: avoid or adapt movements their body notes flag, pick times that suit
   their energy, and say in "why" how it serves their long-term health goals where it does.
+- context.sleep (if present) is their recent sleep from lights out / lights on. After a short night
+  (well under their usual) or one they felt was rough, suggest a lighter or shorter session and say
+  so kindly; never lecture about sleep.
 
 TIMING
 - context.busy lists every booked slot as "YYYY-MM-DD HH:MM-HH:MM title". A new or moved item's

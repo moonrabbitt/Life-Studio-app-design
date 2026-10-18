@@ -3,7 +3,7 @@ import { areaMeta } from "./data"
 import { checkPlacement } from "./training"
 import type { ActivityKind, AppState, Area, PlanItem } from "./types"
 
-export type SpaceKey = Area | "breathe" | "preferences" | "about"
+export type SpaceKey = Area | "breathe" | "preferences" | "about" | "sleep"
 import { formatDate, today, uid } from "./ui"
 
 export const areaKeys = Object.keys(areaMeta) as Area[]

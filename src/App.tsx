@@ -43,6 +43,7 @@ import {
   Wind,
   X,
   type LucideIcon,
+  Moon,
 } from "lucide-react"
 import { flushSync } from "react-dom"
 import {
@@ -128,6 +129,7 @@ import { AboutMeSpace } from "./AboutMe"
 import { SetupChat } from "./SetupChat"
 import { applySetup } from "./setup"
 import { Tour } from "./Tour"
+import { openSleep, SleepSpace, SleepToggle } from "./SleepViews"
 import { NextWeekPlanner, nextWeekDue } from "./NextWeek"
 import { SessionPlanner, type PlannedSession } from "./SessionPlanner"
 import { VoiceNoteList } from "./VoiceNotes"
@@ -391,6 +393,8 @@ function TodayView({
           ))}
         </div>
       </section>
+
+      <SleepToggle state={state} update={update} onOpen={() => onOpenSpace("sleep")} />
 
       <div className="page-grid">
         <div className="page-grid__main">
@@ -1300,6 +1304,17 @@ function MySpaceView({
               ? "What Studio knows about your body, health goals, energy and week. Keep it up to date."
               : "Tell Studio about your body, health goals and energy, so plans fit you."}
           </small>
+        </span>
+        <ChevronRight size={20} />
+      </button>
+
+      <button type="button" className="about-card" onClick={() => openSpace("sleep")}>
+        <span className="about-card__icon">
+          <Moon size={21} />
+        </span>
+        <span>
+          <strong>Sleep</strong>
+          <small>Lights out and lights on, so you can see your patterns.</small>
         </span>
         <ChevronRight size={20} />
       </button>
@@ -4372,6 +4387,18 @@ export default function App() {
           onVoiceNotes={() => setVoiceNotes(true)}
           onJourney={() => navigate("progress")}
           onStartNext={(id) => openActivity(id, "start")}
+          onSleep={() => {
+            const asleep = openSleep(state)
+            update(
+              (current) => ({
+                ...current,
+                sleep: asleep
+                  ? (current.sleep ?? []).map((entry) => (entry.id === asleep.id ? { ...entry, lightsOn: new Date().toISOString() } : entry))
+                  : [...(current.sleep ?? []), { id: uid(), lightsOut: new Date().toISOString() }],
+              }),
+              asleep ? "Lights on. Good morning." : "Lights out. Sleep well.",
+            )
+          }}
         />
       )}
       {openItemId && (
@@ -4511,6 +4538,7 @@ export default function App() {
           }}
         />
       )}
+      {space === "sleep" && <SleepSpace state={state} update={update} close={() => setSpace(null)} />}
       {space === "about" && (
         <AboutMeSpace
           state={state}

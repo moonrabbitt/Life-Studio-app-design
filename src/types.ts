@@ -290,6 +290,14 @@ export type TrainingProfile = {
   minutes: string
 }
 
+export type SleepEntry = {
+  id: string
+  lightsOut: string // ISO time
+  lightsOn?: string // ISO time; missing while you're asleep
+  feeling?: "rough" | "okay" | "rested"
+  note?: string
+}
+
 export type AboutMe = {
   workingTowards: string
   healthGoals: string
@@ -400,6 +408,8 @@ export type AppState = {
   // Snapshots kept when you set up again from the top.
   archives?: SpaceArchive[]
   tourDone?: boolean
+  // Lights out / lights on, to see sleep patterns over time.
+  sleep?: SleepEntry[]
   pastPlans?: PastPlan[]
   events?: { fairplayConfirmed?: boolean; hackneyBooked?: boolean; fairplayBooked?: boolean }
   series?: Series[]

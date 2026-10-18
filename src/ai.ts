@@ -1,4 +1,5 @@
 import { authHeaders } from "./sync"
+import { sleepContext } from "./SleepViews"
 import { phaseTimeline } from "./training"
 import type { ActivityKind, AppState, Area, PlanMode, PlannedExercise } from "./types"
 
@@ -130,6 +131,7 @@ function studioContext(state: AppState) {
     // In their own words: health goals, body, energy, week. Tailor everything to this.
     aboutMe: state.aboutMe && Object.fromEntries(Object.entries(state.aboutMe).filter(([key, value]) => key !== "updatedAt" && value)),
     notesForStudio: (state.movementNotes ?? []).slice(0, 12).map((note) => note.text),
+    sleep: sleepContext(state),
     profile: profile && {
       equipment: profile.equipment,
       gymExperience: profile.gymExperience,
