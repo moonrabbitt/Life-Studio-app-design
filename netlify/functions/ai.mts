@@ -145,6 +145,7 @@ const assistSchema = {
             "details",
             "workout",
             "weeks",
+            "scope",
           ],
           properties: {
             type: {
@@ -154,6 +155,7 @@ const assistSchema = {
                 "move_plan",
                 "complete_plan",
                 "set_aside_plan",
+                "delete_plan",
                 "plan_progression",
                 "add_journal",
                 "add_project",
@@ -210,6 +212,7 @@ const assistSchema = {
             details: { type: ["array", "null"], items: { type: "string" } },
             workout: { type: ["array", "null"], items: workoutItem },
             weeks: nullable("integer"),
+            scope: { type: ["string", "null"], enum: ["this", "future", null] },
           },
         },
       },
@@ -232,14 +235,19 @@ their plan items (with ids), and goals. Rules:
   detail: answer properly, like a knowledgeable friend: a few short paragraphs or a short list
   (use line breaks and "- " bullets; no markdown headings or bold), usually 80-250 words. Be specific
   to them, not generic. Never pad.
-- Only propose actions the user asked for or that clearly help; 0-5 actions. For pure questions or
+- Only propose actions the user asked for or that clearly help; usually 0-5 actions, up to 15 when
+  clearing or reshuffling several plans. For pure questions or
   chat, return an empty actions list and answer in "reply".
 - Dates are YYYY-MM-DD, resolved relative to context.today. Times are 24h HH:MM. Duration in minutes.
 - add_plan: title, date, time, duration, area, mode (fixed = appointment, flexible = can move,
   maybe = optional), kind, goalId, why, details. For a gym session also fill workout.
 - move_plan / complete_plan / set_aside_plan: planId MUST be an id from context.plan; move_plan needs
   the new date (and time if given). set_aside_plan lets an item go (it waits on the Set aside shelf,
-  no catching up).
+  no catching up). delete_plan removes it for good: use it when they say delete/remove/get rid of,
+  when something is wrong or no longer wanted, and when you replace a session with a new version
+  (delete the old one AND add the new one, so nothing is doubled). For a repeating item (it has a
+  seriesId), scope "this" deletes just that day and "future" deletes it from that day on; otherwise
+  scope null. Prefer set_aside_plan only for "not today / not now".
 - BUILDING UP OVER WEEKS: when they talk about getting somewhere over time ("build me up to running",
   "plan my training to get to my goal", "how do I get from walking to running", "plan the next month"),
   don't just suggest today's session. Look at their goals, phase, About me and recent logs, and

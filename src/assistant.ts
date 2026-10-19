@@ -1,5 +1,6 @@
 import { localDate, type StudioAction, type StudioProposal } from "./ai"
 import { areaMeta } from "./data"
+import { removePlanItem } from "./series"
 import { checkPlacement } from "./training"
 import type { ActivityKind, AppState, Area, PlanItem } from "./types"
 
@@ -208,6 +209,10 @@ export function applyAction(current: AppState, action: StudioAction): AppState {
     case "plan_progression":
       // Planned asynchronously by the chat (it needs Studio to write the weeks).
       return current
+    case "delete_plan": {
+      const item = current.plan.find((candidate) => candidate.id === action.planId)
+      return item ? removePlanItem(current, item, action.scope === "future" ? "future" : "this") : current
+    }
     case "move_plan":
     case "complete_plan":
     case "set_aside_plan":
@@ -406,6 +411,10 @@ export function destinationOf(action: StudioAction, state: AppState): { label: s
     }
     case "plan_progression":
       return { label: `${action.weeks ?? 6} weeks added to your Plan as suggestions`, to: { kind: "plan", date: today() } }
+    case "delete_plan": {
+      const item = state.plan.find((candidate) => candidate.id === action.planId)
+      return { label: action.scope === "future" ? "Deleted from your Plan, from that day on" : "Deleted from your Plan", to: { kind: "plan", date: item?.date ?? date } }
+    }
     case "set_aside_plan": {
       const item = state.plan.find((candidate) => candidate.id === action.planId)
       return { label: "Set aside · it’s under Plan → Set aside", to: { kind: "plan", date: item?.date ?? date } }
@@ -420,6 +429,7 @@ export function destinationOf(action: StudioAction, state: AppState): { label: s
 
 // Moving or completing needs a real, still-open plan item.
 export function isValidAction(state: AppState, action: StudioAction) {
+  if (action.type === "delete_plan") return state.plan.some((item) => item.id === action.planId)
   if (action.type === "move_plan" || action.type === "complete_plan" || action.type === "set_aside_plan")
     return state.plan.some((item) => item.id === action.planId && item.status !== "complete")
   if (action.type === "log_activity" && action.planId)

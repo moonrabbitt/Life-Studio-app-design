@@ -8944,9 +8944,18 @@ label.check-row input {
 }
 /* Mouse and keyboard: a small handle on hover or focus instead of swiping */
 @media (hover: hover) and (pointer: fine) {
+  .swipe .swipe__handle {
+    display: grid;
+    opacity: 0.35;
+    background: var(--surface-soft);
+    transition: opacity 0.15s ease;
+  }
   .swipe:hover .swipe__handle,
   .swipe:focus-within .swipe__handle {
-    display: grid;
+    opacity: 1;
+  }
+  .swipe.is-open .swipe__handle {
+    display: none;
   }
 }
 .swipe__handle:focus-visible {
@@ -9866,4 +9875,18 @@ label.setup-review__pick > span {
 .progression__form > .button {
   grid-column: 1 / -1;
   justify-self: start;
+}
+.plan-sheet__delete {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.4rem;
+  margin-top: 0.4rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+.plan-sheet__delete .text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.88rem;
 }

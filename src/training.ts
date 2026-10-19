@@ -395,7 +395,6 @@ export function applyProgression(
 ): AppState {
   const weeks = Math.max(1, ...draft.sessions.map((session) => session.week), ...draft.path.map((entry) => entry.week))
   const mondayOfWeek = (week: number) => addDays(startMonday, (week - 1) * 7)
-  const batches = new Set(Array.from({ length: weeks }, (_, index) => `plan-${mondayOfWeek(index + 1)}`))
   const id = state.trainingPlan?.id ?? crypto.randomUUID()
   const goal = state.goals.find((item) => item.id === state.trainingPlan?.goalId)
   const lastWorkout = new Map<string, PlannedExercise[]>()
@@ -442,8 +441,12 @@ export function applyProgression(
       items.push({ id: `prog-${id.slice(0, 6)}-${date}-rest`, title: "Rest day", area: "move", kind: "recovery", date, duration: 5, intensity: "light", details: ["Rest is part of the build-up: sleep, eat well, an easy stroll if you fancy it."], optional: true, mode: "maybe", status: "proposed", phase: "plan", batch: `plan-${monday}` })
     }
   }
-  // Don't double up on anything you've already accepted or done on those days.
-  const kept = state.plan.filter((item) => !(item.batch && batches.has(item.batch) && item.status === "proposed"))
+  // A new build-up replaces the old plan: every upcoming, not-yet-done session from a training plan
+  // goes (accepted or not). Done sessions, fixed commitments and things you added yourself stay.
+  const kept = state.plan.filter(
+    (item) =>
+      !((item.phase === "plan" || item.phase === "restart") && item.date >= today() && (item.status === "proposed" || item.status === "planned")),
+  )
   const fresh = items.filter((item) => !kept.some((other) => other.phase === "plan" && other.date === item.date && other.kind === item.kind && other.status !== "proposed"))
   const progression = draft.path.map((entry) => ({ weekStart: mondayOfWeek(entry.week), focus: entry.focus, keySession: entry.keySession }))
   const plan: TrainingPlan = state.trainingPlan

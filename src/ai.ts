@@ -9,6 +9,7 @@ export type StudioAction = {
     | "move_plan"
     | "complete_plan"
     | "set_aside_plan"
+    | "delete_plan"
     | "plan_progression"
     | "add_journal"
     | "add_project"
@@ -39,6 +40,7 @@ export type StudioAction = {
   details?: string[] | null
   workout?: PlannedExercise[] | null
   weeks?: number | null
+  scope?: "this" | "future" | null
 }
 
 export type StudioProposal = { reply: string; actions: StudioAction[]; sources?: { title: string; url: string }[] }
@@ -178,8 +180,10 @@ function studioContext(state: AppState) {
       .filter((item) => item.date >= today && item.date <= end && item.status !== "let-go")
       .sort((a, b) => `${a.date}${a.time ?? ""}`.localeCompare(`${b.date}${b.time ?? ""}`))
       .slice(0, 80)
-      .map(({ id, title, date, time, duration, mode, status, area, kind, intensity, optional }) => ({
+      .map(({ id, title, date, time, duration, mode, status, area, kind, intensity, optional, seriesId, phase }) => ({
         id,
+        seriesId: seriesId ?? undefined,
+        fromTrainingPlan: phase === "plan" || phase === "restart" || undefined,
         title,
         date,
         time,

@@ -36,7 +36,7 @@ import {
   type ActivityMode,
 } from "./TrainingViews"
 import type { ActivityKind, AppState, Area, PlanItem, RepeatFrequency, Series } from "./types"
-import { Button, formatDate, Modal, today, uid, type SwipeAction } from "./ui"
+import { Button, formatDate, Modal, today, uid, useRemove, type SwipeAction } from "./ui"
 
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
 
@@ -242,6 +242,7 @@ export function PlanItemSheet({
   const item = state.plan.find((candidate) => candidate.id === itemId)
   const [editing, setEditing] = useState(false)
   const [editingWorkout, setEditingWorkout] = useState(false)
+  const remove = useRemove()
   const [journal, setJournal] = useState("")
   const [howItWent, setHowItWent] = useState("")
   const [stepTitle, setStepTitle] = useState("")
@@ -710,6 +711,23 @@ export function PlanItemSheet({
               >
                 Reopen
               </Button>
+            )}
+          </div>
+          {/* Delete for good (with Undo). Set aside is for "not now"; this is for "not at all". */}
+          <div className="plan-sheet__delete">
+            {series ? (
+              <>
+                <button type="button" className="text-link plan-edit__delete-link" onClick={() => { remove((current) => removePlanItem(current, item, "this"), `Deleted “${item.title}” on this day.`); onClose() }}>
+                  <Trash2 size={14} /> Delete this one
+                </button>
+                <button type="button" className="text-link plan-edit__delete-link" onClick={() => { remove((current) => removePlanItem(current, item, "future"), `Deleted “${item.title}” from here on.`); onClose() }}>
+                  <Trash2 size={14} /> Delete this and all future
+                </button>
+              </>
+            ) : (
+              <button type="button" className="text-link plan-edit__delete-link" onClick={() => { remove((current) => removePlanItem(current, item), `Deleted “${item.title}”.`); onClose() }}>
+                <Trash2 size={14} /> Delete from my plan
+              </button>
             )}
           </div>
         </div>

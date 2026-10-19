@@ -102,7 +102,7 @@ export function NextWeekPlanner({ state, update, compact = false }: { state: App
           <Button
             icon={CalendarCheck}
             onClick={() => {
-              update((currentState) => applyNextWeek(currentState, monday, draft), "Next week is in your plan as suggestions.")
+              update((currentState) => applyNextWeek(currentState, monday, draft, true), "Next week is in your plan as suggestions. Anything from the old version is gone.")
               setDraft(null)
             }}
           >
