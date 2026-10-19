@@ -9,6 +9,7 @@ export type StudioAction = {
     | "move_plan"
     | "complete_plan"
     | "set_aside_plan"
+    | "plan_progression"
     | "add_journal"
     | "add_project"
     | "add_goal"
@@ -37,6 +38,7 @@ export type StudioAction = {
   why?: string | null
   details?: string[] | null
   workout?: PlannedExercise[] | null
+  weeks?: number | null
 }
 
 export type StudioProposal = { reply: string; actions: StudioAction[]; sources?: { title: string; url: string }[] }
@@ -139,10 +141,13 @@ function studioContext(state: AppState) {
     energy: state.checkIn,
     trainingPhase: state.trainingPhase ?? 1,
     phase: phaseSummary(state),
+    // Things Studio had wrong, corrected by the user: these override everything else.
+    corrections: (state.corrections ?? []).map((item) => `${item.text} (${item.at.slice(0, 10)})`),
     // In their own words: health goals, body, energy, week. Tailor everything to this.
     aboutMe: state.aboutMe && { ...Object.fromEntries(Object.entries(state.aboutMe).filter(([key, value]) => key !== "updatedAt" && value)), lastUpdated: state.aboutMe.updatedAt },
     notesForStudio: (state.movementNotes ?? []).slice(0, 12).map((note) => note.text),
     sleep: sleepContext(state),
+    progression: state.trainingPlan?.progression?.filter((week) => week.weekStart >= localDate(new Date(Date.now() - 6 * 86400000))).slice(0, 8),
     profile: profile && {
       equipment: profile.equipment,
       gymExperience: profile.gymExperience,
@@ -414,6 +419,8 @@ export const planNextWeek = (state: AppState, weekStart: string) => {
   return ai<NextWeekDraft>("nextweek", `Plan my week starting ${weekStart}.`, {
     ...base,
     weekStart,
+    // If there's a planned build-up, this week's step: follow it, adjusting to how last week went.
+    plannedFocus: plan?.progression?.find((week) => week.weekStart === weekStart) ?? null,
     template: plan?.week ?? [],
     purpose: plan?.purpose,
     goal: goal && { title: goal.title, date: goal.date, nextMilestone: goal.milestones.find((milestone) => !milestone.completedAt)?.title ?? null },
@@ -454,5 +461,29 @@ export const suggestAboutMe = (state: AppState) => {
     reflections: (state.roadmap?.reflections ?? []).filter((item) => item.date >= from).map((item) => item.text).slice(0, 8),
     messages: (state.chat ?? []).filter((message) => message.role === "user" && message.at >= from).map((message) => `${message.at.slice(0, 10)}: ${message.text}`).slice(-20),
     concern: state.trainingProfile?.concern === "yes" ? state.trainingProfile.concernNote ?? "yes" : "no",
+    corrections: (state.corrections ?? []).map((item) => `${item.text} (${item.at.slice(0, 10)})`),
+  })
+}
+
+export type ProgressionDraft = {
+  summary: string
+  path: { week: number; focus: string; keySession: string }[]
+  sessions: (PlanDraft["week"][number] & { week: number })[]
+}
+
+// Several weeks of gradual build-up towards what you asked for, from where you are now.
+export const planProgression = (state: AppState, request: string, weeks: number, startMonday: string) => {
+  const end = localDate(new Date(new Date(`${startMonday}T12:00:00`).getTime() + (weeks * 7 - 1) * 86400000))
+  return ai<ProgressionDraft>("progression", request, {
+    ...studioContext(state),
+    weeks,
+    startMonday,
+    commitments: Array.from(
+      new Map(
+        state.plan
+          .filter((item) => item.seriesId && item.mode === "fixed" && item.date >= startMonday && item.date <= end)
+          .map((item) => [`${item.title}-${new Date(`${item.date}T12:00:00`).getDay()}`, { title: item.title, weekday: new Date(`${item.date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "long" }), time: item.time, kind: item.kind }]),
+      ).values(),
+    ),
   })
 }

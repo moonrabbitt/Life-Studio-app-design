@@ -14,7 +14,8 @@ import {
 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { flushSync } from "react-dom"
-import { askStudio, type ChatTurn, type StudioAction } from "./ai"
+import { askStudio, planProgression, type ChatTurn, type ProgressionDraft, type StudioAction } from "./ai"
+import { applyProgression, mondayOf, nextMonday } from "./training"
 import {
   actionWarnings,
   applyAction,
@@ -27,7 +28,7 @@ import {
 import { listen, speechSupported } from "./speech"
 import { PlannedWorkoutList } from "./TrainingViews"
 import type { AppState, ChatMessage } from "./types"
-import { Button, formatDate, Modal, uid } from "./ui"
+import { Button, formatDate, Modal, today, uid } from "./ui"
 
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
 
@@ -149,16 +150,51 @@ export function StudioChat({
     setFailed(null)
   }
 
-  const confirm = (message: ChatMessage) => {
+  const confirm = async (message: ChatMessage) => {
     const actions = (message.actions ?? []) as StudioAction[]
     const picks = selected[message.id] ?? actions.map(() => true)
     const chosen = actions.filter((action, index) => picks[index] && isValidAction(state, action))
     if (!chosen.length) return
+    // Multi-week build-ups need Studio to write the weeks first.
+    const progressions = chosen.filter((action) => action.type === "plan_progression")
+    const simple = chosen.filter((action) => action.type !== "plan_progression")
+    let built: { start: string; request: string; draft: ProgressionDraft }[] = []
+    if (progressions.length) {
+      setLoading(true)
+      setFailed(null)
+      try {
+        const day = new Date(`${today()}T12:00:00`).getDay()
+        const start = day >= 1 && day <= 3 ? mondayOf(today()) : nextMonday(today())
+        built = await Promise.all(
+          progressions.map(async (action) => {
+            const request = [action.title, action.body].filter(Boolean).join(". ")
+            const draft = await planProgression(state, request || "Build up gradually towards my goal", Math.max(2, Math.min(8, action.weeks ?? 6)), start)
+            if (!draft?.sessions?.length) throw new Error("Studio couldn’t write those weeks this time. Try again.")
+            return { start, request: action.title ?? request, draft }
+          }),
+        )
+      } catch (error) {
+        setLoading(false)
+        setFailed({ text: "", error: (error as Error).message })
+        return
+      }
+      setLoading(false)
+    }
     const saved = chosen.map((action) => ({ summary: action.summary, ...destinationOf(action, state) }))
-    update((current) => ({
-      ...chosen.reduce(applyAction, current),
-      chat: (current.chat ?? []).map((item) => (item.id === message.id ? { ...item, status: "saved" as const, saved } : item)),
-    }))
+    update((current) => {
+      let next = simple.reduce(applyAction, current)
+      for (const { start, request, draft } of built) next = applyProgression(next, start, request, draft)
+      const pathMessages: ChatMessage[] = built.map(({ draft }) => ({
+        id: uid(),
+        role: "studio",
+        text: [draft.summary, "", ...draft.path.map((entry) => `- ${entry.focus}: ${entry.keySession}`)].join("\n"),
+        at: new Date().toISOString(),
+      }))
+      return {
+        ...next,
+        chat: [...(next.chat ?? []).map((item) => (item.id === message.id ? { ...item, status: "saved" as const, saved } : item)), ...pathMessages].slice(-MAX_MESSAGES),
+      }
+    })
   }
 
   const dismiss = (message: ChatMessage) =>
@@ -343,14 +379,18 @@ export function StudioChat({
           {failed && (
             <div className="chat-error" role="alert">
               <p>{failed.error}</p>
-              <div className="inline-actions">
-                <Button variant="secondary" icon={RotateCcw} onClick={() => send(failed.text)}>
-                  Try again
-                </Button>
-                <Button variant="ghost" onClick={useOffline}>
-                  Simple offline suggestion
-                </Button>
-              </div>
+              {failed.text ? (
+                <div className="inline-actions">
+                  <Button variant="secondary" icon={RotateCcw} onClick={() => send(failed.text)}>
+                    Try again
+                  </Button>
+                  <Button variant="ghost" onClick={useOffline}>
+                    Simple offline suggestion
+                  </Button>
+                </div>
+              ) : (
+                <small>Tap Confirm on the suggestion to try again.</small>
+              )}
             </div>
           )}
           <div ref={endRef} className="studio-chat__end" />

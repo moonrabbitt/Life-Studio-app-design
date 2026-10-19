@@ -1,6 +1,7 @@
 import { Compass, Map, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { AboutMeSuggestions } from "./AboutMeUpdates"
+import { CorrectionBox } from "./CorrectionBox"
 import { planNextWeek } from "./ai"
 import { restoreArchive } from "./setup"
 import { applyNextWeek, mondayOf, nextMonday } from "./training"
@@ -172,6 +173,7 @@ export function AboutMeSpace({
             </label>
           )}
         </section>
+        <CorrectionBox state={state} update={update} />
         {state.trainingPlan && (
           <section className={`about-me__refresh ${nudgeRefresh ? "is-nudged" : ""}`}>
             <p>

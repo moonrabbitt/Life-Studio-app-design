@@ -34,6 +34,9 @@ const workoutItem = {
 const PLANNING = `How to plan well (apply to every suggestion that adds or moves something):
 
 ABOUT THEM
+- context.corrections are things the user told you that you had wrong. They override EVERYTHING else
+  in the context, history and your own earlier replies. Follow them silently: don't bring up the old
+  belief again (e.g. if a correction says "my ankles are fine", never mention ankles or adapt for them).
 - WHAT'S CURRENT: context.aboutMe and context.profile.concern are the user's latest word and always
   win over anything older (earlier messages in context.history, older notes, old plan wording). If
   they say something is better now (e.g. "my ankles are fine"), believe it: don't keep adapting for it
@@ -141,6 +144,7 @@ const assistSchema = {
             "why",
             "details",
             "workout",
+            "weeks",
           ],
           properties: {
             type: {
@@ -150,6 +154,7 @@ const assistSchema = {
                 "move_plan",
                 "complete_plan",
                 "set_aside_plan",
+                "plan_progression",
                 "add_journal",
                 "add_project",
                 "add_goal",
@@ -204,6 +209,7 @@ const assistSchema = {
             why: nullable("string"),
             details: { type: ["array", "null"], items: { type: "string" } },
             workout: { type: ["array", "null"], items: workoutItem },
+            weeks: nullable("integer"),
           },
         },
       },
@@ -234,6 +240,15 @@ their plan items (with ids), and goals. Rules:
 - move_plan / complete_plan / set_aside_plan: planId MUST be an id from context.plan; move_plan needs
   the new date (and time if given). set_aside_plan lets an item go (it waits on the Set aside shelf,
   no catching up).
+- BUILDING UP OVER WEEKS: when they talk about getting somewhere over time ("build me up to running",
+  "plan my training to get to my goal", "how do I get from walking to running", "plan the next month"),
+  don't just suggest today's session. Look at their goals, phase, About me and recent logs, and
+  propose ONE plan_progression action: title = what they're building towards in their words, weeks =
+  4-8 (default 6), body = the path in 2-4 short lines (e.g. "Weeks 1-2: brisk walks with 1-min jogs;
+  weeks 3-4: 3-min jogs; weeks 5-6: 10 min continuous"), summary = "Plan 6 weeks: walking → running 10
+  min". In "reply", explain the build-up honestly: where they start, how it grows week by week, and
+  how they'll know to move up. Confirming it fills those weeks in their calendar. If
+  context.progression exists, use it to answer "what's next" and how this week fits.
 - SOMETHING CAME UP: when the user says plans changed ("working late Thursday", "I'm ill", "friends
   are visiting this weekend", "I'm exhausted"), look at every plan item affected (in context.plan,
   with ids) and propose the reshuffle as several actions: move_plan for what still matters to a day and
@@ -658,7 +673,8 @@ they ACTUALLY did. context.lastWeeks lists their recent plan sessions with statu
 let-go = skipped, planned/proposed = not done), effort, concern (pain), notes and logged sets.
 context.template is the current typical week. context.phase is where they are (week n of about N,
 its focus and how they know they're ready). context.goal is the goal it builds towards and its next
-milestone. context.commitments are fixed things already in that week.
+milestone. context.commitments are fixed things already in that week. context.plannedFocus (if set)
+is this week's step in their planned build-up: follow it, unless the logs say to repeat or ease off.
 
 Progress like a careful coach: start small, build gradually.
 - A session done and felt easy or comfortable with no pain: progress ONE small thing (one more rep
@@ -710,6 +726,8 @@ up with their progress. context.aboutMe is what it says now. The evidence from t
 context.logs (sessions done or skipped, effort, pain), context.workouts (weights and reps),
 context.sleep, context.reflections and context.messages (things they told you in chat), their
 training phase and goals with milestones reached.
+- context.corrections override everything: never suggest anything that contradicts them, and update
+  fields that still say the old thing.
 - "whereNow": ALWAYS suggest a fresh 1-3 line snapshot of where they are, if there is any activity:
   phase and week, what a normal week looks like now, key numbers that moved (e.g. "Leg press up from
   40 to 45 kg"), milestones reached. Plain and specific; no praise inflation.
@@ -719,6 +737,74 @@ training phase and goals with milestones reached.
 - "reason": one short line pointing at the evidence ("You said on 12 Oct your ankles are fine").
 - Never invent health details; only use what they said or logged. 0-5 changes. If nothing changed and
   nothing happened, return an empty list.`
+
+const progressionSchema = {
+  name: "progression",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["summary", "path", "sessions"],
+    properties: {
+      summary: { type: "string" },
+      path: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["week", "focus", "keySession"],
+          properties: { week: { type: "integer" }, focus: { type: "string" }, keySession: { type: "string" } },
+        },
+      },
+      sessions: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["week", "dayOffset", "title", "kind", "time", "duration", "intensity", "details", "optional", "workout"],
+          properties: {
+            week: { type: "integer" },
+            dayOffset: { type: "integer" },
+            title: { type: "string" },
+            kind: { type: "string", enum: ["gym", "walk", "run", "dance", "recovery", "journal"] },
+            time: nullable("string"),
+            duration: { type: "integer" },
+            intensity: { type: "string", enum: ["light", "moderate", "hard"] },
+            details: { type: "array", items: { type: "string" } },
+            optional: { type: "boolean" },
+            workout: { type: "array", items: workoutItem },
+          },
+        },
+      },
+    },
+  },
+}
+
+const PROGRESSION_INSTRUCTIONS = `${TONE}
+
+Plan a gradual build-up over context.weeks weeks (week 1 starts context.startMonday) that takes the
+user from where they are NOW towards what they asked for (the request), like a careful coach.
+Use the whole context: About me, corrections (these override everything), their recent logs and
+weights, sleep, their training phase and goals, their realistic days and session length, and
+context.commitments (fixed things already in their week: keep those days free of hard sessions and
+never duplicate them).
+- Start where the logs say they are, not where they'd like to be. If they don't run yet, week 1 is
+  brisk walking with very short jogs (e.g. 6 × 1 min jog / 90 s walk), then lengthen the jogs and
+  shorten the walks gradually, in the spirit of NHS Couch to 5K. Never raise total weekly running
+  time by more than about 10-20% a week; every third or fourth week can repeat or ease off.
+- Keep strength alongside (usually 2 sessions a week), progressing one small thing a week.
+- 3-5 active sessions a week with recovery between hard days. Do NOT include rest days or the
+  commitments themselves; the app adds rest days.
+- Every run or walk "details" gives the exact shape: total time, intervals, effort by feel
+  ("conversational"), e.g. "5 min brisk walk, 6 × (1 min jog, 90 s walk), 5 min walk".
+- Gym: give the full "workout" (4-6 exercises, sets, reps, rest, load, why) in week 1 and whenever
+  the exercises change; otherwise "workout": [] and the first detail line says exactly what changes
+  from last week ("Same exercises; leg press 3×10, add 2.5 kg if last week felt easy").
+- Non-gym sessions: "workout": [].
+- "path": one entry per week: "focus" (e.g. "Week 3: jogs up to 3 minutes") and "keySession" (the
+  session that moves them forward that week, in plain words).
+- "summary": 2-4 sentences on the shape of the build-up, where it gets them by the end, and what
+  comes after.
+- No calorie or weight talk; pain means gentler and a suggestion to check with a professional.`
 
 const GUIDE_INSTRUCTIONS = `${TONE}
 
@@ -757,7 +843,7 @@ export default async (req: Request) => {
       const text = await callResponses({
         instructions: ASSIST_INSTRUCTIONS,
         input: `Context:\n${context}${web}\n\nRequest:\n${input}`,
-        maxOutputTokens: 4000,
+        maxOutputTokens: 8000,
         schema: assistSchema,
         timeoutMs: body.search ? 40000 : 25000,
       })
@@ -833,6 +919,17 @@ export default async (req: Request) => {
         input: `Context:\n${context}\n\nRequest:\n${input}`,
         maxOutputTokens: 2000,
         schema: aboutMeSchema,
+      })
+      return json(JSON.parse(text))
+    }
+
+    if (body?.task === "progression") {
+      const text = await callResponses({
+        instructions: PROGRESSION_INSTRUCTIONS,
+        input: `Context:\n${context}\n\nRequest:\n${input}`,
+        maxOutputTokens: 12000,
+        schema: progressionSchema,
+        timeoutMs: 55000,
       })
       return json(JSON.parse(text))
     }

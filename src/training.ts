@@ -385,6 +385,82 @@ export function applyNextWeek(
   return addPlanWeek(next, weekStart)
 }
 
+// Put a multi-week build-up into the calendar: each week's sessions as suggestions (replacing
+// untouched suggestions in those weeks), rest days on free days, and the path saved on the plan.
+export function applyProgression(
+  state: AppState,
+  startMonday: string,
+  request: string,
+  draft: { summary: string; path: { week: number; focus: string; keySession: string }[]; sessions: (Omit<PlanWeekSession, "time"> & { time?: string | null; week: number })[] },
+): AppState {
+  const weeks = Math.max(1, ...draft.sessions.map((session) => session.week), ...draft.path.map((entry) => entry.week))
+  const mondayOfWeek = (week: number) => addDays(startMonday, (week - 1) * 7)
+  const batches = new Set(Array.from({ length: weeks }, (_, index) => `plan-${mondayOfWeek(index + 1)}`))
+  const id = state.trainingPlan?.id ?? crypto.randomUUID()
+  const goal = state.goals.find((item) => item.id === state.trainingPlan?.goalId)
+  const lastWorkout = new Map<string, PlannedExercise[]>()
+  const items: PlanItem[] = []
+  for (let week = 1; week <= weeks; week++) {
+    const monday = mondayOfWeek(week)
+    const focus = draft.path.find((entry) => entry.week === week)?.focus ?? `Week ${week}`
+    const sessions = draft.sessions.filter((session) => session.week === week)
+    const busyDays = new Set(
+      state.plan
+        .filter((item) => item.seriesId && item.mode === "fixed" && item.date >= monday && item.date <= addDays(monday, 6))
+        .map((item) => (new Date(`${item.date}T12:00:00`).getDay() + 6) % 7),
+    )
+    for (const [index, session] of cleanWeek(sessions, [...busyDays]).entries()) {
+      const date = addDays(monday, Math.max(0, Math.min(6, session.dayOffset)))
+      if (date < today()) continue
+      // Gym weeks that keep the same exercises carry the last list forward (numbers come from your logs).
+      const key = session.title.toLowerCase()
+      const workout = session.kind === "gym" ? (session.workout?.length ? session.workout : lastWorkout.get(key) ?? [...lastWorkout.values()].pop()) : undefined
+      if (session.kind === "gym" && workout?.length) lastWorkout.set(key, workout)
+      items.push({
+        id: `prog-${id.slice(0, 6)}-${date}-${index}`,
+        title: session.title,
+        area: "move",
+        kind: session.kind,
+        date,
+        time: session.time && /^\d{2}:\d{2}$/.test(session.time) ? session.time : undefined,
+        duration: Math.max(5, Math.min(240, session.duration || 30)),
+        intensity: session.intensity,
+        details: [`Week ${week} of ${weeks}: ${focus.replace(/^week \d+:\s*/i, "")}${goal ? ` → ${goal.title}` : ""}`, ...session.details],
+        workout: workout?.length ? workout : undefined,
+        optional: session.optional || undefined,
+        mode: session.optional ? "maybe" : "flexible",
+        status: "proposed",
+        phase: "plan",
+        batch: `plan-${monday}`,
+        goalId: state.trainingPlan?.goalId,
+      })
+    }
+    const activeDays = new Set([...busyDays, ...sessions.map((session) => session.dayOffset)])
+    for (let day = 0; day < 7; day++) {
+      const date = addDays(monday, day)
+      if (activeDays.has(day) || date < today()) continue
+      items.push({ id: `prog-${id.slice(0, 6)}-${date}-rest`, title: "Rest day", area: "move", kind: "recovery", date, duration: 5, intensity: "light", details: ["Rest is part of the build-up: sleep, eat well, an easy stroll if you fancy it."], optional: true, mode: "maybe", status: "proposed", phase: "plan", batch: `plan-${monday}` })
+    }
+  }
+  // Don't double up on anything you've already accepted or done on those days.
+  const kept = state.plan.filter((item) => !(item.batch && batches.has(item.batch) && item.status === "proposed"))
+  const fresh = items.filter((item) => !kept.some((other) => other.phase === "plan" && other.date === item.date && other.kind === item.kind && other.status !== "proposed"))
+  const progression = draft.path.map((entry) => ({ weekStart: mondayOfWeek(entry.week), focus: entry.focus, keySession: entry.keySession }))
+  const plan: TrainingPlan = state.trainingPlan
+    ? { ...state.trainingPlan, progression, progressionGoal: request }
+    : {
+        id,
+        purpose: request,
+        summary: draft.summary,
+        createdAt: new Date().toISOString(),
+        phases: [{ id: 1, title: "Build-up", weeks, body: draft.summary, ready: "When the last week feels comfortable and nothing hurts." }],
+        week: draft.sessions.filter((session) => session.week === 1).map(({ week: _week, ...session }) => ({ ...session, time: session.time ?? undefined })),
+        progression,
+        progressionGoal: request,
+      }
+  return { ...state, trainingPlan: plan, restartOffer: "dismissed", plan: [...kept, ...fresh] }
+}
+
 // Switch to a new plan: archive the current one, clear future training proposals, start at phase 1.
 // Your logs, done sessions and story are untouched.
 export function startNewPlan(state: AppState, plan: TrainingPlan | null, reason: string, restore?: PastPlan): AppState {
@@ -510,8 +586,9 @@ export function nextUsefulAction(plan: PlanItem[], todayDate: string, now = new 
   })
   const today = pick(upcoming) ?? pick(todays)
   if (today) return { item: today, when: "today" as const }
+  // Looking ahead, only real sessions count (not next week's check-in).
   const later = candidates
-    .filter((item) => item.date > todayDate && item.date <= addDays(todayDate, 7))
+    .filter((item) => item.date > todayDate && item.date <= addDays(todayDate, 7) && EXERCISE.includes(item.kind!))
     .sort(byTime)
   const next = pick(later)
   return next ? { item: next, when: "later" as const } : null

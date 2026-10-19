@@ -1,7 +1,7 @@
 import { CalendarCheck, RotateCcw, Sparkles, TrendingUp } from "lucide-react"
 import { useState } from "react"
-import { planNextWeek, type NextWeekDraft } from "./ai"
-import { addPlanWeek, applyNextWeek, nextMonday, phasesOf, phaseTimeline } from "./training"
+import { planNextWeek, planProgression, type NextWeekDraft, type ProgressionDraft } from "./ai"
+import { addPlanWeek, applyNextWeek, applyProgression, mondayOf, nextMonday, phasesOf, phaseTimeline } from "./training"
 import type { AppState } from "./types"
 import { Button, formatDate, today } from "./ui"
 
@@ -144,6 +144,107 @@ export function NextWeekPlanner({ state, update, compact = false }: { state: App
           </button>
         )}
       </div>
+      {error && <p className="capture-disclaimer">{error}</p>}
+    </section>
+  )
+}
+
+// Plan several weeks of gradual build-up towards a goal (e.g. walking → running), from where you are.
+export function ProgressionPlanner({ state, update }: { state: AppState; update: Update }) {
+  const [request, setRequest] = useState(state.trainingPlan?.progressionGoal ?? state.trainingPlan?.purpose ?? "")
+  const [weeks, setWeeks] = useState(6)
+  const [draft, setDraft] = useState<ProgressionDraft | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const day = new Date(`${today()}T12:00:00`).getDay()
+  const start = day >= 1 && day <= 3 ? mondayOf(today()) : nextMonday(today())
+  const path = state.trainingPlan?.progression ?? []
+
+  const ask = async () => {
+    setLoading(true)
+    setError("")
+    try {
+      const result = await planProgression(state, request.trim() || "Build up gradually towards my goal", weeks, start)
+      if (!result?.sessions?.length) throw new Error("Studio couldn’t plan those weeks this time. Try again.")
+      setDraft(result)
+    } catch (failure) {
+      setError((failure as Error).message)
+    }
+    setLoading(false)
+  }
+
+  return (
+    <section className="next-week progression">
+      <p className="eyebrow">The build-up</p>
+      {path.length > 0 && !draft && (
+        <ol className="progression__path">
+          {path.map((entry) => (
+            <li key={entry.weekStart} className={entry.weekStart === mondayOf(today()) ? "is-now" : entry.weekStart < mondayOf(today()) ? "is-done" : ""}>
+              <b>{formatDate(entry.weekStart, { day: "numeric", month: "short" })}</b>
+              <span>
+                {entry.focus}
+                <small>{entry.keySession}</small>
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {draft ? (
+        <>
+          <p>{draft.summary}</p>
+          <ol className="progression__path">
+            {draft.path.map((entry) => (
+              <li key={entry.week}>
+                <b>Wk {entry.week}</b>
+                <span>
+                  {entry.focus}
+                  <small>{entry.keySession}</small>
+                </span>
+              </li>
+            ))}
+          </ol>
+          <div className="inline-actions">
+            <Button
+              icon={CalendarCheck}
+              onClick={() => {
+                update((current) => applyProgression(current, start, request.trim(), draft), `${draft.path.length || weeks} weeks are in your plan as suggestions.`)
+                setDraft(null)
+              }}
+            >
+              Add these weeks to my plan
+            </Button>
+            <Button variant="ghost" icon={RotateCcw} onClick={ask} disabled={loading}>
+              {loading ? "Planning…" : "Try again"}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <form
+          className="progression__form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            ask()
+          }}
+        >
+          <label>
+            <span>Building towards</span>
+            <input value={request} onChange={(event) => setRequest(event.target.value)} placeholder="e.g. from walking to running 20 minutes" />
+          </label>
+          <label>
+            <span>Over</span>
+            <select value={weeks} onChange={(event) => setWeeks(Number(event.target.value))}>
+              {[4, 5, 6, 7, 8].map((count) => (
+                <option value={count} key={count}>
+                  {count} weeks
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button type="submit" variant={path.length ? "secondary" : "primary"} icon={Sparkles} disabled={loading}>
+            {loading ? "Studio is planning the weeks… (up to a minute)" : path.length ? "Re-plan the build-up" : "Plan the build-up with Studio"}
+          </Button>
+        </form>
+      )}
       {error && <p className="capture-disclaimer">{error}</p>}
     </section>
   )

@@ -9778,3 +9778,92 @@ label.setup-review__pick > span {
   border-color: var(--moss);
   background: var(--surface);
 }
+.correction-box {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface);
+}
+.correction-box h3,
+.correction-box p {
+  margin: 0;
+}
+.correction-box__form {
+  display: grid;
+  gap: 0.6rem;
+}
+.correction-box__form > .button,
+.correction-box__form > button {
+  justify-self: start;
+}
+.correction-box__found {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border-radius: 0.9rem;
+  background: var(--surface-soft);
+}
+.correction-box__found ul,
+.correction-box__list ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+.correction-box__found em {
+  color: var(--ink-soft);
+}
+.correction-box__list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.correction-box__list small {
+  color: var(--ink-soft);
+}
+.progression__path {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.progression__path li {
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.8rem;
+  font-size: 0.92rem;
+}
+.progression__path li > span {
+  display: grid;
+  gap: 0.1rem;
+}
+.progression__path li small {
+  color: var(--ink-soft);
+}
+.progression__path li.is-now {
+  background: var(--surface-soft);
+  box-shadow: inset 3px 0 0 var(--moss);
+}
+.progression__path li.is-done {
+  opacity: 0.6;
+}
+.progression__form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: end;
+}
+.progression__form > button,
+.progression__form > .button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}

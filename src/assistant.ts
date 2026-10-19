@@ -205,6 +205,9 @@ export function applyAction(current: AppState, action: StudioAction): AppState {
         ],
       }
     }
+    case "plan_progression":
+      // Planned asynchronously by the chat (it needs Studio to write the weeks).
+      return current
     case "move_plan":
     case "complete_plan":
     case "set_aside_plan":
@@ -401,6 +404,8 @@ export function destinationOf(action: StudioAction, state: AppState): { label: s
         to: { kind: "plan", date: target },
       }
     }
+    case "plan_progression":
+      return { label: `${action.weeks ?? 6} weeks added to your Plan as suggestions`, to: { kind: "plan", date: today() } }
     case "set_aside_plan": {
       const item = state.plan.find((candidate) => candidate.id === action.planId)
       return { label: "Set aside · it’s under Plan → Set aside", to: { kind: "plan", date: item?.date ?? date } }

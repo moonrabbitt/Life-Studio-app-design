@@ -28,7 +28,7 @@ import { countdown, EventsList } from "./EventsViews"
 import { goalDate, goalFeeling, GoalMilestones } from "./MilestoneViews"
 import { celebrate } from "./GoalProjectViews"
 import { ChangeDirection, PastPlans } from "./PlanChange"
-import { NextWeekPlanner } from "./NextWeek"
+import { NextWeekPlanner, ProgressionPlanner } from "./NextWeek"
 import { listen, speechSupported } from "./speech"
 import {
   acceptWeek,
@@ -72,7 +72,7 @@ import type {
 import { Art, Button, formatDate, Modal, SwipeRow, today, uid, useRemove } from "./ui"
 
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
-export type ActivityMode = "start" | "short" | "move"
+export type ActivityMode = "start" | "short" | "move" | "log"
 
 const EFFORTS: [Effort, string][] = [
   ["easy", "Easy"],
@@ -321,6 +321,9 @@ export function ActivityButtons({
           Short version
         </Button>
       )}
+      <Button variant="secondary" icon={Check} onClick={() => onActivity(item.id, "log")}>
+        Done
+      </Button>
       <Button variant="ghost" icon={MoveRight} onClick={() => onActivity(item.id, "move")}>
         Move
       </Button>
@@ -416,7 +419,7 @@ export function NextActionCard({
           {item.phase === "restart" ? "Restart phase · " : ""}
           {when === "today"
             ? "Next useful action"
-            : `Next up · ${formatDate(item.date, { weekday: "long" })}`}
+            : `${state.plan.some((other) => other.date === today() && isRestDay(other) && other.status !== "let-go") ? "Rest day today · " : "Nothing else today · "}next up ${formatDate(item.date, { weekday: "long" })}`}
         </p>
         <StatusBadge item={item} />
       </div>
@@ -1262,6 +1265,7 @@ export function Roadmap({
                 </li>
               ))}
             </ol>
+            <ProgressionPlanner state={state} update={update} />
             {custom && <NextWeekPlanner state={state} update={update} />}
             {!custom && !state.plan.some((item) => item.phase === "restart") && (
               <Button variant="secondary" icon={CalendarCheck} onClick={onSetupRestart}>
@@ -2378,7 +2382,9 @@ export function ActivityFlow({
   const [step, setStep] = useState<Step>(
     mode === "move"
       ? "move"
-      : item?.kind === "gym" && !state.trainingProfile
+      : mode === "log"
+        ? "log"
+        : item?.kind === "gym" && !state.trainingProfile
         ? "intake"
         : "do",
   )

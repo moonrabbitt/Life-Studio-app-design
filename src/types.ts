@@ -361,6 +361,9 @@ export type TrainingPlan = {
   goalId?: string
   // Studio's latest look back at a week, and whether you look ready for the next phase.
   lastReview?: { weekStart: string; text: string; phaseReady: boolean; phaseNote: string; at: string }
+  // The planned build-up, week by week (from "plan the next weeks"), so later plans follow it.
+  progression?: { weekStart: string; focus: string; keySession: string }[]
+  progressionGoal?: string
 }
 
 // A plan you moved on from, kept so you can see it (or go back to it).
@@ -416,6 +419,8 @@ export type AppState = {
   // Snapshots kept when you set up again from the top.
   archives?: SpaceArchive[]
   tourDone?: boolean
+  // Things Studio had wrong, in your words. Sent first, and they override everything else.
+  corrections?: { id: string; text: string; at: string }[]
   // Studio's weekly suggested updates to About me, waiting for you to accept or dismiss.
   aboutMeSuggestions?: { weekStart: string; at: string; items: AboutMeSuggestion[] }
   // Lights out / lights on, to see sleep patterns over time.
