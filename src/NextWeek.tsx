@@ -176,6 +176,24 @@ export function ProgressionPlanner({ state, update }: { state: AppState; update:
   return (
     <section className="next-week progression">
       <p className="eyebrow">The build-up</p>
+      {!draft && (state.trainingPlan?.roadmap ?? []).length > 0 && (
+        <>
+          {state.trainingPlan?.onTrack && <p className="progression-preview__ontrack">{state.trainingPlan.onTrack}</p>}
+          <ol className="progression-preview__route">
+            {state.trainingPlan!.roadmap!.map((stage) => (
+              <li key={stage.start} className={stage.start <= today() && today() <= stage.end ? "is-now" : ""}>
+                <b>
+                  {formatDate(stage.start, { day: "numeric", month: "short" })} – {formatDate(stage.end, { day: "numeric", month: "short" })}
+                </b>
+                <span>
+                  {stage.stage}
+                  <small>Target: {stage.target}</small>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
       {path.length > 0 && !draft && (
         <ol className="progression__path">
           {path.map((entry) => (
@@ -190,34 +208,22 @@ export function ProgressionPlanner({ state, update }: { state: AppState; update:
         </ol>
       )}
       {draft ? (
-        <>
-          <p>{draft.summary}</p>
-          <ol className="progression__path">
-            {draft.path.map((entry) => (
-              <li key={entry.week}>
-                <b>Wk {entry.week}</b>
-                <span>
-                  {entry.focus}
-                  <small>{entry.keySession}</small>
-                </span>
-              </li>
-            ))}
-          </ol>
+        <ProgressionPreview draft={draft} start={start}>
           <div className="inline-actions">
             <Button
               icon={CalendarCheck}
               onClick={() => {
-                update((current) => applyProgression(current, start, request.trim(), draft), `${draft.path.length || weeks} weeks are in your plan as suggestions.`)
+                update((current) => applyProgression(current, start, request.trim(), draft), `${draft.path.length || weeks} weeks are in your plan. The old upcoming sessions are gone.`)
                 setDraft(null)
               }}
             >
-              Add these weeks to my plan
+              Add these weeks to my calendar
             </Button>
             <Button variant="ghost" icon={RotateCcw} onClick={ask} disabled={loading}>
               {loading ? "Planning…" : "Try again"}
             </Button>
           </div>
-        </>
+        </ProgressionPreview>
       ) : (
         <form
           className="progression__form"
@@ -247,5 +253,86 @@ export function ProgressionPlanner({ state, update }: { state: AppState; update:
       )}
       {error && <p className="capture-disclaimer">{error}</p>}
     </section>
+  )
+}
+
+const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+// Look before you add: the route to your goal dates, then every week's sessions in detail.
+export function ProgressionPreview({ draft, start, children }: { draft: ProgressionDraft; start: string; children?: React.ReactNode }) {
+  const weeks = Array.from(new Set([...draft.path.map((entry) => entry.week), ...draft.sessions.map((session) => session.week)])).sort((a, b) => a - b)
+  const mondayOfWeek = (week: number) => {
+    const date = new Date(`${start}T12:00:00`)
+    date.setDate(date.getDate() + (week - 1) * 7)
+    return date.toISOString().slice(0, 10)
+  }
+  return (
+    <div className="progression-preview">
+      <p>{draft.summary}</p>
+      {draft.onTrack && <p className="progression-preview__ontrack">{draft.onTrack}</p>}
+      {draft.roadmap?.length > 0 && (
+        <>
+          <p className="eyebrow">The route to your goals</p>
+          <ol className="progression-preview__route">
+            {draft.roadmap.map((stage) => (
+              <li key={stage.start}>
+                <b>
+                  {formatDate(stage.start, { day: "numeric", month: "short" })} – {formatDate(stage.end, { day: "numeric", month: "short" })}
+                </b>
+                <span>
+                  {stage.stage}
+                  <small>Target: {stage.target}</small>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+      <p className="eyebrow">Week by week</p>
+      {weeks.map((week) => {
+        const entry = draft.path.find((item) => item.week === week)
+        const sessions = draft.sessions.filter((session) => session.week === week).sort((a, b) => a.dayOffset - b.dayOffset)
+        return (
+          <details className="progression-preview__week" key={week} open={week === weeks[0]}>
+            <summary>
+              <b>
+                Week {week} · {formatDate(mondayOfWeek(week), { day: "numeric", month: "short" })}
+              </b>
+              <span>{(entry?.focus ?? "").replace(/^week \d+:\s*/i, "")}</span>
+            </summary>
+            <ul>
+              {sessions.map((session, index) => (
+                <li key={index}>
+                  <div className="progression-preview__session">
+                    <b>{DAY_NAMES[Math.max(0, Math.min(6, session.dayOffset))]}</b>
+                    <strong>{session.title}</strong>
+                    <small>{session.duration} min</small>
+                  </div>
+                  {session.details.length > 0 && (
+                    <ul className="progression-preview__details">
+                      {session.details.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {session.workout?.length > 0 && (
+                    <ul className="progression-preview__details">
+                      {session.workout.map((exercise) => (
+                        <li key={exercise.name}>
+                          {exercise.name}: {exercise.sets} × {exercise.reps}
+                          {exercise.load ? ` · ${exercise.load}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+              <li className="progression-preview__rest">Other days: rest, plus your regular commitments.</li>
+            </ul>
+          </details>
+        )
+      })}
+      {children}
+    </div>
   )
 }

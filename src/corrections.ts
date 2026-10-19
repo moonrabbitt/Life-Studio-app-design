@@ -26,6 +26,19 @@ const cleanWorkout = (workout: PlannedExercise[] | undefined, match: RegExp) =>
 const workoutMentions = (workout: PlannedExercise[] | undefined, match: RegExp) =>
   (workout ?? []).some((exercise) => match.test(exercise.why) || (exercise.cue && match.test(exercise.cue)))
 
+// Health cautions written into a plan earlier ("check with a professional before impact").
+export const CAUTION = /\b(health ?professional|professional|physio\w*|GP|doctor|clinician|medical|before (any )?impact|impact training|clearance)\b/i
+
+// Is anything flagged as current right now? (pain switch on, or pain logged in the last week)
+export const currentConcern = (state: AppState) => {
+  const week = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+  return state.trainingProfile?.concern === "yes" || state.plan.some((item) => item.log?.concern && item.date >= week)
+}
+
+// Drop out-of-date cautions from plan text when nothing current is flagged.
+export const withoutCautions = (text: string | undefined, state: AppState) =>
+  !text || currentConcern(state) ? (text ?? "") : dropSentences(text, CAUTION)
+
 export type Mentions = {
   sessions: number
   plan: number
@@ -79,7 +92,7 @@ export function cleanMentions(state: AppState, word: string, truth: string, opti
       if (isUpcoming(item))
         return {
           ...item,
-          details: item.details?.filter((line) => !match.test(line)),
+          details: item.details?.filter((line) => !match.test(line) && !CAUTION.test(line)),
           note: item.note && (dropSentences(item.note, match) || undefined),
           workout: cleanWorkout(item.workout, match),
         }
@@ -88,9 +101,14 @@ export function cleanMentions(state: AppState, word: string, truth: string, opti
     }),
     trainingPlan: plan && {
       ...plan,
-      summary: dropSentences(plan.summary, match) || plan.summary,
-      phases: plan.phases.map((phase) => ({ ...phase, body: dropSentences(phase.body, match) || phase.body, ready: dropSentences(phase.ready, match) || phase.ready })),
-      week: plan.week.map((session) => ({ ...session, details: session.details.filter((line) => !match.test(line)), workout: cleanWorkout(session.workout, match) })),
+      summary: dropSentences(dropSentences(plan.summary, match), CAUTION) || plan.summary,
+      onTrack: plan.onTrack && (dropSentences(dropSentences(plan.onTrack, match), CAUTION) || undefined),
+      phases: plan.phases.map((phase) => ({
+        ...phase,
+        body: dropSentences(dropSentences(phase.body, match), CAUTION) || phase.body,
+        ready: dropSentences(dropSentences(phase.ready, match), CAUTION) || phase.ready,
+      })),
+      week: plan.week.map((session) => ({ ...session, details: session.details.filter((line) => !match.test(line) && !CAUTION.test(line)), workout: cleanWorkout(session.workout, match) })),
     },
     goals: state.goals.map((goal) => (match.test(goal.nextStep ?? "") ? { ...goal, nextStep: dropSentences(goal.nextStep, match) || goal.milestones.find((milestone) => !milestone.completedAt)?.title || "" } : goal)),
     movementNotes: (state.movementNotes ?? []).filter((note) => !match.test(note.text)),

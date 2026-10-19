@@ -391,7 +391,13 @@ export function applyProgression(
   state: AppState,
   startMonday: string,
   request: string,
-  draft: { summary: string; path: { week: number; focus: string; keySession: string }[]; sessions: (Omit<PlanWeekSession, "time"> & { time?: string | null; week: number })[] },
+  draft: {
+    summary: string
+    onTrack?: string
+    roadmap?: { start: string; end: string; stage: string; target: string }[]
+    path: { week: number; focus: string; keySession: string }[]
+    sessions: (Omit<PlanWeekSession, "time"> & { time?: string | null; week: number })[]
+  },
 ): AppState {
   const weeks = Math.max(1, ...draft.sessions.map((session) => session.week), ...draft.path.map((entry) => entry.week))
   const mondayOfWeek = (week: number) => addDays(startMonday, (week - 1) * 7)
@@ -449,8 +455,22 @@ export function applyProgression(
   )
   const fresh = items.filter((item) => !kept.some((other) => other.phase === "plan" && other.date === item.date && other.kind === item.kind && other.status !== "proposed"))
   const progression = draft.path.map((entry) => ({ weekStart: mondayOfWeek(entry.week), focus: entry.focus, keySession: entry.keySession }))
+  // The route to the goal becomes the plan's phases (stage 1 = now), so phases and the plan agree.
+  const roadmap = (draft.roadmap ?? []).filter((stage) => /^\d{4}-\d{2}-\d{2}$/.test(stage.start) && /^\d{4}-\d{2}-\d{2}$/.test(stage.end) && stage.end >= stage.start)
+  const phases = roadmap.length
+    ? roadmap.slice(0, 8).map((stage, index) => ({
+        id: index + 1,
+        title: stage.stage,
+        weeks: Math.max(1, Math.round((new Date(`${stage.end}T12:00:00`).getTime() - new Date(`${stage.start}T12:00:00`).getTime()) / (7 * 86400000)) || 1),
+        body: `Target: ${stage.target}`,
+        ready: stage.target,
+      }))
+    : undefined
+  const routeFields = roadmap.length
+    ? { roadmap, onTrack: draft.onTrack, phases: phases! }
+    : {}
   const plan: TrainingPlan = state.trainingPlan
-    ? { ...state.trainingPlan, progression, progressionGoal: request }
+    ? { ...state.trainingPlan, progression, progressionGoal: request, ...routeFields }
     : {
         id,
         purpose: request,
@@ -460,8 +480,24 @@ export function applyProgression(
         week: draft.sessions.filter((session) => session.week === 1).map(({ week: _week, ...session }) => ({ ...session, time: session.time ?? undefined })),
         progression,
         progressionGoal: request,
+        ...routeFields,
       }
-  return { ...state, trainingPlan: plan, restartOffer: "dismissed", plan: [...kept, ...fresh] }
+  return {
+    ...state,
+    trainingPlan: plan,
+    restartOffer: "dismissed",
+    plan: [...kept, ...fresh],
+    ...(roadmap.length
+      ? {
+          trainingPhase: 1,
+          roadmap: {
+            ...state.roadmap,
+            phaseWeeks: {},
+            phaseDates: Object.fromEntries(roadmap.slice(0, 8).map((stage, index) => [String(index + 1), stage.start])),
+          },
+        }
+      : {}),
+  }
 }
 
 // Switch to a new plan: archive the current one, clear future training proposals, start at phase 1.

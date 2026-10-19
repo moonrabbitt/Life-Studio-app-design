@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react"
 import { flushSync } from "react-dom"
 import { askStudio, planProgression, type ChatTurn, type ProgressionDraft, type StudioAction } from "./ai"
 import { applyProgression, mondayOf, nextMonday } from "./training"
+import { ProgressionPreview } from "./NextWeek"
 import {
   actionWarnings,
   applyAction,
@@ -102,7 +103,10 @@ export function StudioChat({
   const history = (): ChatTurn[] =>
     chat.slice(-12).map((message) => ({
       role: message.role,
-      text: message.text,
+      // A preview's weeks are part of what was said, so "more running" makes sense next turn.
+      text: message.preview
+        ? `${message.text} [Preview ${message.preview.status}: ${(message.preview.draft as ProgressionDraft).path.map((entry) => `${entry.focus} (${entry.keySession})`).join("; ")}]`
+        : message.text,
       suggested: (message.actions as StudioAction[] | undefined)?.map((action) => action.summary),
       outcome: message.actions?.length ? message.status : undefined,
     }))
@@ -168,7 +172,7 @@ export function StudioChat({
         built = await Promise.all(
           progressions.map(async (action) => {
             const request = [action.title, action.body].filter(Boolean).join(". ")
-            const draft = await planProgression(state, request || "Build up gradually towards my goal", Math.max(2, Math.min(8, action.weeks ?? 6)), start)
+            const draft = await planProgression(state, request || "Build up gradually towards my goal", Math.max(2, Math.min(8, action.weeks ?? 6)), start, history())
             if (!draft?.sessions?.length) throw new Error("Studio couldn’t write those weeks this time. Try again.")
             return { start, request: action.title ?? request, draft }
           }),
@@ -180,22 +184,39 @@ export function StudioChat({
       }
       setLoading(false)
     }
-    const saved = chosen.map((action) => ({ summary: action.summary, ...destinationOf(action, state) }))
+    // Simple changes apply now; multi-week plans come back as a preview to look over first.
+    const saved = chosen.map((action) =>
+      action.type === "plan_progression"
+        ? { summary: action.summary, label: "The weeks are below. Have a look before adding them.", to: { kind: "plan", date: today() } }
+        : { summary: action.summary, ...destinationOf(action, state) },
+    )
     update((current) => {
-      let next = simple.reduce(applyAction, current)
-      for (const { start, request, draft } of built) next = applyProgression(next, start, request, draft)
-      const pathMessages: ChatMessage[] = built.map(({ draft }) => ({
+      const next = simple.reduce(applyAction, current)
+      const previews: ChatMessage[] = built.map(({ start, request, draft }) => ({
         id: uid(),
         role: "studio",
-        text: [draft.summary, "", ...draft.path.map((entry) => `- ${entry.focus}: ${entry.keySession}`)].join("\n"),
+        text: `Here are the ${draft.path.length || "planned"} weeks in detail. Nothing is in your calendar yet.`,
         at: new Date().toISOString(),
+        preview: { request, start, draft, status: "pending" },
       }))
       return {
         ...next,
-        chat: [...(next.chat ?? []).map((item) => (item.id === message.id ? { ...item, status: "saved" as const, saved } : item)), ...pathMessages].slice(-MAX_MESSAGES),
+        chat: [...(next.chat ?? []).map((item) => (item.id === message.id ? { ...item, status: "saved" as const, saved } : item)), ...previews].slice(-MAX_MESSAGES),
       }
     })
   }
+
+  const setPreview = (id: string, status: "added" | "dismissed") =>
+    update((current) => {
+      const target = (current.chat ?? []).find((item) => item.id === id)
+      const preview = target?.preview
+      if (!preview) return current
+      const next = status === "added" ? applyProgression(current, preview.start, preview.request, preview.draft as ProgressionDraft) : current
+      return {
+        ...next,
+        chat: (next.chat ?? []).map((item) => (item.id === id && item.preview ? { ...item, preview: { ...item.preview, status } } : item)),
+      }
+    }, status === "added" ? "Added to your calendar. The old upcoming sessions are gone." : undefined)
 
   const dismiss = (message: ChatMessage) =>
     update((current) => ({
@@ -278,6 +299,29 @@ export function StudioChat({
             return (
               <div className={`chat-bubble chat-bubble--${message.role}`} key={message.id}>
                 <p>{message.text}</p>
+                {message.preview && (
+                  <ProgressionPreview draft={message.preview.draft as ProgressionDraft} start={message.preview.start}>
+                    {message.preview.status === "pending" ? (
+                      <div className="inline-actions">
+                        <Button icon={Check} onClick={() => setPreview(message.id, "added")}>
+                          Add to my calendar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setPreview(message.id, "dismissed")
+                            flushSync(() => setHint("What should change? e.g. more running, gym on weekday mornings"))
+                            inputRef.current?.focus()
+                          }}
+                        >
+                          Not quite, change it
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="capture-disclaimer">{message.preview.status === "added" ? "Added to your calendar." : "Not added. Tell Studio what to change."}</p>
+                    )}
+                  </ProgressionPreview>
+                )}
                 {message.sources && message.sources.length > 0 && (
                   <ul className="chat-sources">
                     {message.sources.map((source) => (

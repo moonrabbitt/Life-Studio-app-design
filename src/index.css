@@ -9890,3 +9890,89 @@ label.setup-review__pick > span {
   gap: 0.35rem;
   font-size: 0.88rem;
 }
+/* Multi-week plan preview */
+.progression-preview {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  min-width: 0;
+}
+.progression-preview p {
+  margin: 0;
+}
+.progression-preview__ontrack {
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.8rem;
+  background: var(--surface-soft);
+  box-shadow: inset 3px 0 0 var(--moss);
+  font-size: 0.9rem;
+}
+.progression-preview__route {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.progression-preview__route li {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.6rem;
+  font-size: 0.88rem;
+}
+.progression-preview__route li.is-now {
+  font-weight: 700;
+}
+.progression-preview__route span {
+  display: grid;
+}
+.progression-preview__route small {
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+.progression-preview__week {
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--surface);
+}
+.progression-preview__week summary {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.progression-preview__week summary span {
+  color: var(--ink-soft);
+}
+.progression-preview__week > ul {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0 0.8rem 0.8rem;
+  list-style: none;
+}
+.progression-preview__session {
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  align-items: baseline;
+  font-size: 0.9rem;
+}
+.progression-preview__session small {
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.progression-preview__details {
+  margin: 0.2rem 0 0 2.8rem;
+  padding-left: 1rem;
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+}
+.progression-preview__rest {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+.chat-bubble .progression-preview {
+  color: var(--ink);
+}

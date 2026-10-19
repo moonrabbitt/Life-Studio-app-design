@@ -91,6 +91,8 @@ export type ChatMessage = {
   saved?: { summary: string; label: string; to: unknown }[]
   // Pages Studio read when you asked it to search the web.
   sources?: { title: string; url: string }[]
+  // A multi-week plan to look over before it goes into the calendar.
+  preview?: { request: string; start: string; draft: unknown; status: "pending" | "added" | "dismissed" }
 }
 
 // A reflection, or a moment you add yourself (with a title), on your journey.
@@ -364,6 +366,9 @@ export type TrainingPlan = {
   // The planned build-up, week by week (from "plan the next weeks"), so later plans follow it.
   progression?: { weekStart: string; focus: string; keySession: string }[]
   progressionGoal?: string
+  // The whole route to the goal dates, stage by stage.
+  roadmap?: { start: string; end: string; stage: string; target: string }[]
+  onTrack?: string
 }
 
 // A plan you moved on from, kept so you can see it (or go back to it).

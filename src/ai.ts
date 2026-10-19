@@ -1,4 +1,5 @@
 import { authHeaders } from "./sync"
+import { withoutCautions } from "./corrections"
 import { sleepContext } from "./SleepViews"
 import { phaseTimeline } from "./training"
 import type { ActivityKind, AppState, Area, PlanMode, PlannedExercise } from "./types"
@@ -102,8 +103,9 @@ function phaseSummary(state: AppState) {
   return {
     trainingFor: state.trainingPlan
       ? {
-          purpose: state.trainingPlan.purpose,
+          purpose: withoutCautions(state.trainingPlan.purpose, state),
           targetDate: state.trainingPlan.targetDate,
+          route: state.trainingPlan.roadmap?.map((stage) => `${stage.start} → ${stage.end}: ${stage.stage} (target: ${stage.target})`),
           // Only the shape of the week: old session notes can mention things that are no longer true.
           typicalWeek: state.trainingPlan.week.map((session) => ({
             day: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][session.dayOffset] ?? session.dayOffset,
@@ -116,8 +118,8 @@ function phaseSummary(state: AppState) {
       : "Restart, then Hackney Half (16 May 2027) and FairPlay dance camp",
     number: current.id,
     title: current.title,
-    focus: current.body,
-    readyWhen: current.ready,
+    focus: withoutCautions(current.body, state),
+    readyWhen: withoutCautions(current.ready, state),
     week,
     plannedWeeks: current.weeks,
     started: current.start,
@@ -471,15 +473,18 @@ export const suggestAboutMe = (state: AppState) => {
 
 export type ProgressionDraft = {
   summary: string
+  onTrack: string
+  roadmap: { start: string; end: string; stage: string; target: string }[]
   path: { week: number; focus: string; keySession: string }[]
   sessions: (PlanDraft["week"][number] & { week: number })[]
 }
 
 // Several weeks of gradual build-up towards what you asked for, from where you are now.
-export const planProgression = (state: AppState, request: string, weeks: number, startMonday: string) => {
+export const planProgression = (state: AppState, request: string, weeks: number, startMonday: string, history: ChatTurn[] = []) => {
   const end = localDate(new Date(new Date(`${startMonday}T12:00:00`).getTime() + (weeks * 7 - 1) * 86400000))
   return ai<ProgressionDraft>("progression", request, {
     ...studioContext(state),
+    history: history.slice(-12),
     weeks,
     startMonday,
     commitments: Array.from(
