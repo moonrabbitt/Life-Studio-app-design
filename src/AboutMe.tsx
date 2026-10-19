@@ -1,10 +1,12 @@
-import { Compass, Map, Plus, RotateCcw, Trash2 } from "lucide-react"
+import { Compass, Map, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { AboutMeSuggestions } from "./AboutMeUpdates"
+import { planNextWeek } from "./ai"
 import { restoreArchive } from "./setup"
+import { applyNextWeek, mondayOf, nextMonday } from "./training"
 import { ABOUT_LABELS } from "./SetupChat"
 import type { AboutMe, AppState } from "./types"
-import { Button, formatDate, Modal, SwipeRow, uid, useRemove } from "./ui"
+import { Button, formatDate, Modal, SwipeRow, today, uid, useRemove } from "./ui"
 
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
 
@@ -54,6 +56,31 @@ export function AboutMeSpace({
   const changed = (Object.keys(blank) as (keyof typeof blank)[]).some((key) => (saved[key] ?? "") !== draft[key])
   const notes = state.movementNotes ?? []
   const profile = state.trainingProfile
+  // After you change something about your body or week, Studio can rewrite upcoming sessions to match.
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshNote, setRefreshNote] = useState("")
+  const [nudgeRefresh, setNudgeRefresh] = useState(false)
+  const refreshPlan = async () => {
+    setRefreshing(true)
+    setRefreshNote("")
+    persist()
+    try {
+      const weeks = [mondayOf(today()), nextMonday(today())].filter(
+        (week, index) => index === 0 || state.plan.some((item) => item.batch === `plan-${week}`),
+      )
+      const snapshot = { ...state, aboutMe: { ...draft, updatedAt: new Date().toISOString() } }
+      for (const week of weeks) {
+        const result = await planNextWeek(snapshot, week)
+        if (!result?.week?.length) throw new Error("Studio couldn’t refresh your sessions this time. Try again.")
+        update((current) => applyNextWeek(current, week, result, true))
+      }
+      setRefreshNote(`Done. Your sessions from today${weeks.length > 1 ? " through next week" : " this week"} now match About me. Anything you’ve already done stays.`)
+      setNudgeRefresh(false)
+    } catch (failure) {
+      setRefreshNote((failure as Error).message)
+    }
+    setRefreshing(false)
+  }
   const concern = profile?.concern ?? "not-sure"
 
   // Save as you type (and when you close), so an update is never lost.
@@ -117,7 +144,15 @@ export function AboutMeSpace({
           <h3>Anything affecting exercise right now?</h3>
           <p className="capture-disclaimer">Pain, an injury or a condition. When this is on, Studio only suggests gentle options.</p>
           <div className="segmented" role="group" aria-label="Anything affecting exercise right now?">
-            <button type="button" className={concern === "no" ? "is-active" : ""} aria-pressed={concern === "no"} onClick={() => setConcern("no")}>
+            <button
+              type="button"
+              className={concern === "no" ? "is-active" : ""}
+              aria-pressed={concern === "no"}
+              onClick={() => {
+                if (concern !== "no") setNudgeRefresh(true)
+                setConcern("no")
+              }}
+            >
               No, I’m fine
             </button>
             <button type="button" className={concern === "yes" ? "is-active" : ""} aria-pressed={concern === "yes"} onClick={() => setConcern("yes")}>
@@ -125,7 +160,7 @@ export function AboutMeSpace({
             </button>
           </div>
           {concern === "yes" && (
-            <label>
+            <label key="what">
               <span>What is it?</span>
               <input
                 defaultValue={profile?.concernNote ?? ""}
@@ -137,6 +172,19 @@ export function AboutMeSpace({
             </label>
           )}
         </section>
+        {state.trainingPlan && (
+          <section className={`about-me__refresh ${nudgeRefresh ? "is-nudged" : ""}`}>
+            <p>
+              {nudgeRefresh
+                ? "Your sessions were written before this change. Want Studio to rewrite them to match?"
+                : "Changed something about your body, energy or week? Studio can rewrite your upcoming sessions to match."}
+            </p>
+            <Button variant={nudgeRefresh ? "primary" : "secondary"} icon={RefreshCw} onClick={refreshPlan} disabled={refreshing}>
+              {refreshing ? "Rewriting your sessions…" : "Refresh my upcoming sessions"}
+            </Button>
+            {refreshNote && <p className="capture-disclaimer">{refreshNote}</p>}
+          </section>
+        )}
         <form className="about-me__form" onSubmit={(event) => { event.preventDefault(); persist() }}>
           {ABOUT_LABELS.map(([key, label]) => (
             <label key={key}>

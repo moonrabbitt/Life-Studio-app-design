@@ -9763,3 +9763,18 @@ label.setup-review__pick > span {
   flex: none;
   color: var(--moss);
 }
+.about-me__refresh {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem;
+  border: 1px dashed var(--line);
+  border-radius: 1rem;
+}
+.about-me__refresh p {
+  margin: 0;
+}
+.about-me__refresh.is-nudged {
+  border-style: solid;
+  border-color: var(--moss);
+  background: var(--surface);
+}

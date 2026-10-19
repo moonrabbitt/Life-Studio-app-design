@@ -347,7 +347,13 @@ const AREA_OF: Partial<Record<ActivityKind, PlanItem["area"]>> = {
 
 // Use Studio's next week: it becomes the typical week from now on (so progress builds), and replaces
 // any untouched suggestions already in that week.
-export function applyNextWeek(state: AppState, weekStart: string, draft: { review: string; phaseReady: boolean; phaseNote: string; week: (Omit<PlanWeekSession, "time"> & { time?: string | null })[] }): AppState {
+export function applyNextWeek(
+  state: AppState,
+  weekStart: string,
+  draft: { review: string; phaseReady: boolean; phaseNote: string; week: (Omit<PlanWeekSession, "time"> & { time?: string | null })[] },
+  // Refreshing after About me changes: also replace sessions you'd accepted but not done yet.
+  replaceAccepted = false,
+): AppState {
   const plan = state.trainingPlan
   if (!plan) return state
   const commitmentDays = state.plan
@@ -368,7 +374,13 @@ export function applyNextWeek(state: AppState, weekStart: string, draft: { revie
       week,
       lastReview: { weekStart, text: draft.review, phaseReady: draft.phaseReady, phaseNote: draft.phaseNote, at: new Date().toISOString() },
     },
-    plan: state.plan.filter((item) => !(item.batch === `plan-${weekStart}` && item.status === "proposed")),
+    plan: state.plan.filter(
+      (item) =>
+        !(
+          item.batch === `plan-${weekStart}` &&
+          (item.status === "proposed" || (replaceAccepted && item.status === "planned" && item.date >= today()))
+        ),
+    ),
   }
   return addPlanWeek(next, weekStart)
 }

@@ -97,7 +97,18 @@ function phaseSummary(state: AppState) {
   const next = rows.find((row) => row.id === current.id + 1)
   return {
     trainingFor: state.trainingPlan
-      ? { purpose: state.trainingPlan.purpose, targetDate: state.trainingPlan.targetDate, typicalWeek: state.trainingPlan.week }
+      ? {
+          purpose: state.trainingPlan.purpose,
+          targetDate: state.trainingPlan.targetDate,
+          // Only the shape of the week: old session notes can mention things that are no longer true.
+          typicalWeek: state.trainingPlan.week.map((session) => ({
+            day: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][session.dayOffset] ?? session.dayOffset,
+            title: session.title,
+            kind: session.kind,
+            duration: session.duration,
+            exercises: session.workout?.map((exercise) => exercise.name),
+          })),
+        }
       : "Restart, then Hackney Half (16 May 2027) and FairPlay dance camp",
     number: current.id,
     title: current.title,
