@@ -5,6 +5,7 @@ import {
   CloudOff,
   Feather,
   Map,
+  Heart,
   MessageCircle,
   Moon,
   Sun,
@@ -58,7 +59,7 @@ export function QuickMenu({
   onStudio: () => void
   onLog: () => void
   onAdd: () => void
-  onSpace: (space: "reflect" | "breathe" | "connect") => void
+  onSpace: (space: "reflect" | "breathe" | "connect" | "happiness") => void
   onVoiceNotes: () => void
   onJourney: () => void
   onStartNext: (id: string) => void
@@ -79,6 +80,7 @@ export function QuickMenu({
     { label: "Add to plan", hint: "Something for today", icon: CalendarPlus, onClick: go(onAdd) },
     { label: "Journal", hint: "A few lines", icon: Feather, onClick: go(() => onSpace("reflect")) },
     { label: "Breathe", hint: "A quiet minute", icon: Wind, onClick: go(() => onSpace("breathe")) },
+    { label: "Happiness jar", hint: "Today’s little pocket", icon: Heart, onClick: go(() => onSpace("happiness")) },
     { label: "Plan with a friend", hint: "Message, coffee, walk", icon: Users, onClick: go(() => onSpace("connect")) },
     { label: "Voice note", hint: "Private recording", icon: AudioLines, onClick: go(onVoiceNotes) },
     { label: "Your journey", hint: "Roadmap and story", icon: Map, onClick: go(onJourney) },

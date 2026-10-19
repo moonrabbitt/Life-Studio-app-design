@@ -613,6 +613,8 @@ function journeyEntries(state: AppState): JourneyEntry[] {
       detail: `${Math.floor(note.duration / 60)}:${String(note.duration % 60).padStart(2, "0")} recording · play it in Journal`,
       kind: "Voice note",
     })
+  for (const pocket of state.happiness ?? [])
+    entries.push({ date: pocket.date, title: pocket.text, kind: "Happiness" })
   for (const reflection of state.roadmap?.reflections ?? [])
     entries.push(
       reflection.title

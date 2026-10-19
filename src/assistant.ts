@@ -4,7 +4,7 @@ import { removePlanItem } from "./series"
 import { checkPlacement } from "./training"
 import type { ActivityKind, AppState, Area, PlanItem } from "./types"
 
-export type SpaceKey = Area | "breathe" | "preferences" | "about" | "sleep"
+export type SpaceKey = Area | "breathe" | "preferences" | "about" | "sleep" | "happiness"
 import { formatDate, today, uid } from "./ui"
 
 export const areaKeys = Object.keys(areaMeta) as Area[]

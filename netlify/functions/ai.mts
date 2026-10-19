@@ -841,6 +841,31 @@ const progressionSchema = {
   },
 }
 
+const routeSchema = {
+  name: "progression_route",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["summary", "onTrack", "roadmap", "path"],
+    properties: {
+      summary: progressionSchema.schema.properties.summary,
+      onTrack: progressionSchema.schema.properties.onTrack,
+      roadmap: progressionSchema.schema.properties.roadmap,
+      path: progressionSchema.schema.properties.path,
+    },
+  },
+}
+
+const weeksSchema = {
+  name: "progression_weeks",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["sessions"],
+    properties: { sessions: progressionSchema.schema.properties.sessions },
+  },
+}
+
 const PROGRESSION_INSTRUCTIONS = `${COACH}
 
 You are their coach. Two jobs:
@@ -997,13 +1022,34 @@ export default async (req: Request) => {
       return json(JSON.parse(text))
     }
 
-    if (body?.task === "progression") {
+    // A build-up is written in pieces so each call finishes well inside Netlify's time limit:
+    // first the route and weekly focus, then the detailed sessions two weeks at a time (in parallel).
+    if (body?.task === "progression_route") {
       const text = await callResponses({
-        instructions: PROGRESSION_INSTRUCTIONS,
+        instructions: `${PROGRESSION_INSTRUCTIONS}
+
+THIS CALL: return only "summary", "onTrack", "roadmap" and "path" (one entry per week, weeks 1 to
+context.weeks). Do not write sessions; they are written next, following your path exactly.`,
         input: `Context:\n${context}\n\nRequest:\n${input}`,
-        maxOutputTokens: 12000,
-        schema: progressionSchema,
-        timeoutMs: 55000,
+        maxOutputTokens: 3500,
+        schema: routeSchema,
+        timeoutMs: 40000,
+      })
+      return json(JSON.parse(text))
+    }
+
+    if (body?.task === "progression_weeks") {
+      const text = await callResponses({
+        instructions: `${PROGRESSION_INSTRUCTIONS}
+
+THIS CALL: context.path is the agreed week-by-week focus. Write "sessions" ONLY for weeks
+context.fromWeek to context.toWeek (use those week numbers), following the path exactly. Give the full
+gym "workout" in the first gym session of each week; later gym sessions in the same week can be [] if
+they repeat it.`,
+        input: `Context:\n${context}\n\nRequest:\n${input}`,
+        maxOutputTokens: 7000,
+        schema: weeksSchema,
+        timeoutMs: 40000,
       })
       return json(JSON.parse(text))
     }

@@ -131,6 +131,7 @@ import { applySetup } from "./setup"
 import { Tour } from "./Tour"
 import { AboutMeNudge, useWeeklyAboutMe } from "./AboutMeUpdates"
 import { openSleep, SleepSpace, SleepToggle } from "./SleepViews"
+import { HappinessCard, HappinessJar } from "./HappinessViews"
 import { NextWeekPlanner, nextWeekDue } from "./NextWeek"
 import { SessionPlanner, type PlannedSession } from "./SessionPlanner"
 import { VoiceNoteList } from "./VoiceNotes"
@@ -396,6 +397,7 @@ function TodayView({
       </section>
 
       <SleepToggle state={state} update={update} onOpen={() => onOpenSpace("sleep")} />
+      <HappinessCard state={state} update={update} onOpen={() => onOpenSpace("happiness")} />
 
       <div className="page-grid">
         <div className="page-grid__main">
@@ -1311,6 +1313,16 @@ function MySpaceView({
         <ChevronRight size={20} />
       </button>
 
+      <button type="button" className="about-card" onClick={() => openSpace("happiness")}>
+        <span className="about-card__icon">
+          <Heart size={21} />
+        </span>
+        <span>
+          <strong>Happiness jar</strong>
+          <small>Your daily pockets of happiness, and a random one to reach in for.</small>
+        </span>
+        <ChevronRight size={20} />
+      </button>
       <button type="button" className="about-card" onClick={() => openSpace("sleep")}>
         <span className="about-card__icon">
           <Moon size={21} />
@@ -4542,6 +4554,7 @@ export default function App() {
         />
       )}
       {space === "sleep" && <SleepSpace state={state} update={update} close={() => setSpace(null)} />}
+      {space === "happiness" && <HappinessJar state={state} update={update} close={() => setSpace(null)} />}
       {space === "about" && (
         <AboutMeSpace
           state={state}

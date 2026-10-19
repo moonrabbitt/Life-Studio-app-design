@@ -9976,3 +9976,136 @@ label.setup-review__pick > span {
 .chat-bubble .progression-preview {
   color: var(--ink);
 }
+/* Pocket of happiness */
+.happiness-card {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 1.2rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1.2rem;
+  background: linear-gradient(135deg, #fff6ec, var(--surface));
+}
+.happiness-card.is-found {
+  background: linear-gradient(135deg, #fdeee2, #fff8ef);
+}
+.happiness-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.happiness-card__head svg {
+  color: #c9735a;
+}
+.happiness-card__head .eyebrow {
+  margin: 0;
+  flex: 1;
+}
+.happiness-card__head .text-link {
+  font-size: 0.82rem;
+}
+.happiness-card__today {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.happiness-card__today li {
+  font-family: var(--font-display, inherit);
+  font-size: 1.05rem;
+}
+.happiness-card__today li::before {
+  content: "♡ ";
+  color: #c9735a;
+}
+.happiness-card__form {
+  display: flex;
+  gap: 0.5rem;
+}
+.happiness-card__form input {
+  min-width: 0;
+  flex: 1;
+}
+.happiness-card__help {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+.happiness-card__idea {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border-radius: 0.9rem;
+  background: var(--surface);
+}
+.happiness-card__idea > svg {
+  flex: none;
+  margin-top: 0.15rem;
+  color: #c9735a;
+}
+.happiness-card__idea > div {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.happiness-card__idea p {
+  margin: 0;
+}
+.happiness-card__idea a {
+  color: var(--moss);
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+.happiness-jar {
+  display: grid;
+  gap: 0.9rem;
+}
+.happiness-jar__reach {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+}
+.happiness-jar__reach blockquote {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  background: #fdeee2;
+  font-family: var(--font-display, inherit);
+  font-size: 1.1rem;
+}
+.happiness-jar__reach small {
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+.happiness-jar__list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.happiness-jar__list .swipe {
+  --swipe-radius: 0.9rem;
+}
+.happiness-jar__row {
+  display: grid;
+  width: 100%;
+  gap: 0.15rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  padding: 0.65rem 0.8rem;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.happiness-jar__row small {
+  color: var(--ink-soft);
+}

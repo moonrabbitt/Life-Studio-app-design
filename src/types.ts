@@ -298,6 +298,14 @@ export type AboutMeSuggestion = {
   reason: string
 }
 
+export type HappinessPocket = {
+  id: string
+  date: string
+  text: string
+  fromIdea?: boolean // came from a "can't find one" suggestion
+  at: string
+}
+
 export type SleepEntry = {
   id: string
   lightsOut: string // ISO time
@@ -424,6 +432,8 @@ export type AppState = {
   // Snapshots kept when you set up again from the top.
   archives?: SpaceArchive[]
   tourDone?: boolean
+  // A little pocket of happiness each day.
+  happiness?: HappinessPocket[]
   // Things Studio had wrong, in your words. Sent first, and they override everything else.
   corrections?: { id: string; text: string; at: string }[]
   // Studio's weekly suggested updates to About me, waiting for you to accept or dismiss.

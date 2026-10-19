@@ -151,6 +151,8 @@ function studioContext(state: AppState) {
     aboutMe: state.aboutMe && { ...Object.fromEntries(Object.entries(state.aboutMe).filter(([key, value]) => key !== "updatedAt" && value)), lastUpdated: state.aboutMe.updatedAt },
     notesForStudio: (state.movementNotes ?? []).slice(0, 12).map((note) => note.text),
     sleep: sleepContext(state),
+    // Little things that made them happy lately: use them to suggest things they'll enjoy.
+    happiness: (state.happiness ?? []).slice(0, 7).map((pocket) => `${pocket.date}: ${pocket.text}`),
     progression: state.trainingPlan?.progression?.filter((week) => week.weekStart >= localDate(new Date(Date.now() - 6 * 86400000))).slice(0, 8),
     profile: profile && {
       equipment: profile.equipment,
@@ -480,9 +482,9 @@ export type ProgressionDraft = {
 }
 
 // Several weeks of gradual build-up towards what you asked for, from where you are now.
-export const planProgression = (state: AppState, request: string, weeks: number, startMonday: string, history: ChatTurn[] = []) => {
+export const planProgression = async (state: AppState, request: string, weeks: number, startMonday: string, history: ChatTurn[] = []) => {
   const end = localDate(new Date(new Date(`${startMonday}T12:00:00`).getTime() + (weeks * 7 - 1) * 86400000))
-  return ai<ProgressionDraft>("progression", request, {
+  const context = {
     ...studioContext(state),
     history: history.slice(-12),
     weeks,
@@ -494,5 +496,17 @@ export const planProgression = (state: AppState, request: string, weeks: number,
           .map((item) => [`${item.title}-${new Date(`${item.date}T12:00:00`).getDay()}`, { title: item.title, weekday: new Date(`${item.date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "long" }), time: item.time, kind: item.kind }]),
       ).values(),
     ),
-  })
+  }
+  // In pieces, so no single call runs into the server's time limit: the route first, then the
+  // detailed sessions two weeks at a time, all at once.
+  const route = await ai<Omit<ProgressionDraft, "sessions">>("progression_route", request, context)
+  if (!route?.path?.length) throw new Error("Studio couldn’t plan the route this time. Try again.")
+  const chunks = Array.from({ length: Math.ceil(weeks / 2) }, (_, index) => [index * 2 + 1, Math.min(weeks, index * 2 + 2)])
+  const parts = await Promise.all(
+    chunks.map(([fromWeek, toWeek]) =>
+      ai<{ sessions: ProgressionDraft["sessions"] }>("progression_weeks", request, { ...context, path: route.path, roadmap: route.roadmap, fromWeek, toWeek }),
+    ),
+  )
+  const sessions = parts.flatMap((part, index) => (part.sessions ?? []).filter((session) => session.week >= chunks[index][0] && session.week <= chunks[index][1]))
+  return { ...route, sessions } as ProgressionDraft
 }
