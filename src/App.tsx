@@ -47,6 +47,7 @@ import {
 } from "lucide-react"
 import { flushSync } from "react-dom"
 import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
@@ -250,6 +251,48 @@ function EmptyState({
   )
 }
 
+// Morning (4-12), day (12-17), evening (17-21), night (21-4).
+const partOfDay = () => {
+  const hour = new Date().getHours()
+  return hour >= 4 && hour < 12 ? "morning" : hour < 17 && hour >= 12 ? "day" : hour >= 17 && hour < 21 ? "evening" : "night"
+}
+
+// Evenings and nights: one line about today, and a peek at tomorrow.
+function WindDown({ state, onReflect }: { state: AppState; onReflect: () => void }) {
+  const date = new Date(`${today()}T12:00:00`)
+  date.setDate(date.getDate() + (new Date().getHours() < 4 ? 0 : 1))
+  const tomorrow = localDate(date)
+  const items = state.plan
+    .filter((item) => item.date === tomorrow && (item.status === "planned" || item.status === "proposed") && !(item.kind === "recovery" && /^rest/i.test(item.title)))
+    .sort((a, b) => (a.time ?? "99").localeCompare(b.time ?? "99"))
+  return (
+    <section className="wind-down">
+      <div className="wind-down__reflect">
+        <p className="eyebrow">Before bed</p>
+        <h2>How was today, in one line?</h2>
+        <Button variant="secondary" icon={Feather} onClick={onReflect}>
+          Write one line
+        </Button>
+      </div>
+      <div className="wind-down__tomorrow">
+        <p className="eyebrow">Tomorrow</p>
+        {items.length ? (
+          <ul>
+            {items.slice(0, 4).map((item) => (
+              <li key={item.id}>
+                <b>{item.time ?? "Anytime"}</b> {item.title}
+              </li>
+            ))}
+            {items.length > 4 && <li className="wind-down__more">and {items.length - 4} more</li>}
+          </ul>
+        ) : (
+          <p>Nothing planned yet. Open space.</p>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function TodayView({
   state,
   update,
@@ -340,30 +383,17 @@ function TodayView({
     if (done) celebrateDone(done.title, done.area)
   }
 
-  return (
-    <div className="page today-page">
-      <section className="today-hero">
-        <img
-          src="/assets/life-studio-room.jpg"
-          alt=""
-          className="today-hero__image"
-        />
-        <div className="today-hero__veil" />
-        <div className="today-hero__content">
-          <p className="eyebrow eyebrow--light">
-            {formatDate(today(), {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-            })}
-          </p>
-          <h1>
-            {greeting}, {state.name}.
-          </h1>
-          <p>What would make today feel a little more like yours?</p>
-        </div>
-      </section>
-
+  // Today changes with the time of day: lights on and the day ahead in the morning; the plan in the
+  // day; happiness and winding down in the evening; lights out at night. "How much room" always sits
+  // right above the schedule, so you can watch it change.
+  const part = partOfDay()
+  // The big sleep card only when it matters: lights out at night, lights on / "how did you sleep?" in the morning.
+  const lastNight = [...(state.sleep ?? [])].filter((entry) => entry.lightsOn).sort((a, b) => b.lightsOut.localeCompare(a.lightsOut))[0]
+  const sleepMatters =
+    part === "night" ||
+    (part === "morning" && (!!openSleep(state) || (!!lastNight && !lastNight.feeling && Date.now() - new Date(lastNight.lightsOn!).getTime() < 12 * 3600000)))
+  const blocks: Record<string, ReactNode> = {
+    next: (
       <NextActionCard
         state={state}
         update={update}
@@ -372,7 +402,9 @@ function TodayView({
         onSetupRestart={onSetupRestart}
         onOpenItem={onOpenItem}
       />
-
+    ),
+    schedule: (
+      <>
       <section className="check-in today-check-in">
         <div>
           <p className="eyebrow">A small check-in</p>
@@ -396,10 +428,6 @@ function TodayView({
           ))}
         </div>
       </section>
-
-      <SleepToggle state={state} update={update} onOpen={() => onOpenSpace("sleep")} />
-      <HappinessCard state={state} update={update} onOpen={() => onOpenSpace("happiness")} />
-
       <div className="page-grid">
         <div className="page-grid__main">
           <section className="section-block">
@@ -585,6 +613,54 @@ function TodayView({
           </section>
         </aside>
       </div>
+      </>
+    ),
+    sleep: <SleepToggle state={state} update={update} onOpen={() => onOpenSpace("sleep")} featured={sleepMatters} />,
+    happiness: <HappinessCard state={state} update={update} onOpen={() => onOpenSpace("happiness")} />,
+    winddown: <WindDown state={state} onReflect={() => onOpenSpace("reflect")} />,
+  }
+  // Something starting soon (within two hours) always comes first, whatever the time of day.
+  const soon = (() => {
+    if (!upNext || upNext.when !== "today" || !upNext.item.time) return false
+    const [h, m] = upNext.item.time.split(":").map(Number)
+    const now = new Date()
+    const diff = h * 60 + m - (now.getHours() * 60 + now.getMinutes())
+    return diff >= -30 && diff <= 120
+  })()
+  const order: Record<ReturnType<typeof partOfDay>, string[]> = {
+    morning: sleepMatters ? ["sleep", "next", "schedule", "happiness"] : ["next", "schedule", "happiness", "sleep"],
+    day: ["next", "schedule", "happiness", "sleep"],
+    evening: soon ? ["next", "happiness", "winddown", "schedule", "sleep"] : ["happiness", "winddown", "next", "schedule", "sleep"],
+    night: soon ? ["next", "sleep", "happiness", "winddown", "schedule"] : ["sleep", "happiness", "winddown", "schedule"],
+  }
+
+  return (
+    <div className={`page today-page is-${part}`}>
+      <section className="today-hero">
+        <img
+          src="/assets/life-studio-room.jpg"
+          alt=""
+          className="today-hero__image"
+        />
+        <div className="today-hero__veil" />
+        <div className="today-hero__content">
+          <p className="eyebrow eyebrow--light">
+            {formatDate(today(), {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}
+          </p>
+          <h1>
+            {greeting}, {state.name}.
+          </h1>
+          <p>What would make today feel a little more like yours?</p>
+        </div>
+      </section>
+
+      {order[part].map((key) => (
+        <Fragment key={key}>{blocks[key]}</Fragment>
+      ))}
     </div>
   )
 }

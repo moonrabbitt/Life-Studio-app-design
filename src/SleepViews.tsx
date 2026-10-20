@@ -69,72 +69,111 @@ export const sleepContext = (state: AppState) => {
   }
 }
 
-// One button on Today: Lights out at night, Lights on in the morning, then "how did you sleep?".
-export function SleepToggle({ state, update, onOpen }: { state: AppState; update: Update; onOpen: () => void }) {
+const NIGHT_LINES = [
+  "The samoyed’s already asleep. Your turn.",
+  "Phone down, lights low. Tomorrow can wait.",
+  "Tuck the day in. You did enough.",
+  "Cosy o’clock.",
+  "The day is done. Off you pop.",
+]
+const MORNING_LINES = [
+  "Rise and shine (or rise and squint).",
+  "Morning! The kettle’s calling.",
+  "Good morning, sleepyhead.",
+  "A brand new day, freshly unwrapped.",
+  "Up you get. Slowly is fine.",
+]
+const FEELING_FACES: Record<NonNullable<SleepEntry["feeling"]>, string> = { rough: "😵‍💫", okay: "🙂", rested: "✨" }
+const lineFor = (lines: string[]) => lines[Number(today().replace(/-/g, "")) % lines.length]
+
+// Lights out at night, Lights on in the morning, then "how did you sleep?". Featured = big, with a picture.
+export function SleepToggle({ state, update, onOpen, featured = false }: { state: AppState; update: Update; onOpen: () => void; featured?: boolean }) {
   const asleep = openSleep(state)
   const [justWoke, setJustWoke] = useState<string | null>(null)
   const woke = justWoke ? (state.sleep ?? []).find((entry) => entry.id === justWoke) : undefined
   const last = nights(state)[0]
   const hour = new Date().getHours()
   const evening = hour >= 18 || hour < 4
+  const recentLast = last && nightOf(last) >= new Date(Date.now() - 36 * HOUR).toISOString().slice(0, 10) ? last : undefined
+  // In the morning, ask how you slept if you haven't said yet.
+  const unrated = !evening && recentLast && !recentLast.feeling ? recentLast : undefined
+  const rating = woke ?? unrated
 
-  if (woke)
-    return (
-      <section className="sleep-toggle">
-        <Sun size={20} />
-        <div>
-          <strong>Morning. You slept {hoursLabel(sleepMinutes(woke))}.</strong>
+  const lightsOut = () =>
+    update((current) => ({ ...current, sleep: [...(current.sleep ?? []), { id: uid(), lightsOut: new Date().toISOString() }] }), "Night night. 🌙")
+  const lightsOn = (entry: SleepEntry) => {
+    update((current) => ({
+      ...current,
+      sleep: (current.sleep ?? []).map((item) => (item.id === entry.id ? { ...item, lightsOn: new Date().toISOString() } : item)),
+    }))
+    setJustWoke(entry.id)
+  }
+  const rate = (entry: SleepEntry, value: NonNullable<SleepEntry["feeling"]>) => {
+    update((current) => ({ ...current, sleep: (current.sleep ?? []).map((item) => (item.id === entry.id ? { ...item, feeling: value } : item)) }))
+    setJustWoke(null)
+  }
+
+  const art = (night: boolean) =>
+    featured ? (
+      <>
+        <img className={`sleep-moment__art ${night ? "" : "is-samoyed"}`} src={night ? "/assets/writing-nook.jpg" : "/assets/samoyed.png"} alt="" />
+        <div className="sleep-moment__veil" />
+      </>
+    ) : null
+  const wrap = (night: boolean, children: React.ReactNode) => (
+    <section className={`sleep-toggle ${featured ? `sleep-moment ${night ? "is-night-art" : "is-morning-art"}` : ""} ${!featured && night ? "is-night" : ""}`}>
+      {art(night)}
+      <div className="sleep-moment__content">{children}</div>
+    </section>
+  )
+
+  if (rating)
+    return wrap(
+      false,
+      <>
+        <Sun size={featured ? 26 : 20} />
+        <div className="sleep-moment__text">
+          {featured && <p className="eyebrow eyebrow--light">{lineFor(MORNING_LINES)}</p>}
+          <strong>You slept {hoursLabel(sleepMinutes(rating))}.</strong>
           <small>How did you sleep?</small>
         </div>
         <div className="sleep-toggle__feelings">
           {FEELINGS.map(([value, label]) => (
-            <button
-              type="button"
-              key={value}
-              onClick={() => {
-                update((current) => ({ ...current, sleep: (current.sleep ?? []).map((entry) => (entry.id === woke.id ? { ...entry, feeling: value } : entry)) }))
-                setJustWoke(null)
-              }}
-            >
-              {label}
+            <button type="button" key={value} onClick={() => rate(rating, value)}>
+              <span aria-hidden="true">{FEELING_FACES[value]}</span> {label}
             </button>
           ))}
         </div>
-      </section>
+      </>,
     )
 
   if (asleep)
-    return (
-      <section className="sleep-toggle is-night">
-        <Moon size={20} />
-        <div>
+    return wrap(
+      evening,
+      <>
+        {evening ? <Moon size={featured ? 26 : 20} /> : <Sun size={featured ? 26 : 20} />}
+        <div className="sleep-moment__text">
+          {featured && <p className="eyebrow eyebrow--light">{evening ? "Night night" : lineFor(MORNING_LINES)}</p>}
           <strong>Lights out at {clock(asleep.lightsOut)}</strong>
-          <small>Tap when you’re up.</small>
+          <small>{evening ? "Sleep well. Tap Lights on when you’re up." : "Tap when you’re up."}</small>
         </div>
-        <Button
-          icon={Sun}
-          onClick={() => {
-            update((current) => ({
-              ...current,
-              sleep: (current.sleep ?? []).map((entry) => (entry.id === asleep.id ? { ...entry, lightsOn: new Date().toISOString() } : entry)),
-            }))
-            setJustWoke(asleep.id)
-          }}
-        >
+        <Button icon={Sun} onClick={() => lightsOn(asleep)}>
           Lights on
         </Button>
-      </section>
+      </>,
     )
 
-  return (
-    <section className={`sleep-toggle ${evening ? "is-evening" : ""}`}>
-      <Moon size={20} />
-      <button type="button" className="sleep-toggle__summary" onClick={onOpen}>
-        {last && nightOf(last) >= new Date(Date.now() - 36 * HOUR).toISOString().slice(0, 10) ? (
+  return wrap(
+    evening,
+    <>
+      <Moon size={featured ? 26 : 20} />
+      <button type="button" className="sleep-toggle__summary sleep-moment__text" onClick={onOpen}>
+        {featured && evening && <span className="eyebrow eyebrow--light">{lineFor(NIGHT_LINES)}</span>}
+        {recentLast ? (
           <>
             <strong>
-              Last night {hoursLabel(sleepMinutes(last))}
-              {last.feeling ? ` · ${last.feeling}` : ""}
+              Last night {hoursLabel(sleepMinutes(recentLast))}
+              {recentLast.feeling ? ` · ${FEELING_FACES[recentLast.feeling]} ${recentLast.feeling}` : ""}
             </strong>
             <small>See your sleep</small>
           </>
@@ -145,19 +184,10 @@ export function SleepToggle({ state, update, onOpen }: { state: AppState; update
           </>
         )}
       </button>
-      <Button
-        variant={evening ? "primary" : "secondary"}
-        icon={Moon}
-        onClick={() =>
-          update(
-            (current) => ({ ...current, sleep: [...(current.sleep ?? []), { id: uid(), lightsOut: new Date().toISOString() }] }),
-            "Lights out. Sleep well.",
-          )
-        }
-      >
+      <Button variant={evening ? "primary" : "secondary"} icon={Moon} onClick={lightsOut}>
         Lights out
       </Button>
-    </section>
+    </>,
   )
 }
 
