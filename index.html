@@ -8,6 +8,15 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <meta name="theme-color" content="#34543f" />
+    <script>
+      // Apply dark mode before the app loads, so evenings don't flash white.
+      try {
+        var saved = JSON.parse(localStorage.getItem("life-studio:v1") || "{}").theme || "evening"
+        var hour = new Date().getHours()
+        var dark = saved === "dark" || (saved === "evening" && (hour >= 19 || hour < 6)) || (saved === "system" && matchMedia("(prefers-color-scheme: dark)").matches)
+        document.documentElement.dataset.theme = dark ? "dark" : "light"
+      } catch (error) {}
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Life Studio" />

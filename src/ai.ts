@@ -301,6 +301,9 @@ export function digestContext(state: AppState, weekStart: string) {
     today,
     weekStart,
     name: state.name,
+    // How they slept this week and the little things that made them happy.
+    sleep: sleepContext(state),
+    pocketsOfHappiness: (state.happiness ?? []).filter((pocket) => pocket.date >= weekStart).map((pocket) => pocket.text).slice(0, 10),
     done: week
       .filter((item) => item.status === "complete")
       .map((item) => ({

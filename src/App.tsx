@@ -11,7 +11,6 @@ import {
   CloudCheck,
   CloudOff,
   CircleDollarSign,
-  Clock3,
   Coffee,
   Dumbbell,
   Feather,
@@ -59,7 +58,6 @@ import {
   askMoneyGuide,
   askStudio,
   localDate,
-  suggestGymSession,
   type StudioAction,
   type StudioProposal,
 } from "./ai"
@@ -68,18 +66,16 @@ import { listen, speechSupported } from "./speech"
 import { downloadVoice, getPasscode } from "./sync"
 import { areaMeta, demoState } from "./data"
 import { createSeries, REPEAT_LABELS } from "./series"
-import { checkPlacement, mondayOf, nextUsefulAction } from "./training"
+import { checkPlacement, nextUsefulAction } from "./training"
 import type {
   ActivityKind,
   AppState,
-  PlannedExercise,
   RepeatFrequency,
   Area,
   CheckIn,
   Goal,
   JournalEntry,
   PlanItem,
-  Project,
 } from "./types"
 import {
   ActivityButtons,
@@ -92,7 +88,6 @@ import {
   NextActionCard,
   PlannedWorkoutList,
   RestartSetup,
-  WorkoutEditor,
   Roadmap,
   skipItem,
   StatusBadge,
@@ -111,10 +106,7 @@ import {
 import { HomeSpace } from "./HomeViews"
 import { LogEditor, MyWorkouts, StrengthProgress } from "./GymViews"
 import {
-  actionWarnings as checkActionWarnings,
   applyAction,
-  areaKeys,
-  blankAction,
   destinationOf,
   isDate,
   isTime,
@@ -2953,6 +2945,32 @@ function PreferencesSpace({
             ))}
           </div>
         </section>
+        <section>
+          <div>
+            <h3>Dark mode</h3>
+            <p>Easier on the eyes at night. “Evenings” goes dark from 7pm to 6am.</p>
+          </div>
+          <div className="segmented">
+            {(
+              [
+                ["evening", "Evenings"],
+                ["light", "Light"],
+                ["dark", "Dark"],
+                ["system", "Like my phone"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                type="button"
+                className={(state.theme ?? "evening") === value ? "is-active" : ""}
+                aria-pressed={(state.theme ?? "evening") === value}
+                onClick={() => update((current) => ({ ...current, theme: value }))}
+                key={value}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </section>
         <section className="priority-setting">
           <div>
             <h3>What matters in this season?</h3>
@@ -4219,6 +4237,24 @@ export default function App() {
   const [restartSetup, setRestartSetup] = useState(false)
   const [editProfile, setEditProfile] = useState(false)
   const [setupAgain, setSetupAgain] = useState(false)
+  // Dark mode: evenings by default (7pm-6am), or the user's choice. Rechecked every minute.
+  useEffect(() => {
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)")
+    const apply = () => {
+      const choice = state.theme ?? "evening"
+      const hour = new Date().getHours()
+      const dark = choice === "dark" || (choice === "evening" && (hour >= 19 || hour < 6)) || (choice === "system" && !!media?.matches)
+      document.documentElement.dataset.theme = dark ? "dark" : "light"
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#161915" : "#34543f")
+    }
+    apply()
+    const timer = window.setInterval(apply, 60000)
+    media?.addEventListener?.("change", apply)
+    return () => {
+      window.clearInterval(timer)
+      media?.removeEventListener?.("change", apply)
+    }
+  }, [state.theme])
   const [chatFocus, setChatFocus] = useState<"move" | undefined>(undefined)
   // Anywhere can open Studio (e.g. Movement's "Plan with Studio"), optionally focused on movement.
   useEffect(() => {

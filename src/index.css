@@ -10280,3 +10280,156 @@ label.setup-review__pick > span {
   background: rgb(255 255 255 / 55%);
   color: #3b2a1a;
 }
+
+/* ---------------------------------------------------------------------------
+   Dark mode (evenings by default). Warm, low light, same personality.
+   --------------------------------------------------------------------------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #161915;
+  --paper-deep: #1d211c;
+  --surface: #22261f;
+  --surface-soft: #1b1f19;
+  --moss: #a9cdb3;
+  --moss-dark: #cfe3d4; /* used for text; the few background uses are overridden below */
+  --moss-fill: #4a7658;
+  --sage: #7d9070;
+  --sage-soft: #2a3427;
+  --olive: #b4c49b;
+  --peach: #d09a80;
+  --peach-soft: #3a2a23;
+  --terracotta: #e8a593;
+  --honey: #e2bd6e;
+  --ink: #ece6da;
+  --ink-soft: #b8b1a3;
+  --line: #3a3f36;
+  --rose: #d9a3a1;
+  --blue: #9bb5b1;
+  --shadow: 0 18px 50px rgb(0 0 0 / 35%);
+  --shadow-soft: 0 8px 25px rgb(0 0 0 / 28%);
+}
+:root[data-theme="dark"] body {
+  background: var(--paper);
+  color: var(--ink);
+}
+/* Filled green things keep a deep fill so white text stays readable. */
+:root[data-theme="dark"] :is(.button--primary, .day-strip button.is-selected, .milestone-list > button.is-complete .milestone-list__check, .money-guide-card__icon, .learning-path__list > button > span.is-complete, .money-figure--primary, .coach-preview li > span, .workout-list button.is-complete > span:first-child, .roadmap__countdown, .chat-bubble--user, .studio-chat__send, .quick-menu__next, .voice-list__play, .setup-chat__send, .setup-chat__bubble.is-me, .up-next-badge, .about-card__icon, .workout__head > span, .plan-change__phases li > span, .setup-chat__chips button.is-selected) {
+  background: var(--moss-fill);
+  color: #f6f1e6;
+}
+:root[data-theme="dark"] .button--primary:hover:not(:disabled) {
+  background: #5a8a69;
+}
+:root[data-theme="dark"] .button--danger {
+  color: #f0b7a8;
+}
+/* Translucent paper panels */
+:root[data-theme="dark"] :is(.check-in, .section-block, .agenda, .journey-section, .journey-block, .journey-records, .agenda-item.is-proposed, .companion-card__actions button) {
+  background: rgb(34 38 31 / 88%);
+}
+:root[data-theme="dark"] .bottom-nav {
+  background: rgb(28 32 26 / 94%);
+}
+:root[data-theme="dark"] .mobile-topbar,
+:root[data-theme="dark"] .desktop-rail {
+  background: var(--paper);
+}
+/* Warm tinted cards */
+:root[data-theme="dark"] .today-item--focus {
+  background: linear-gradient(120deg, #262b23, #20251e);
+}
+:root[data-theme="dark"] .area-reflect { background: #3d2a25; color: #f0c2b4; }
+:root[data-theme="dark"] .area-create { background: #3b3320; color: #ecd18f; }
+:root[data-theme="dark"] .area-connect { background: #3b2628; color: #efbcbb; }
+:root[data-theme="dark"] .area-move { background: #263526; color: #b9d8be; }
+:root[data-theme="dark"] .area-money { background: #30321f; color: #d6d9a6; }
+:root[data-theme="dark"] .area-home { background: #22332f; color: #b5d6d0; }
+:root[data-theme="dark"] :is(.toast, .moments-banner, .skip-link) {
+  background: #2e4b38;
+  color: #f6f1e6;
+}
+:root[data-theme="dark"] .segmented button.is-active {
+  background: var(--moss-fill);
+  color: #f6f1e6;
+}
+:root[data-theme="dark"] :is(.area-create, .money-guide-card__icon.is-gold, .space-card--gold .space-card__icon, .money-lesson__visual > span, .milestone-celebration__card > span) {
+  background: #3b3320;
+}
+:root[data-theme="dark"] :is(.companion-card, .week-note, .project-card__visual) {
+  background: linear-gradient(135deg, #232a22, #2b2520);
+}
+:root[data-theme="dark"] :is(.finished-note, .energy-explore) {
+  background: linear-gradient(150deg, #2d2919, var(--surface));
+}
+:root[data-theme="dark"] .finished-shelf .swipe__content > button {
+  background: #2d2919;
+  border-color: rgb(214 165 75 / 30%);
+}
+:root[data-theme="dark"] .happiness-card {
+  background: linear-gradient(135deg, #2c231f, var(--surface));
+}
+:root[data-theme="dark"] .happiness-card.is-found {
+  background: linear-gradient(135deg, #36271f, #2a221d);
+}
+:root[data-theme="dark"] .happiness-jar__reach blockquote {
+  background: #36271f;
+}
+:root[data-theme="dark"] .look-back__moments span {
+  background: rgb(255 255 255 / 8%);
+}
+:root[data-theme="dark"] :is(input, textarea, select) {
+  background: var(--surface-soft);
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] :is(input, textarea)::placeholder {
+  color: #8d877b;
+}
+:root[data-theme="dark"] .modal {
+  background: var(--paper);
+}
+:root[data-theme="dark"] .modal-backdrop,
+:root[data-theme="dark"] .modal-overlay {
+  background: rgb(0 0 0 / 55%);
+}
+/* Pictures sit a little dimmer at night */
+:root[data-theme="dark"] :is(.today-hero__image, .art, .project-card__visual img, .week-card__art img, .roadmap__art) {
+  filter: brightness(0.8) saturate(0.9);
+}
+:root[data-theme="dark"] .companion-card img {
+  filter: brightness(0.9);
+}
+:root[data-theme="dark"] .swipe__action.is-neutral {
+  background: #56664c;
+}
+:root[data-theme="dark"] .sleep-chart__bar.is-empty {
+  background: #3a3f36;
+}
+:root[data-theme="dark"] :is(.modal__header, .studio-chat__footer, .mobile-topbar) {
+  background: rgb(22 25 21 / 94%);
+}
+:root[data-theme="dark"] .desktop-rail {
+  background: rgb(27 31 25 / 92%);
+}
+:root[data-theme="dark"] body {
+  background-image: none;
+}
+:root[data-theme="dark"] .plan-note {
+  background: linear-gradient(145deg, var(--sage-soft), #23261f);
+}
+:root[data-theme="dark"] .space-card--rose .space-card__icon {
+  background: #3b2628;
+}
+:root[data-theme="dark"] .daily-lesson-card__top > span {
+  background: #3b3320;
+}
+:root[data-theme="dark"] .breath-orb.is-running.breath-orb--breathe-in {
+  background: #2e3a2b;
+}
+:root[data-theme="dark"] .look-back {
+  background-color: var(--surface);
+}
+:root[data-theme="dark"] .modal__header h2,
+:root[data-theme="dark"] .modal__header .icon-button {
+  color: var(--ink);
+}

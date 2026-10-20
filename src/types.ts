@@ -432,6 +432,8 @@ export type AppState = {
   // Snapshots kept when you set up again from the top.
   archives?: SpaceArchive[]
   tourDone?: boolean
+  // Dark mode: in the evening (default), always light, always dark, or follow the phone.
+  theme?: "evening" | "light" | "dark" | "system"
   // A little pocket of happiness each day.
   happiness?: HappinessPocket[]
   // Things Studio had wrong, in your words. Sent first, and they override everything else.

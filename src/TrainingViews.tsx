@@ -25,7 +25,7 @@ import {
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { countdown, EventsList } from "./EventsViews"
-import { goalDate, goalFeeling, GoalMilestones } from "./MilestoneViews"
+import { goalDate, goalFeeling } from "./MilestoneViews"
 import { celebrate } from "./GoalProjectViews"
 import { ChangeDirection, PastPlans } from "./PlanChange"
 import { NextWeekPlanner, ProgressionPlanner } from "./NextWeek"
@@ -48,7 +48,6 @@ import {
   mondayOf,
   nextMonday,
   nextUsefulAction,
-  addPlanWeek,
   isRestDay,
   phasesOf,
   phaseTimeline,

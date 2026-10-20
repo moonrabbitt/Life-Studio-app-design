@@ -435,6 +435,8 @@ coming up next week.
 - "nextWeek": 1-2 sentences on what is planned next week, gently; suggest one small focus if useful,
   in line with context.phase (e.g. "week 3 of base building").
 - "encouragement": one short line, genuine and not cheesy, no exclamation-mark overload.
+- If context.pocketsOfHappiness has entries, mention one or two of them warmly in "thisWeek" (their
+  words, lightly). If context.sleep shows short or rough nights, acknowledge it gently; never lecture.
 - No guilt, no streaks, no comparison, no calorie or body talk.`
 
 const replanSchema = {
