@@ -355,12 +355,14 @@ export function NextActionCard({
   onActivity,
   onRoadmap,
   onSetupRestart,
+  onOpenItem,
 }: {
   state: AppState
   update: Update
   onActivity: (id: string, mode: ActivityMode) => void
   onRoadmap: () => void
   onSetupRestart: () => void
+  onOpenItem?: (id: string) => void
 }) {
   const next = nextUsefulAction(state.plan, today())
   const hasRestart = state.plan.some((item) => item.phase === "restart")
@@ -433,12 +435,36 @@ export function NextActionCard({
           <Zap size={14} /> Keeping it small: {item.shortVersion.note}
         </p>
       )}
-      <ActivityButtons
-        item={item}
-        onActivity={onActivity}
-        onSkip={(id) => skipItem(update, id)}
-        preferShort={state.checkIn === "low"}
-      />
+      {item.kind ? (
+        <ActivityButtons
+          item={item}
+          onActivity={onActivity}
+          onSkip={(id) => skipItem(update, id)}
+          preferShort={state.checkIn === "low"}
+        />
+      ) : (
+        <div className="activity-buttons">
+          <Button
+            icon={Check}
+            onClick={() => {
+              update((current) => ({
+                ...current,
+                plan: current.plan.map((candidate) =>
+                  candidate.id === item.id ? { ...candidate, status: "complete", log: { completedAt: new Date().toISOString(), summary: candidate.title } } : candidate,
+                ),
+              }))
+              celebrate({ title: item.title, body: "Done. One less thing on your mind." })
+            }}
+          >
+            Done
+          </Button>
+          {onOpenItem && (
+            <Button variant="ghost" onClick={() => onOpenItem(item.id)}>
+              Details
+            </Button>
+          )}
+        </div>
+      )}
       <div className="today-next__links">
         {item.status === "proposed" && item.batch && (
           <button

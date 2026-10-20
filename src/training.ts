@@ -612,11 +612,10 @@ export function nextUsefulAction(plan: PlanItem[], todayDate: string, now = new 
     time ? Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5)) : null
   const byTime = (a: PlanItem, b: PlanItem) =>
     `${a.date}${a.time ?? "99"}`.localeCompare(`${b.date}${b.time ?? "99"}`)
-  // Structured activities only; other plans stay in Today's list below.
-  const candidates = plan.filter(
-    (item) => open(item) && !!item.kind && item.kind !== "recovery",
-  )
-  const todays = candidates.filter((item) => item.date === todayDate).sort(byTime)
+  // Today: anything planned (classes, plans with people, tasks), except rest days.
+  const todays = plan.filter((item) => open(item) && item.date === todayDate && !isRestDay(item)).sort(byTime)
+  // Looking ahead: real sessions only (classes and workouts, not rest days or next week's check-in).
+  const candidates = plan.filter((item) => open(item) && !!item.kind && !isRestDay(item))
   const pick = (items: PlanItem[]) =>
     items.find((item) => !item.optional) ?? items[0]
   const upcoming = todays.filter((item) => {
@@ -627,7 +626,7 @@ export function nextUsefulAction(plan: PlanItem[], todayDate: string, now = new 
   if (today) return { item: today, when: "today" as const }
   // Looking ahead, only real sessions count (not next week's check-in).
   const later = candidates
-    .filter((item) => item.date > todayDate && item.date <= addDays(todayDate, 7) && EXERCISE.includes(item.kind!))
+    .filter((item) => item.date > todayDate && item.date <= addDays(todayDate, 7) && (EXERCISE.includes(item.kind!) || item.kind === "recovery"))
     .sort(byTime)
   const next = pick(later)
   return next ? { item: next, when: "later" as const } : null

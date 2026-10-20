@@ -370,6 +370,7 @@ function TodayView({
         onActivity={onActivity}
         onRoadmap={onRoadmap}
         onSetupRestart={onSetupRestart}
+        onOpenItem={onOpenItem}
       />
 
       <section className="check-in today-check-in">
