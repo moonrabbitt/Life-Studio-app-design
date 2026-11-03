@@ -1,3 +1,4 @@
+import { play, setSoundsOn } from "./sounds"
 import {
   ArrowLeft,
   Compass,
@@ -2956,6 +2957,34 @@ function PreferencesSpace({
         </section>
         <section>
           <div>
+            <h3>Sounds</h3>
+            <p>A soft chime when you finish something, and a gentle hush for Lights out. Nothing for ordinary taps.</p>
+          </div>
+          <div className="segmented">
+            {(
+              [
+                [true, "On"],
+                [false, "Off"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                type="button"
+                className={(state.sounds !== false) === value ? "is-active" : ""}
+                aria-pressed={(state.sounds !== false) === value}
+                onClick={() => {
+                  setSoundsOn(value)
+                  if (value) play("done")
+                  update((current) => ({ ...current, sounds: value }))
+                }}
+                key={label}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </section>
+        <section>
+          <div>
             <h3>Dark mode</h3>
             <p>Easier on the eyes at night. “Evenings” goes dark from 7pm to 6am.</p>
           </div>
@@ -4278,6 +4307,7 @@ export default function App() {
     } else if (action === "studio") setCapture(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  useEffect(() => setSoundsOn(state.sounds !== false), [state.sounds])
   // Dark mode: evenings by default (7pm-6am), or the user's choice. Rechecked every minute.
   useEffect(() => {
     const media = window.matchMedia?.("(prefers-color-scheme: dark)")
@@ -4501,7 +4531,14 @@ export default function App() {
         <div className="toast" role="status">
           <Trash2 size={17} />
           {undo.message}
-          <button type="button" className="toast__undo" onClick={undo.run}>
+          <button
+            type="button"
+            className="toast__undo"
+            onClick={() => {
+              play("undo")
+              undo.run()
+            }}
+          >
             Undo
           </button>
         </div>

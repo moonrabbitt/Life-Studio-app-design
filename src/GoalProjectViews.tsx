@@ -1,3 +1,4 @@
+import { play } from "./sounds"
 import {
   ArrowDown,
   ArrowLeft,
@@ -38,8 +39,10 @@ const formatMoney = (pence: number) =>
 export type CelebrationMessage = { title: string; body: string; big?: boolean }
 
 // Celebrate from anywhere; the app shell shows it.
-export const celebrate = (message: CelebrationMessage) =>
+export const celebrate = (message: CelebrationMessage) => {
+  play(message.big ? "big" : "done")
   window.dispatchEvent(new CustomEvent<CelebrationMessage>("studio:celebrate", { detail: message }))
+}
 
 const AREA_CHEERS: Record<string, string> = {
   connect: "Time with people you care about counts.",

@@ -451,6 +451,8 @@ export type AppState = {
   notifications?: NotificationPrefs
   // Dark mode: in the evening (default), always light, always dark, or follow the phone.
   theme?: "evening" | "light" | "dark" | "system"
+  // Soft sound effects for moments worth marking (on unless turned off).
+  sounds?: boolean
   // A little pocket of happiness each day.
   happiness?: HappinessPocket[]
   // Things Studio had wrong, in your words. Sent first, and they override everything else.

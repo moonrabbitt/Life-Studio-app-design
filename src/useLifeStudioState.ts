@@ -1,3 +1,4 @@
+import { play } from "./sounds"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { getVoiceNote } from "./audioStore"
 import { demoState, emptyState } from "./data"
@@ -130,6 +131,7 @@ export function useLifeStudioState() {
     (recipe: (current: AppState) => AppState, message: string) => {
       const previous = stateRef.current
       commit(recipe)
+      play("remove")
       setUndo({ message, previous })
       window.clearTimeout(undoTimer.current)
       undoTimer.current = window.setTimeout(() => setUndo(null), 6000)

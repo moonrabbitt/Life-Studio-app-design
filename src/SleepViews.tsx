@@ -1,3 +1,4 @@
+import { play } from "./sounds"
 import { Moon, Plus, Sun, Trash2 } from "lucide-react"
 import { useState } from "react"
 import type { AppState, SleepEntry } from "./types"
@@ -99,9 +100,12 @@ export function SleepToggle({ state, update, onOpen, featured = false }: { state
   const unrated = !evening && recentLast && !recentLast.feeling ? recentLast : undefined
   const rating = woke ?? unrated
 
-  const lightsOut = () =>
+  const lightsOut = () => {
+    play("night")
     update((current) => ({ ...current, sleep: [...(current.sleep ?? []), { id: uid(), lightsOut: new Date().toISOString() }] }), "Night night. 🌙")
+  }
   const lightsOn = (entry: SleepEntry) => {
+    play("morning")
     update((current) => ({
       ...current,
       sleep: (current.sleep ?? []).map((item) => (item.id === entry.id ? { ...item, lightsOn: new Date().toISOString() } : item)),
