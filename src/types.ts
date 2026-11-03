@@ -136,6 +136,8 @@ export type PlanItem = {
   personId?: string
   seriesId?: string
   eventId?: string
+  // Ask for a reminder before this one, even if session reminders are off.
+  remind?: boolean
   links?: EventLink[]
   log?: ActivityLog
 }
@@ -306,6 +308,19 @@ export type HappinessPocket = {
   at: string
 }
 
+export type NotificationPrefs = {
+  enabled: boolean
+  morning: { on: boolean; time: string }
+  happiness: { on: boolean; time: string }
+  lightsOut: { on: boolean; time?: string } // no time = your usual bedtime from the sleep log
+  sessions: { on: boolean; minutesBefore: number }
+  weekly: { on: boolean }
+  dates: { on: boolean }
+  dailyMax: number
+  quiet: { from: string; to: string }
+  pausedUntil?: string // YYYY-MM-DD, inclusive
+}
+
 export type SleepEntry = {
   id: string
   lightsOut: string // ISO time
@@ -432,6 +447,8 @@ export type AppState = {
   // Snapshots kept when you set up again from the top.
   archives?: SpaceArchive[]
   tourDone?: boolean
+  // Gentle notifications: what's on, when, and how many a day at most.
+  notifications?: NotificationPrefs
   // Dark mode: in the evening (default), always light, always dark, or follow the phone.
   theme?: "evening" | "light" | "dark" | "system"
   // A little pocket of happiness each day.

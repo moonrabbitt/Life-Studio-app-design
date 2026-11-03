@@ -662,6 +662,12 @@ export function PlanItemSheet({
             </p>
           )}
           {item.note && <p className="plan-sheet__note">{item.note}</p>}
+          {open && item.time && item.date >= today() && (
+            <label className="check-row plan-sheet__remind">
+              <input type="checkbox" checked={!!item.remind} onChange={(event) => patch({ remind: event.target.checked || undefined }, event.target.checked ? "I’ll remind you before it." : "No reminder for this one.")} />
+              <span>Remind me before this ({state.notifications?.sessions?.minutesBefore ?? 30} min)</span>
+            </label>
+          )}
           {(item.links ?? []).length > 0 && (
             <div className="events__links">
               {item.links!.map((link) => (

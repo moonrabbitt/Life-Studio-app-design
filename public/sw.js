@@ -1,4 +1,4 @@
-const CACHE = "life-studio-shell-v3"
+const CACHE = "life-studio-shell-v4"
 const SHELL = ["/", "/manifest.webmanifest", "/life-studio-icon.svg"]
 
 self.addEventListener("install", (event) => {
@@ -52,5 +52,41 @@ self.addEventListener("fetch", (event) => {
           return response
         }),
     ),
+  )
+})
+
+// Gentle notifications from the server (see netlify/functions/notify.mts).
+self.addEventListener("push", (event) => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch (error) {
+    data = { title: "Life Studio", body: event.data ? event.data.text() : "" }
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Life Studio", {
+      body: data.body || "",
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      tag: data.tag || "life-studio",
+      data: { url: data.url || "/" },
+    }),
+  )
+})
+
+// Tapping a notification opens the app on the right thing (or focuses it if it's open).
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close()
+  const target = new URL((event.notification.data && event.notification.data.url) || "/", self.location.origin).href
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      for (const client of windows) {
+        if ("focus" in client) {
+          client.navigate(target).catch(() => undefined)
+          return client.focus()
+        }
+      }
+      return self.clients.openWindow(target)
+    }),
   )
 })

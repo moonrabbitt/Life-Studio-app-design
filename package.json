@@ -13,7 +13,8 @@
     "@netlify/blobs": "^11.1.4",
     "lucide-react": "^1.59.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "web-push": "3.6.7"
   },
   "devDependencies": {
     "@netlify/functions": "^6.0.2",
@@ -21,6 +22,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/web-push": "3.6.4",
     "@vitejs/plugin-react": "^6.0.0",
     "oxfmt": "^0.2.0",
     "tailwindcss": "^4.0.0",

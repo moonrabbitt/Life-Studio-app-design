@@ -122,6 +122,8 @@ import { AboutMeSpace } from "./AboutMe"
 import { SetupChat } from "./SetupChat"
 import { applySetup } from "./setup"
 import { Tour } from "./Tour"
+import { NotificationSettings } from "./NotificationSettings"
+import { markSeen } from "./notifications"
 import { AboutMeNudge, useWeeklyAboutMe } from "./AboutMeUpdates"
 import { openSleep, SleepSpace, SleepToggle } from "./SleepViews"
 import { HappinessCard, HappinessJar } from "./HappinessViews"
@@ -2945,6 +2947,13 @@ function PreferencesSpace({
             ))}
           </div>
         </section>
+        <section className="notif-section">
+          <div>
+            <h3>Notifications</h3>
+            <p>Gentle, few, and skipped when there’s no need.</p>
+          </div>
+          <NotificationSettings state={state} update={update} />
+        </section>
         <section>
           <div>
             <h3>Dark mode</h3>
@@ -4237,6 +4246,38 @@ export default function App() {
   const [restartSetup, setRestartSetup] = useState(false)
   const [editProfile, setEditProfile] = useState(false)
   const [setupAgain, setSetupAgain] = useState(false)
+  // Tell the notification job "I'm in the app", so nothing pings while you're using it.
+  useEffect(() => {
+    markSeen()
+    const onVisible = () => document.visibilityState === "visible" && markSeen()
+    document.addEventListener("visibilitychange", onVisible)
+    return () => document.removeEventListener("visibilitychange", onVisible)
+  }, [])
+  // Links that notifications (and iPhone Shortcuts) open: /?do=lights-out, lights-on, happiness, plan-week, log, studio.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const action = params.get("do")
+    if (!action) return
+    window.history.replaceState(null, "", window.location.pathname)
+    const now = new Date().toISOString()
+    if (action === "lights-out")
+      update((current) => {
+        const asleep = (current.sleep ?? []).some((entry) => !entry.lightsOn && Date.now() - new Date(entry.lightsOut).getTime() < 6 * 3600000)
+        return asleep ? current : { ...current, sleep: [...(current.sleep ?? []), { id: uid(), lightsOut: now }] }
+      }, "Lights out. Night night 🌙")
+    else if (action === "lights-on")
+      update((current) => {
+        const open = [...(current.sleep ?? [])].sort((a, b) => b.lightsOut.localeCompare(a.lightsOut)).find((entry) => !entry.lightsOn)
+        return open ? { ...current, sleep: (current.sleep ?? []).map((entry) => (entry.id === open.id ? { ...entry, lightsOn: now } : entry)) } : current
+      }, "Lights on. Good morning ☀️")
+    else if (action === "happiness") window.setTimeout(() => document.querySelector<HTMLInputElement>(".happiness-card input")?.focus(), 400)
+    else if (action === "plan-week") setRoadmap(true)
+    else if (action === "log") {
+      setChatHint("Tell Studio what you did, e.g. walked 25 minutes, felt easy")
+      setCapture(true)
+    } else if (action === "studio") setCapture(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // Dark mode: evenings by default (7pm-6am), or the user's choice. Rechecked every minute.
   useEffect(() => {
     const media = window.matchMedia?.("(prefers-color-scheme: dark)")
