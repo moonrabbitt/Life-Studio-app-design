@@ -2,7 +2,7 @@ import type { SetupDraft } from "./ai"
 import { createSeries, REPEAT_LABELS } from "./series"
 import { cleanWeek, startNewPlan } from "./training"
 import type { AboutMe, AppState, Goal, TrainingPlan } from "./types"
-import { formatDate, today, uid } from "./ui"
+import { formatDate, properName, today, uid } from "./ui"
 
 export type SetupChoices = {
   goals: boolean[]
@@ -50,7 +50,7 @@ export function applySetup(state: AppState, draft: SetupDraft, choices: SetupCho
 
   next = {
     ...next,
-    name: name.trim() || state.name,
+    name: properName(name) || state.name,
     onboarded: true,
     tourDone: false,
     priorities: draft.priorities.length ? draft.priorities : state.priorities,

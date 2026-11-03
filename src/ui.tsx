@@ -10,6 +10,9 @@ export const useRemove = () => useContext(RemoveContext)
 
 export const today = () => localDate()
 export const uid = () => crypto.randomUUID()
+// Names always start with a capital ("james" → "James", "mary-jane" → "Mary-Jane").
+export const properName = (name = "") =>
+  name.trim().replace(/(^|[\s'’-])(\p{L})/gu, (_, before: string, letter: string) => before + letter.toUpperCase())
 export const formatDate = (
   value: string,
   options?: Intl.DateTimeFormatOptions,

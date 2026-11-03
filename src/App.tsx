@@ -131,7 +131,7 @@ import { NextWeekPlanner, nextWeekDue } from "./NextWeek"
 import { SessionPlanner, type PlannedSession } from "./SessionPlanner"
 import { VoiceNoteList } from "./VoiceNotes"
 import { WeekDigestCard } from "./WeekDigest"
-import { Art, Button, formatDate, IconButton, Modal, RemoveContext, SwipeHint, SwipeRow, today, uid, useRemove } from "./ui"
+import { Art, Button, formatDate, IconButton, Modal, properName, RemoveContext, SwipeHint, SwipeRow, today, uid, useRemove } from "./ui"
 import { useLifeStudioState, type SyncStatus } from "./useLifeStudioState"
 
 type Route = "today" | "plan" | "progress" | "space"
@@ -646,7 +646,7 @@ function TodayView({
             })}
           </p>
           <h1>
-            {greeting}, {state.name}.
+            {greeting}, {properName(state.name)}.
           </h1>
           <p>What would make today feel a little more like yours?</p>
         </div>
@@ -2904,7 +2904,7 @@ function PreferencesSpace({
               event.preventDefault()
               if (!name.trim()) return
               update(
-                (current) => ({ ...current, name: name.trim() }),
+                (current) => ({ ...current, name: properName(name) }),
                 "Your studio feels a little more yours.",
               )
             }}
@@ -4421,7 +4421,7 @@ export default function App() {
           <span>Studio assistant</span>
         </button>
         <div className="rail-footer">
-          <span>{state.name}’s Life Studio</span>
+          <span>{properName(state.name)}’s Life Studio</span>
           <small>One life, shaped gently</small>
         </div>
       </aside>
