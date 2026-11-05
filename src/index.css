@@ -5857,6 +5857,11 @@ textarea::placeholder {
   margin-top: 1.2rem;
 }
 
+/* The schedule grid has no margin of its own, so give whatever follows it the same room. */
+.today-page > .page-grid:not(:last-child) {
+  margin-bottom: 1.2rem;
+}
+
 @media (max-width: 699px) {
   .today-page .today-hero {
     min-height: 190px;
