@@ -58,6 +58,17 @@ export function sleepStats(state: AppState, days = 14) {
   }
 }
 
+// Nearly bedtime: from an hour before the chosen or usual lights out (22:30 until it knows), until 4am.
+export const nearBedtime = (state: AppState) => {
+  const now = new Date()
+  const hour = now.getHours()
+  if (hour >= 4 && hour < 18) return false
+  const bedtime = state.notifications?.lightsOut?.time || sleepStats(state)?.lightsOut || "22:30"
+  const [bedHour, bedMinute] = bedtime.split(":").map(Number)
+  const sinceSix = (hours: number, minutes: number) => ((hours - 18 + 24) % 24) * 60 + minutes
+  return sinceSix(hour, now.getMinutes()) >= sinceSix(bedHour, bedMinute) - 60
+}
+
 // What Studio sees: the last week of sleep, so plans can go lighter after a short or rough night.
 export const sleepContext = (state: AppState) => {
   const stats = sleepStats(state, 7)

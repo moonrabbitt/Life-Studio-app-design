@@ -126,7 +126,7 @@ import { Tour } from "./Tour"
 import { NotificationSettings } from "./NotificationSettings"
 import { markSeen } from "./notifications"
 import { AboutMeNudge, useWeeklyAboutMe } from "./AboutMeUpdates"
-import { openSleep, SleepSpace, SleepToggle } from "./SleepViews"
+import { nearBedtime, openSleep, SleepSpace, SleepToggle } from "./SleepViews"
 import { HappinessCard, HappinessJar } from "./HappinessViews"
 import { NextWeekPlanner, nextWeekDue } from "./NextWeek"
 import { SessionPlanner, type PlannedSession } from "./SessionPlanner"
@@ -247,6 +247,19 @@ function EmptyState({
 }
 
 // Morning (4-12), day (12-17), evening (17-21), night (21-4).
+// Same breakpoint as the phone layout in index.css.
+function useIsPhone() {
+  const [isPhone, setIsPhone] = useState(() => window.matchMedia("(max-width: 699px)").matches)
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 699px)")
+    const onChange = () => setIsPhone(media.matches)
+    onChange()
+    media.addEventListener("change", onChange)
+    return () => media.removeEventListener("change", onChange)
+  }, [])
+  return isPhone
+}
+
 const partOfDay = () => {
   const hour = new Date().getHours()
   return hour >= 4 && hour < 12 ? "morning" : hour < 17 && hour >= 12 ? "day" : hour >= 17 && hour < 21 ? "evening" : "night"
@@ -380,13 +393,69 @@ function TodayView({
 
   // Today changes with the time of day: lights on and the day ahead in the morning; the plan in the
   // day; happiness and winding down in the evening; lights out at night. "How much room" always sits
-  // right above the schedule, so you can watch it change.
+  // right above the schedule, so you can watch it change. Phones are different: see phoneOrder below.
+  const isPhone = useIsPhone()
   const part = partOfDay()
   // The big sleep card only when it matters: lights out at night, lights on / "how did you sleep?" in the morning.
   const lastNight = [...(state.sleep ?? [])].filter((entry) => entry.lightsOn).sort((a, b) => b.lightsOut.localeCompare(a.lightsOut))[0]
   const sleepMatters =
     part === "night" ||
     (part === "morning" && (!!openSleep(state) || (!!lastNight && !lastNight.feeling && Date.now() - new Date(lastNight.lightsOn!).getTime() < 12 * 3600000)))
+  // On a phone the check-in and today's shape lead, unless it's nearly bedtime or time for lights on.
+  const [bedtimeSoon, setBedtimeSoon] = useState(() => nearBedtime(state))
+  useEffect(() => {
+    const check = () => setBedtimeSoon(nearBedtime(state))
+    check()
+    const timer = window.setInterval(check, 60000)
+    document.addEventListener("visibilitychange", check)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener("visibilitychange", check)
+    }
+  }, [state])
+  const sleepFirst = bedtimeSoon || !!openSleep(state) || (part === "morning" && sleepMatters)
+  const corner = (
+    <aside className="page-grid__aside">
+      <section className="companion-card">
+        <div>
+          <p className="eyebrow">A quiet corner</p>
+          <h3>A softer day still belongs to your life.</h3>
+          <p>Rest, make tea, write one line, or leave the space open.</p>
+          <div className="companion-card__actions">
+            <button type="button" onClick={() => onOpenSpace("breathe")}>
+              <Wind size={16} /> Breathe for a minute
+            </button>
+            <button type="button" onClick={() => onOpenSpace("reflect")}>
+              <Feather size={16} /> Write one line
+            </button>
+          </div>
+        </div>
+        <img src="/assets/samoyed.png" alt="" />
+      </section>
+      <section className="quick-spaces">
+        <div className="section-heading section-heading--small">
+          <h3>Drop into a space</h3>
+        </div>
+        <div className="quick-spaces__grid">
+          {(["reflect", "create", "connect", "money"] as Area[]).map(
+            (area) => {
+              const Icon = areaIcon[area]
+              return (
+                <button
+                  type="button"
+                  onClick={() => onOpenSpace(area)}
+                  key={area}
+                >
+                  <Icon size={19} />
+                  <span>{areaMeta[area].label}</span>
+                </button>
+              )
+            },
+          )}
+        </div>
+      </section>
+    </aside>
+  )
   const blocks: Record<string, ReactNode> = {
     next: (
       <NextActionCard
@@ -567,52 +636,14 @@ function TodayView({
           </section>
         </div>
 
-        <aside className="page-grid__aside">
-          <section className="companion-card">
-            <div>
-              <p className="eyebrow">A quiet corner</p>
-              <h3>A softer day still belongs to your life.</h3>
-              <p>Rest, make tea, write one line, or leave the space open.</p>
-              <div className="companion-card__actions">
-                <button type="button" onClick={() => onOpenSpace("breathe")}>
-                  <Wind size={16} /> Breathe for a minute
-                </button>
-                <button type="button" onClick={() => onOpenSpace("reflect")}>
-                  <Feather size={16} /> Write one line
-                </button>
-              </div>
-            </div>
-            <img src="/assets/samoyed.png" alt="" />
-          </section>
-          <section className="quick-spaces">
-            <div className="section-heading section-heading--small">
-              <h3>Drop into a space</h3>
-            </div>
-            <div className="quick-spaces__grid">
-              {(["reflect", "create", "connect", "money"] as Area[]).map(
-                (area) => {
-                  const Icon = areaIcon[area]
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => onOpenSpace(area)}
-                      key={area}
-                    >
-                      <Icon size={19} />
-                      <span>{areaMeta[area].label}</span>
-                    </button>
-                  )
-                },
-              )}
-            </div>
-          </section>
-        </aside>
+        {!isPhone && corner}
       </div>
       </>
     ),
-    sleep: <SleepToggle state={state} update={update} onOpen={() => onOpenSpace("sleep")} featured={sleepMatters} />,
+    sleep: <SleepToggle state={state} update={update} onOpen={() => onOpenSpace("sleep")} featured={isPhone ? sleepFirst : sleepMatters} />,
     happiness: <HappinessCard state={state} update={update} onOpen={() => onOpenSpace("happiness")} />,
     winddown: <WindDown state={state} onReflect={() => onOpenSpace("reflect")} />,
+    corner: <div className="page-grid">{corner}</div>,
   }
   // Something starting soon (within two hours) always comes first, whatever the time of day.
   const soon = (() => {
@@ -628,6 +659,14 @@ function TodayView({
     evening: soon ? ["next", "happiness", "winddown", "schedule", "sleep"] : ["happiness", "winddown", "next", "schedule", "sleep"],
     night: soon ? ["next", "sleep", "happiness", "winddown", "schedule"] : ["sleep", "happiness", "winddown", "schedule"],
   }
+
+  const phoneOrder = [
+    ...(sleepFirst ? ["sleep"] : []),
+    "schedule",
+    ...order[part].filter((key) => key !== "schedule" && key !== "sleep"),
+    ...(sleepFirst ? [] : ["sleep"]),
+    "corner",
+  ]
 
   return (
     <div className={`page today-page is-${part}`}>
@@ -653,7 +692,7 @@ function TodayView({
         </div>
       </section>
 
-      {order[part].map((key) => (
+      {(isPhone ? phoneOrder : order[part]).map((key) => (
         <Fragment key={key}>{blocks[key]}</Fragment>
       ))}
     </div>

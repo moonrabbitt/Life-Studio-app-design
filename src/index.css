@@ -5875,6 +5875,19 @@ textarea::placeholder {
   .today-page .today-hero__content > p:last-child {
     display: none;
   }
+
+  .today-check-in {
+    margin-bottom: 1rem;
+    padding: 0.8rem;
+  }
+
+  .today-check-in h2 {
+    margin-bottom: 0.6rem;
+  }
+
+  .page-grid + .today-next {
+    margin-top: 1.2rem;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -6650,7 +6663,7 @@ html {
 
 .money-studio-hero__art {
   position: absolute;
-  z-index: -1;
+  z-index: -2;
   inset: 0;
   width: 100%;
   height: 100%;
@@ -10502,3 +10515,66 @@ label.setup-review__pick > span {
   margin: 0.2rem 0;
   font-size: 0.9rem;
 }
+
+/* ---------------------------------------------------------------------------
+   My workouts
+--------------------------------------------------------------------------- */
+
+.my-workouts {
+  display: grid;
+  gap: 0.75rem;
+  margin-block: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 1.2rem;
+  padding: 1rem;
+  background: var(--surface);
+}
+
+.my-workouts__editor {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.my-workouts__list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.my-workouts__list:empty {
+  display: none;
+}
+
+.my-workouts__row {
+  display: grid;
+  gap: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 0.8rem;
+  background: var(--surface-soft);
+}
+
+.my-workouts__title {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.my-workouts__title strong,
+.my-workouts__title small {
+  display: block;
+}
+
+.my-workouts__title small {
+  color: var(--ink-soft);
+}
+
