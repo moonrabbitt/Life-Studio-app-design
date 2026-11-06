@@ -3,10 +3,14 @@ import {
   AudioLines,
   Check,
   ChevronRight,
+  ArrowLeft,
   ExternalLink,
   Globe,
+  History,
   Mic,
   RotateCcw,
+  SquarePen,
+  Trash2,
   ShieldCheck,
   Sparkles,
   Square,
@@ -28,8 +32,8 @@ import {
 } from "./assistant"
 import { listen, speechSupported } from "./speech"
 import { PlannedWorkoutList } from "./TrainingViews"
-import type { AppState, ChatMessage } from "./types"
-import { Button, formatDate, Modal, today, uid } from "./ui"
+import type { AppState, ChatMessage, ChatThread } from "./types"
+import { Button, formatDate, IconButton, Modal, SwipeRow, today, uid, useRemove } from "./ui"
 
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
 
@@ -57,6 +61,84 @@ const MOVE_QUICK: { label: string; send?: string; hint?: string }[] = [
   { label: "Something hurts", hint: "e.g. my left knee aches after squats" },
   { label: "Log a workout", hint: "e.g. gym 40 min: goblet squats 3×8 at 12 kg, felt good" },
 ]
+
+const MAX_THREADS = 12
+
+// Keep a finished chat for later: just the conversation, not proposals that can no longer be confirmed.
+const archived = (current: AppState): ChatThread[] => {
+  const chat = current.chat ?? []
+  const history = current.chatHistory ?? []
+  const first = chat.find((message) => message.role === "user")
+  if (!first) return history
+  const title = first.text.trim().replace(/\s+/g, " ")
+  return [
+    {
+      id: uid(),
+      at: chat[chat.length - 1].at,
+      title: title.length > 70 ? `${title.slice(0, 68)}…` : title,
+      messages: chat.map(({ actions: _actions, preview: _preview, ...message }) =>
+        message.status === "pending" ? { ...message, status: "dismissed" as const } : message,
+      ),
+    },
+    ...history,
+  ].slice(0, MAX_THREADS)
+}
+
+const whenOf = (at: string) => {
+  const date = at.slice(0, 10)
+  if (date === today()) return `Today, ${new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
+  return formatDate(date, { weekday: "short", day: "numeric", month: "short" })
+}
+
+function ChatHistory({ state, update, onBack }: { state: AppState; update: Update; onBack: () => void }) {
+  const remove = useRemove()
+  const threads = state.chatHistory ?? []
+  return (
+    <div className="chat-history">
+      <button type="button" className="text-link" onClick={onBack}>
+        <ArrowLeft size={15} /> Back to this chat
+      </button>
+      {threads.length === 0 ? (
+        <p className="capture-disclaimer">No earlier chats yet. When you start a new chat, the old one is kept here.</p>
+      ) : (
+        <ul className="chat-history__list">
+          {threads.map((thread) => (
+            <SwipeRow
+              as="li"
+              key={thread.id}
+              actions={[
+                {
+                  label: "Delete",
+                  icon: Trash2,
+                  tone: "danger",
+                  onClick: () => remove((current) => ({ ...current, chatHistory: (current.chatHistory ?? []).filter((item) => item.id !== thread.id) }), "Chat deleted."),
+                },
+              ]}
+            >
+              <button
+                type="button"
+                className="chat-history__row"
+                onClick={() => {
+                  update((current) => ({
+                    ...current,
+                    chatHistory: archived(current).filter((item) => item.id !== thread.id),
+                    chat: thread.messages,
+                  }))
+                  onBack()
+                }}
+              >
+                <strong>{thread.title}</strong>
+                <small>
+                  {whenOf(thread.at)} · {thread.messages.length} message{thread.messages.length === 1 ? "" : "s"}
+                </small>
+              </button>
+            </SwipeRow>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 export function StudioChat({
   state,
@@ -86,6 +168,7 @@ export function StudioChat({
   const [keyboardHint, setKeyboardHint] = useState(false)
   // "Search the web" for the next message: Studio looks it up and shows its sources.
   const [web, setWeb] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const listener = useRef<ReturnType<typeof listen> | null>(null)
@@ -261,24 +344,28 @@ export function StudioChat({
       eyebrow={focus === "move" ? "Workouts shaped by your body, energy and goals" : "Plan, move, log and capture by chatting"}
       onClose={onClose}
       wide
+      actions={
+        <>
+          <IconButton icon={History} label="Earlier chats" active={showHistory} onClick={() => setShowHistory((value) => !value)} />
+          <IconButton
+            icon={SquarePen}
+            label="New chat"
+            onClick={() => {
+              update((current) => ({ ...current, chatHistory: archived(current), chat: [] }))
+              setShowHistory(false)
+              setFailed(null)
+              inputRef.current?.focus()
+            }}
+          />
+        </>
+      }
     >
-      <div className="studio-chat">
+      <div className={`studio-chat ${showHistory ? "is-history" : ""}`}>
+        {showHistory && <ChatHistory state={state} update={update} onBack={() => setShowHistory(false)} />}
         <div className="studio-chat__toolbar">
           <button type="button" className="text-link" onClick={onVoiceNotes}>
             <AudioLines size={15} /> Voice notes
           </button>
-          {chat.length > 0 && (
-            <button
-              type="button"
-              className="text-link"
-              onClick={() => {
-                if (window.confirm("Start a new chat? Saved changes stay in your plan."))
-                  update((current) => ({ ...current, chat: [] }))
-              }}
-            >
-              <RotateCcw size={15} /> New chat
-            </button>
-          )}
         </div>
 
         <div className="studio-chat__messages" aria-live="polite">

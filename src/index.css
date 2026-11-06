@@ -2036,6 +2036,42 @@ textarea {
   font-weight: 400;
 }
 
+/* Keep every field inside its box on phones. iPhone Safari gives date and time fields a wide minimum
+   width that ignores width: 100%, and zooms the page in on any field with text under 16px. */
+input,
+select,
+textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"] {
+  display: block;
+  -webkit-appearance: none;
+  appearance: none;
+  text-align: left;
+}
+input::-webkit-date-and-time-value {
+  min-height: 1.5em;
+  text-align: left;
+}
+.form-row > *,
+.form-row label {
+  min-width: 0;
+}
+body {
+  overflow-wrap: break-word;
+}
+@media (max-width: 699px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 textarea {
   resize: vertical;
 }
@@ -10583,3 +10619,53 @@ label.setup-review__pick > span {
   color: var(--ink-soft);
 }
 
+
+/* Studio's header: earlier chats and new chat sit beside Close, so they never scroll away. */
+.modal__header-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.35rem;
+}
+.studio-chat.is-history > :not(.chat-history) {
+  display: none;
+}
+.chat-history {
+  display: grid;
+  gap: 0.8rem;
+}
+.chat-history > .text-link {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.chat-history__list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chat-history__row {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--swipe-radius, 0.9rem);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-history__row strong {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-history__row small {
+  color: var(--ink-soft);
+}

@@ -83,12 +83,15 @@ export function Modal({
   children,
   onClose,
   wide = false,
+  actions,
 }: {
   title: string
   eyebrow?: string
   children: ReactNode
   onClose: () => void
   wide?: boolean
+  // Small buttons kept in the sticky header, beside Close.
+  actions?: ReactNode
 }) {
   const dialogRef = useRef<HTMLElement>(null)
   // Keep the latest onClose without re-running the focus setup on every parent render.
@@ -155,7 +158,10 @@ export function Modal({
             {eyebrow && <p className="eyebrow">{eyebrow}</p>}
             <h2>{title}</h2>
           </div>
-          <IconButton icon={X} label="Close" onClick={() => closeRef.current()} />
+          <div className="modal__header-actions">
+            {actions}
+            <IconButton icon={X} label="Close" onClick={() => closeRef.current()} />
+          </div>
         </header>
         <div className="modal__body">{children}</div>
       </section>

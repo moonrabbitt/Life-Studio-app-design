@@ -97,6 +97,7 @@ import {
 } from "./TrainingViews"
 import {
   Celebration,
+  celebrate,
   celebrateDone,
   GoalDetail,
   GOAL_VS_PROJECT,
@@ -396,11 +397,12 @@ function TodayView({
   // right above the schedule, so you can watch it change. Phones are different: see phoneOrder below.
   const isPhone = useIsPhone()
   const part = partOfDay()
-  // The big sleep card only when it matters: lights out at night, lights on / "how did you sleep?" in the morning.
+  // The big sleep card only when it matters: lights out at night, lights on / "how did you sleep?" for an hour after.
+  // Once you're up, sleep steps aside to the bottom (you can still rate it there).
   const lastNight = [...(state.sleep ?? [])].filter((entry) => entry.lightsOn).sort((a, b) => b.lightsOut.localeCompare(a.lightsOut))[0]
   const sleepMatters =
     part === "night" ||
-    (part === "morning" && (!!openSleep(state) || (!!lastNight && !lastNight.feeling && Date.now() - new Date(lastNight.lightsOn!).getTime() < 12 * 3600000)))
+    (part === "morning" && (!!openSleep(state) || (!!lastNight && !lastNight.feeling && Date.now() - new Date(lastNight.lightsOn!).getTime() < 3600000)))
   // On a phone the check-in and today's shape lead, unless it's nearly bedtime or time for lights on.
   const [bedtimeSoon, setBedtimeSoon] = useState(() => nearBedtime(state))
   useEffect(() => {
@@ -1521,10 +1523,13 @@ function MySpaceView({
 
 function JournalSpace({ state, update, close }: SpaceProps) {
   const [editing, setEditing] = useState<JournalEntry | null>(null)
+  // Bumped after each save so the page starts blank again.
+  const [fresh, setFresh] = useState(0)
   const remove = useRemove()
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
+    if (!String(form.get("body") || "").trim() && !String(form.get("title") || "").trim()) return
     const entry: JournalEntry = {
       id: editing?.id ?? uid(),
       title: String(form.get("title") || "Untitled entry"),
@@ -1541,9 +1546,17 @@ function JournalSpace({ state, update, close }: SpaceProps) {
             )
           : [entry, ...current.journal],
       }),
-      "Journal entry saved on this device.",
+      editing ? "Entry updated." : undefined,
     )
+    if (!editing) {
+      const words = entry.body.trim().split(/\s+/).filter(Boolean).length
+      celebrate({
+        title: "You wrote something",
+        body: words > 1 ? `${words} words, kept safe in your journal.` : "Kept safe in your journal. Every page counts.",
+      })
+    }
     setEditing(null)
+    setFresh((value) => value + 1)
   }
 
   return (
@@ -1551,7 +1564,7 @@ function JournalSpace({ state, update, close }: SpaceProps) {
       <Art className="space-banner" src="/assets/writing-nook.jpg" />
       <div className="feature-layout">
         <div className="feature-main">
-          <form className="writing-form" onSubmit={save}>
+          <form className="writing-form" onSubmit={save} key={editing?.id ?? `new-${fresh}`}>
             <label>
               <span>Title</span>
               <input

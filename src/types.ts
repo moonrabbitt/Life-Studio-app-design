@@ -95,6 +95,14 @@ export type ChatMessage = {
   preview?: { request: string; start: string; draft: unknown; status: "pending" | "added" | "dismissed" }
 }
 
+// An earlier conversation with Studio, kept when you start a new chat.
+export type ChatThread = {
+  id: string
+  at: string
+  title: string
+  messages: ChatMessage[]
+}
+
 // A reflection, or a moment you add yourself (with a title), on your journey.
 export type RoadmapReflection = {
   id: string
@@ -465,6 +473,8 @@ export type AppState = {
   events?: { fairplayConfirmed?: boolean; hackneyBooked?: boolean; fairplayBooked?: boolean }
   series?: Series[]
   chat?: ChatMessage[]
+  // Earlier chats, newest first (a few are kept).
+  chatHistory?: ChatThread[]
   workoutTemplates?: WorkoutTemplate[]
   journeyEvents?: JourneyEvent[]
   weeklyDigest?: {
