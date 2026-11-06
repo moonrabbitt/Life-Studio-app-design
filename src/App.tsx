@@ -1,3 +1,4 @@
+import { describe, forecastFor, heroLine, useWeather } from "./weather"
 import { play, setSoundsOn } from "./sounds"
 import {
   ArrowLeft,
@@ -415,6 +416,9 @@ function TodayView({
       document.removeEventListener("visibilitychange", check)
     }
   }, [state])
+  const weather = useWeather()
+  // In the evening and at night, "next up on Friday" is noise; only show what's still on today.
+  const showNext = (part !== "evening" && part !== "night") || upNext?.when === "today"
   const sleepFirst = bedtimeSoon || !!openSleep(state) || (part === "morning" && sleepMatters)
   const corner = (
     <aside className="page-grid__aside">
@@ -459,47 +463,15 @@ function TodayView({
     </aside>
   )
   const blocks: Record<string, ReactNode> = {
-    next: (
-      <NextActionCard
-        state={state}
-        update={update}
-        onActivity={onActivity}
-        onRoadmap={onRoadmap}
-        onSetupRestart={onSetupRestart}
-        onOpenItem={onOpenItem}
-      />
-    ),
+    // The next useful action sits in the hero; how much room there is sits with the day it shapes.
     schedule: (
       <>
-      <section className="check-in today-check-in">
-        <div>
-          <p className="eyebrow">A small check-in</p>
-          <h2>How much room is there today?</h2>
-        </div>
-        <div className="segmented" aria-label="Energy check-in">
-          {[
-            ["low", "Keep it small"],
-            ["steady", "Steady"],
-            ["open", "Room to explore"],
-          ].map(([value, label]) => (
-            <button
-              type="button"
-              className={state.checkIn === value ? "is-active" : ""}
-              aria-pressed={state.checkIn === value}
-              onClick={() => setCheckIn(value as CheckIn)}
-              key={value}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </section>
       <div className="page-grid">
         <div className="page-grid__main">
           <section className="section-block">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Today’s shape</p>
+                <p className="eyebrow">Today</p>
                 <h2>
                   {visibleItems.length
                     ? "A few things, with space between"
@@ -509,6 +481,26 @@ function TodayView({
               <Button variant="ghost" icon={Plus} onClick={onAdd}>
                 Add
               </Button>
+            </div>
+            <div className="today-room">
+              <span>How much room today?</span>
+              <div className="segmented" aria-label="How much room today">
+                {[
+                  ["low", "Keep it small"],
+                  ["steady", "Steady"],
+                  ["open", "Room to explore"],
+                ].map(([value, label]) => (
+                  <button
+                    type="button"
+                    className={state.checkIn === value ? "is-active" : ""}
+                    aria-pressed={state.checkIn === value}
+                    onClick={() => setCheckIn(value as CheckIn)}
+                    key={value}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
             {tucked.length > 0 && (
               <button type="button" className="energy-note" onClick={() => setShowTucked(!showTucked)}>
@@ -647,7 +639,7 @@ function TodayView({
     winddown: <WindDown state={state} onReflect={() => onOpenSpace("reflect")} />,
     corner: <div className="page-grid">{corner}</div>,
   }
-  // Something starting soon (within two hours) always comes first, whatever the time of day.
+  // In the evening, something starting soon (within two hours) brings the schedule up first.
   const soon = (() => {
     if (!upNext || upNext.when !== "today" || !upNext.item.time) return false
     const [h, m] = upNext.item.time.split(":").map(Number)
@@ -656,10 +648,10 @@ function TodayView({
     return diff >= -30 && diff <= 120
   })()
   const order: Record<ReturnType<typeof partOfDay>, string[]> = {
-    morning: sleepMatters ? ["sleep", "next", "schedule", "happiness"] : ["next", "schedule", "happiness", "sleep"],
-    day: ["next", "schedule", "happiness", "sleep"],
-    evening: soon ? ["next", "happiness", "winddown", "schedule", "sleep"] : ["happiness", "winddown", "next", "schedule", "sleep"],
-    night: soon ? ["next", "sleep", "happiness", "winddown", "schedule"] : ["sleep", "happiness", "winddown", "schedule"],
+    morning: sleepMatters ? ["sleep", "schedule", "happiness"] : ["schedule", "happiness", "sleep"],
+    day: ["schedule", "happiness", "sleep"],
+    evening: soon ? ["schedule", "happiness", "winddown", "sleep"] : ["happiness", "winddown", "schedule", "sleep"],
+    night: ["sleep", "happiness", "winddown", "schedule"],
   }
 
   const phoneOrder = [
@@ -686,12 +678,30 @@ function TodayView({
               day: "numeric",
               month: "long",
             })}
+            {weather && (
+              <span className="today-hero__weather" title={`${weather.place ? `${weather.place}: ` : ""}${describe(weather.now.code, weather.now.isDay).word}, high ${weather.high}°, low ${weather.low}°`}>
+                {" · "}
+                {describe(weather.now.code, weather.now.isDay).icon} {weather.now.temp}°
+              </span>
+            )}
           </p>
           <h1>
             {greeting}, {properName(state.name)}.
           </h1>
-          <p>What would make today feel a little more like yours?</p>
+          <p className="today-hero__line">{heroLine(state, weather)}</p>
         </div>
+        {showNext && (
+          <div className="today-hero__next">
+            <NextActionCard
+              state={state}
+              update={update}
+              onActivity={onActivity}
+              onRoadmap={onRoadmap}
+              onSetupRestart={onSetupRestart}
+              onOpenItem={onOpenItem}
+            />
+          </div>
+        )}
       </section>
 
       {(isPhone ? phoneOrder : order[part]).map((key) => (
@@ -717,6 +727,8 @@ function PlanView({
   onOpenItem: (id: string) => void
 }) {
   const remove = useRemove()
+  // Each day on the strip shows its weather at a glance; details belong in a weather app.
+  const weather = useWeather()
   const days = useMemo(
     () =>
       Array.from({ length: 14 }, (_, index) => {
@@ -789,6 +801,11 @@ function PlanView({
           >
             <span>{formatDate(date, { weekday: "short" })}</span>
             <strong>{formatDate(date, { day: "numeric" })}</strong>
+            {forecastFor(weather, date) && (
+              <i className="day-strip__weather" aria-label={`${describe(forecastFor(weather, date)!.code).word}, ${forecastFor(weather, date)!.high}°`}>
+                {describe(forecastFor(weather, date)!.code).icon} {forecastFor(weather, date)!.high}°
+              </i>
+            )}
             <small>
               {state.plan.filter(
                 (item) =>

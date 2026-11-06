@@ -10669,3 +10669,66 @@ label.setup-review__pick > span {
 .chat-history__row small {
   color: var(--ink-soft);
 }
+
+/* Today's hero: date and weather, the greeting, one useful line, then the next useful action. */
+.today-hero {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 0.8rem;
+}
+.today-hero__content {
+  align-self: flex-start;
+}
+.today-hero__weather {
+  white-space: nowrap;
+}
+.today-hero__next {
+  position: relative;
+  z-index: 1;
+}
+.today-hero__next .today-next {
+  margin: 0;
+  box-shadow: var(--shadow);
+}
+.today-page .today-hero__content > p.today-hero__line {
+  display: block;
+  max-width: 32rem;
+  margin: 0.35rem 0 0;
+  color: #fffaf0;
+}
+@media (max-width: 699px) {
+  .today-page .today-hero__content > p.today-hero__line {
+    font-size: 0.92rem;
+    line-height: 1.4;
+  }
+}
+
+/* How much room today: right above the day it shapes. */
+.today-room {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.8rem;
+  margin: 0 0 1rem;
+}
+.today-room > span {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+@media (max-width: 699px) {
+  .today-room .segmented {
+    width: 100%;
+  }
+}
+
+/* Plan: the next few days' forecast, kept small. */
+.day-strip__weather {
+  margin-top: 0.15rem;
+  font-style: normal;
+  font-size: 0.72rem;
+  line-height: 1;
+  white-space: nowrap;
+}

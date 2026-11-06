@@ -1,3 +1,4 @@
+import { weatherContext } from "./weather"
 import { authHeaders } from "./sync"
 import { withoutCautions } from "./corrections"
 import { sleepContext } from "./SleepViews"
@@ -151,6 +152,8 @@ function studioContext(state: AppState) {
     aboutMe: state.aboutMe && { ...Object.fromEntries(Object.entries(state.aboutMe).filter(([key, value]) => key !== "updatedAt" && value)), lastUpdated: state.aboutMe.updatedAt },
     notesForStudio: (state.movementNotes ?? []).slice(0, 12).map((note) => note.text),
     sleep: sleepContext(state),
+    // Forecast for the next few days (unknown beyond that): plan outdoor things around it.
+    weather: weatherContext(),
     // Little things that made them happy lately: use them to suggest things they'll enjoy.
     happiness: (state.happiness ?? []).slice(0, 7).map((pocket) => `${pocket.date}: ${pocket.text}`),
     progression: state.trainingPlan?.progression?.filter((week) => week.weekStart >= localDate(new Date(Date.now() - 6 * 86400000))).slice(0, 8),

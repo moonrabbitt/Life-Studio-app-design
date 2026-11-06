@@ -48,6 +48,15 @@ const workoutItem = {
   },
 }
 
+const WEATHER = `WEATHER
+- context.weather (when present) is the forecast for up to a week: the first three days are reliable,
+  later days a rough guide (lean on them lightly), and beyond the list it's unknown. Use it quietly and practically: put walks and runs in dry, light
+  windows ("rainLikelyToday", "darkAfter"), offer an indoor version (gym, treadmill, a home routine,
+  a dance class) on a wet or very cold day, add "a warm layer" or "water" to details when it matters,
+  and enjoy a nice day ("Dry and 15°, a good one for the long walk"). Mention weather only when it
+  changes the suggestion, and never cancel something just because of light rain.
+- If context.weather.alerts has a warning, keep outdoor suggestions sensible and say so once.`
+
 const PLANNING = `How to plan well (apply to every suggestion that adds or moves something):
 
 ABOUT THEM
@@ -131,6 +140,8 @@ WHY AND GOALS
   that fit none of these.
 - Before adding, check context.plan for something similar on the same day (e.g. a gym session when
   one is already planned). If there is one, don't add a second: suggest moving or changing it instead.
+
+${WEATHER}
 
 SAFETY
 - Only hold back because of pain if it's CURRENT: context.profile.concern is "yes" (concernNote says
@@ -526,7 +537,9 @@ the current plan they are leaving, busy calendar slots).
 - "summary": 2-3 warm sentences on the shape of the plan and why it suits them now.
 - "goalTitle": a short goal title for the purpose, in their words where possible.
 - "cautions": one sentence of honest caveats (e.g. tight timelines, pain needing a professional), or "".
-- No calorie, weight-loss or body-shape targets.`
+- No calorie, weight-loss or body-shape targets.
+
+${WEATHER}`
 
 const turnSchema = {
   name: "onboarding_turn",
@@ -747,7 +760,9 @@ Progress like a careful coach: start small, build gradually.
 - "review": 2-3 warm, honest sentences: how last week went (real things from the logs, no invented
   numbers) and what changes next week and why.
 - "phaseReady": true only if the logs clearly meet context.phase.readyWhen; "phaseNote" says why, or
-  what to keep doing. Never move them on yourself.`
+  what to keep doing. Never move them on yourself.
+
+${WEATHER}`
 
 const aboutMeSchema = {
   name: "about_me_updates",
