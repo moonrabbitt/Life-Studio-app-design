@@ -806,13 +806,17 @@ function PlanView({
                 {describe(forecastFor(weather, date)!.code).icon} {forecastFor(weather, date)!.high}°
               </i>
             )}
-            <small>
-              {state.plan.filter(
-                (item) =>
-                  item.date === date &&
-                  (item.status === "planned" || item.status === "proposed"),
-              ).length || "—"}
-            </small>
+            {(() => {
+              const count = state.plan.filter((item) => item.date === date && (item.status === "planned" || item.status === "proposed")).length
+              // A dot per plan (up to three), so the day reads at a glance without another number.
+              return (
+                <small className="day-strip__dots" aria-label={count ? `${count} planned` : "Nothing planned"}>
+                  {Array.from({ length: Math.min(count, 3) }, (_, index) => (
+                    <i key={index} />
+                  ))}
+                </small>
+              )
+            })()}
           </button>
         ))}
       </nav>

@@ -10678,7 +10678,9 @@ label.setup-review__pick > span {
   gap: 0.8rem;
 }
 .today-hero__content {
-  align-self: flex-start;
+  align-self: stretch;
+  width: auto;
+  max-width: none;
 }
 .today-hero__weather {
   white-space: nowrap;
@@ -10725,10 +10727,52 @@ label.setup-review__pick > span {
 }
 
 /* Plan: the next few days' forecast, kept small. */
+
+
+/* On phones the hero runs edge to edge, so its cards use the page's own 16px gutter and line up
+   with the cards below. */
+@media (max-width: 699px) {
+  .today-page .today-hero {
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
+}
+
+/* Day strip: weekday, date, weather, then a dot per plan. */
+.day-strip button {
+  justify-content: flex-start;
+  gap: 0.3rem;
+  min-height: 0;
+  padding: 0.6rem 0 0.65rem;
+}
+.day-strip button > strong {
+  margin: 0;
+  line-height: 1;
+}
 .day-strip__weather {
-  margin-top: 0.15rem;
   font-style: normal;
   font-size: 0.72rem;
   line-height: 1;
   white-space: nowrap;
+}
+.day-strip button > small.day-strip__dots {
+  display: flex;
+  gap: 3px;
+  width: auto;
+  height: 6px;
+  margin-top: 0.1rem;
+  border-radius: 0;
+  background: none;
+}
+.day-strip__dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sage);
+}
+.day-strip button.is-selected > small.day-strip__dots {
+  background: none;
+}
+.day-strip button.is-selected .day-strip__dots i {
+  background: #fffaf0;
 }
