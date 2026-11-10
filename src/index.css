@@ -10776,3 +10776,24 @@ label.setup-review__pick > span {
 .day-strip button.is-selected .day-strip__dots i {
   background: #fffaf0;
 }
+
+/* Past days on the strip: quieter, and today gets a small marker. */
+.day-strip button.is-past:not(.is-selected) {
+  background: var(--surface-soft);
+  opacity: 0.72;
+}
+.day-strip button.is-today:not(.is-selected) {
+  border-color: var(--moss);
+}
+
+@media (min-width: 700px) {
+  /* A month back and a fortnight ahead is too many days to squeeze in: keep them a fixed size and scroll. */
+  .day-strip {
+    grid-auto-columns: 64px;
+  }
+  /* Several activity buttons (Start, Done, Move, Skip) go on their own row, so the title keeps its room. */
+  .agenda-item:has(.activity-buttons) .agenda-item__actions {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+  }
+}

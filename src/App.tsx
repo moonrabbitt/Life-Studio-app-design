@@ -729,17 +729,32 @@ function PlanView({
   const remove = useRemove()
   // Each day on the strip shows its weather at a glance; details belong in a weather app.
   const weather = useWeather()
+  // The last 30 days (scroll back to look) and the next fortnight. The strip opens on today.
+  const PAST_DAYS = 30
   const days = useMemo(
     () =>
-      Array.from({ length: 14 }, (_, index) => {
+      Array.from({ length: PAST_DAYS + 14 }, (_, index) => {
         const date = new Date()
-        date.setDate(date.getDate() + index)
+        date.setDate(date.getDate() + index - PAST_DAYS)
         return localDate(date)
       }),
     [],
   )
+  const todayDate = today()
+  const stripRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const strip = stripRef.current
+    const button = strip?.querySelector<HTMLElement>(`[data-date="${todayDate}"]`)
+    if (strip && button) strip.scrollLeft = button.offsetLeft - strip.offsetLeft - 16
+  }, [todayDate])
+  const backToToday = () => {
+    setSelected(todayDate)
+    const strip = stripRef.current
+    const button = strip?.querySelector<HTMLElement>(`[data-date="${todayDate}"]`)
+    if (strip && button) strip.scrollTo({ left: button.offsetLeft - strip.offsetLeft - 16, behavior: "smooth" })
+  }
   const [selected, setSelected] = useState(
-    focusDate && days.includes(focusDate) ? focusDate : days[0],
+    focusDate && days.includes(focusDate) ? focusDate : todayDate,
   )
   useEffect(() => {
     if (focusDate && days.includes(focusDate)) setSelected(focusDate)
@@ -790,11 +805,21 @@ function PlanView({
         </Button>
       </header>
 
-      <nav className="day-strip" aria-label="Choose a day">
+      <nav
+        className="day-strip"
+        aria-label="Choose a day (scroll back for earlier days)"
+        ref={stripRef}
+        // On a computer, the mouse wheel scrolls the days sideways.
+        onWheel={(event) => {
+          const strip = event.currentTarget
+          if (Math.abs(event.deltaY) > Math.abs(event.deltaX) && strip.scrollWidth > strip.clientWidth) strip.scrollLeft += event.deltaY
+        }}
+      >
         {days.map((date) => (
           <button
             type="button"
-            className={selected === date ? "is-selected" : ""}
+            data-date={date}
+            className={`${selected === date ? "is-selected" : ""} ${date < todayDate ? "is-past" : ""} ${date === todayDate ? "is-today" : ""}`}
             aria-current={selected === date ? "date" : undefined}
             onClick={() => setSelected(date)}
             key={date}
@@ -807,7 +832,10 @@ function PlanView({
               </i>
             )}
             {(() => {
-              const count = state.plan.filter((item) => item.date === date && (item.status === "planned" || item.status === "proposed")).length
+              // Past days count everything that was on them; today and later count what's still to do.
+              const count = state.plan.filter(
+                (item) => item.date === date && (date < todayDate ? item.status !== "let-go" : item.status === "planned" || item.status === "proposed"),
+              ).length
               // A dot per plan (up to three), so the day reads at a glance without another number.
               return (
                 <small className="day-strip__dots" aria-label={count ? `${count} planned` : "Nothing planned"}>
@@ -827,10 +855,17 @@ function PlanView({
             <div>
               <p className="eyebrow">
                 {formatDate(selected, { weekday: "long" })}
+                {selected < todayDate && " · looking back"}
               </p>
               <h2>{formatDate(selected, { day: "numeric", month: "long" })}</h2>
             </div>
-            <span className="open-space-label">Open space is intentional</span>
+            {selected !== todayDate ? (
+              <button type="button" className="text-link" onClick={backToToday}>
+                Back to today
+              </button>
+            ) : (
+              <span className="open-space-label">Open space is intentional</span>
+            )}
           </div>
           <WeekAcceptBanner state={state} date={selected} update={update} />
           {items.length ? (
