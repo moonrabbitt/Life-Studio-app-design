@@ -65,7 +65,8 @@ export function assertSameOrigin(req: Request) {
 
 type ResponsesOptions = {
   instructions: string
-  input: string
+  // Plain text, or text with images (Responses API content parts).
+  input: string | { role: "user"; content: ({ type: "input_text"; text: string } | { type: "input_image"; image_url: string; detail?: "low" | "high" | "auto" })[] }[]
   maxOutputTokens?: number
   schema?: { name: string; schema: Record<string, unknown> }
   // Netlify allows 60s for synchronous functions; big drafts get longer than chat replies.

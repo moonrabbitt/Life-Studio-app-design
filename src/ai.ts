@@ -4,7 +4,7 @@ import { authHeaders } from "./sync"
 import { withoutCautions } from "./corrections"
 import { sleepContext } from "./SleepViews"
 import { phaseTimeline } from "./training"
-import type { ActivityKind, AppState, Area, PlanMode, PlannedExercise } from "./types"
+import type { ActivityKind, AppState, Area, PlanMode, PlannedExercise, SkinReview } from "./types"
 
 export type StudioAction = {
   type:
@@ -254,6 +254,21 @@ export const askStudio = (input: string, state: AppState, history: ChatTurn[] = 
   post<StudioProposal>(
     "/api/ai",
     JSON.stringify({ task: "assist", input, context: { ...studioContext(state), history: history.slice(-12) }, search }),
+    "application/json",
+  )
+
+// A skin care review: routine, concerns, consistency and check-ins, plus (if shared) first and latest photos.
+export const askSkinReview = (state: AppState, images: string[], photoDates: { date: string; which: string }[]) =>
+  post<Omit<SkinReview, "at" | "photos">>(
+    "/api/ai",
+    JSON.stringify({
+      task: "skin",
+      input: images.length
+        ? "Review my skin care routine for my concerns. The attached photos are my skin; tell me what you notice and what's changed."
+        : "Review my skin care routine for my concerns.",
+      context: { skin: { ...skinContext(state), photos: photoDates }, aboutMe: state.aboutMe ?? null, sleep: sleepContext(state) ?? null },
+      images,
+    }),
     "application/json",
   )
 

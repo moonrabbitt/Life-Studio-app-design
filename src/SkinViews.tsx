@@ -1,8 +1,13 @@
-import { Camera, Check, ChevronRight, Columns2, Moon, Pencil, Plus, Sparkles, Sun, Trash2, X } from "lucide-react"
+import { Camera, Check, ChevronRight, Columns2, Moon, Pencil, Plus, RotateCcw, Sparkles, Sun, TriangleAlert, Trash2, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { celebrate } from "./GoalProjectViews"
+import { askSkinReview } from "./ai"
 import {
+  CONCERNS,
   deletePhotoLocal,
+  photoForStudio,
+  SKIN_TYPES,
+  stepFromSuggestion,
   dueOn,
   FEELS,
   isDone,
@@ -21,7 +26,7 @@ import {
 import { play } from "./sounds"
 import { getPasscode, removePhoto } from "./sync"
 import { addDays } from "./training"
-import type { AppState, SkinCare, SkinFeel, SkinPhoto, SkinSchedule, SkinStep } from "./types"
+import type { AppState, SkinCare, SkinFeel, SkinPhoto, SkinSchedule, SkinStep, SkinSuggestion } from "./types"
 import { Button, formatDate, Modal, SwipeRow, today, uid, useRemove } from "./ui"
 
 type Update = (recipe: (current: AppState) => AppState, message?: string) => void
@@ -397,6 +402,207 @@ function Week({ state, update }: { state: AppState; update: Update }) {
   )
 }
 
+// Skin type, concerns and a note: what Studio's suggestions are built around.
+function AboutSkin({ state, update }: { state: AppState; update: Update }) {
+  const profile = skinOf(state).profile ?? { concerns: [] }
+  const [note, setNote] = useState(profile.note ?? "")
+  const save = (change: Partial<typeof profile>) =>
+    update((current) => withSkin(current, (value) => ({ ...value, profile: { concerns: [], ...value.profile, ...change } })))
+  return (
+    <section className="skin-section">
+      <h3>About your skin</h3>
+      <div className="skin-feel">
+        <span>Skin type</span>
+        <div className="skin-chips">
+          {SKIN_TYPES.map((type) => (
+            <button type="button" key={type} className={`skin-chip ${profile.type === type ? "is-active" : ""}`} aria-pressed={profile.type === type} onClick={() => save({ type: profile.type === type ? undefined : type })}>
+              {type}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="skin-feel">
+        <span>What would you like help with?</span>
+        <div className="skin-chips">
+          {CONCERNS.map((concern) => {
+            const on = profile.concerns.includes(concern)
+            return (
+              <button
+                type="button"
+                key={concern}
+                className={`skin-chip ${on ? "is-active" : ""}`}
+                aria-pressed={on}
+                onClick={() => save({ concerns: on ? profile.concerns.filter((item) => item !== concern) : [...profile.concerns, concern] })}
+              >
+                {concern}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      <label className="skin-note">
+        <span>Anything else Studio should know?</span>
+        <input
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          onBlur={() => note.trim() !== (profile.note ?? "") && save({ note: note.trim() || undefined })}
+          placeholder="e.g. sensitive round the eyes, on tretinoin from my GP"
+        />
+      </label>
+    </section>
+  )
+}
+
+const suggestionStep = (suggestion: SkinSuggestion) => {
+  const step = stepFromSuggestion(suggestion, "preview")
+  return step ? `${whenLabel(step.when)} · ${scheduleLabel(step.schedule)}${step.note ? ` · ${step.note}` : ""}` : ""
+}
+
+// Studio's review: how it's going, what it sees in the photos, and changes you can apply in one tap.
+function SkinStudio({ state, update }: { state: AppState; update: Update }) {
+  const skin = skinOf(state)
+  const review = skin.review
+  const [withPhotos, setWithPhotos] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const byDate = [...skin.photos].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+  const chosen = byDate.length > 1 ? [byDate[0], byDate[byDate.length - 1]] : byDate
+  const hasProfile = !!(skin.profile?.type || skin.profile?.concerns.length)
+
+  const ask = async () => {
+    setBusy(true)
+    setError("")
+    try {
+      const images: string[] = []
+      const dates: { date: string; which: string }[] = []
+      if (withPhotos)
+        for (const [index, photo] of chosen.entries()) {
+          const image = await photoForStudio(photo.id).catch(() => null)
+          if (!image) continue
+          images.push(image)
+          dates.push({ date: photo.date, which: chosen.length > 1 ? (index === 0 ? "first" : "latest") : "latest" })
+        }
+      const result = await askSkinReview(state, images, dates)
+      update((current) => withSkin(current, (value) => ({ ...value, review: { ...result, at: new Date().toISOString(), photos: images.length } })))
+      play("done")
+    } catch (failure) {
+      setError((failure as Error).message || "Studio couldn’t look just now. Try again in a moment.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const mark = (index: number, status: SkinSuggestion["status"]) =>
+    update((current) =>
+      withSkin(current, (value) => (value.review ? { ...value, review: { ...value.review, suggestions: value.review.suggestions.map((item, at) => (at === index ? { ...item, status } : item)) } } : value)),
+    )
+
+  const apply = (suggestion: SkinSuggestion, index: number) => {
+    const target = suggestion.target ? skin.steps.find((step) => step.id === suggestion.target) : undefined
+    if (suggestion.kind === "remove") {
+      if (!target) return mark(index, "applied")
+      update(
+        (current) => withSkin(current, (value) => ({ ...value, steps: value.steps.filter((step) => step.id !== target.id), review: value.review && { ...value.review, suggestions: value.review.suggestions.map((item, at) => (at === index ? { ...item, status: "applied" as const } : item)) } })),
+        `${target.name} taken out of your routine.`,
+      )
+      return
+    }
+    const step = stepFromSuggestion(suggestion, target?.id ?? uid())
+    if (!step) return
+    update(
+      (current) =>
+        withSkin(current, (value) => ({
+          ...value,
+          steps: target ? value.steps.map((item) => (item.id === target.id ? step : item)) : [...value.steps, step],
+          review: value.review && { ...value.review, suggestions: value.review.suggestions.map((item, at) => (at === index ? { ...item, status: "applied" as const } : item)) },
+        })),
+      target ? `${step.name} updated.` : `${step.name} added to your routine.`,
+    )
+    play("done")
+  }
+
+  const askButton = (
+    <div className="skin-studio__ask">
+      {chosen.length > 0 && (
+        <label className="skin-studio__photos">
+          <input type="checkbox" checked={withPhotos} onChange={(event) => setWithPhotos(event.target.checked)} />
+          <span>
+            Let Studio look at {chosen.length > 1 ? "my first and latest photos" : "my photo"}
+            <small>Shared for this review only, not kept by Studio.</small>
+          </span>
+        </label>
+      )}
+      <Button icon={review ? RotateCcw : Sparkles} variant={review ? "secondary" : "primary"} onClick={ask} disabled={busy}>
+        {busy ? "Studio is looking…" : review ? "Review again" : skin.steps.length ? "Review my routine" : "Suggest a routine"}
+      </Button>
+    </div>
+  )
+
+  return (
+    <section className="skin-section skin-studio">
+      <div className="sleep-space__head">
+        <h3>
+          <Sparkles size={16} /> Studio’s thoughts
+        </h3>
+        {review && <small className="skin-studio__when">{formatDate(review.at.slice(0, 10), { day: "numeric", month: "short" })}{review.photos ? ` · ${review.photos} photo${review.photos === 1 ? "" : "s"}` : ""}</small>}
+      </div>
+      {!review && (
+        <p className="skin-studio__intro">
+          {hasProfile
+            ? "Studio can look at your routine, your concerns, how often you’ve actually done each step and (if you like) your photos, then suggest what to change."
+            : "Tell Studio about your skin below, then it can suggest what to change for your concerns, and look at your photos if you like."}
+        </p>
+      )}
+      {review && (
+        <>
+          <p className="skin-studio__summary">{review.summary}</p>
+          {review.photoNotes && (
+            <p className="skin-studio__photo-notes">
+              <Camera size={15} /> <span>{review.photoNotes}</span>
+            </p>
+          )}
+          {review.cautions.length > 0 && (
+            <ul className="skin-studio__cautions">
+              {review.cautions.map((caution) => (
+                <li key={caution}>
+                  <TriangleAlert size={14} /> <span>{caution}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="skin-suggestions">
+            {review.suggestions.map((suggestion, index) =>
+              suggestion.status === "dismissed" ? null : (
+                <article key={index} className={`skin-suggestion ${suggestion.status === "applied" ? "is-applied" : ""}`}>
+                  <strong>{suggestion.title}</strong>
+                  <p>{suggestion.why}</p>
+                  {suggestion.step && <small>{suggestionStep(suggestion)}</small>}
+                  {suggestion.status === "applied" ? (
+                    <span className="skin-suggestion__done">
+                      <Check size={14} /> {suggestion.kind === "remove" ? "Removed" : suggestion.kind === "change" ? "Updated" : "Added"}
+                    </span>
+                  ) : suggestion.kind !== "tip" ? (
+                    <div className="skin-suggestion__actions">
+                      <Button variant="secondary" icon={suggestion.kind === "remove" ? Trash2 : suggestion.kind === "change" ? Check : Plus} onClick={() => apply(suggestion, index)}>
+                        {suggestion.kind === "add" ? "Add to routine" : suggestion.kind === "change" ? "Apply" : "Remove"}
+                      </Button>
+                      <button type="button" className="text-link" onClick={() => mark(index, "dismissed")}>
+                        Not for me
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ),
+            )}
+          </div>
+        </>
+      )}
+      {!getPasscode() ? <p className="capture-disclaimer">Add your Studio passcode in My space → Settings to ask Studio.</p> : askButton}
+      {error && <p className="welcome__bad">{error}</p>}
+    </section>
+  )
+}
+
 export function SkinSpace({ state, update, close }: { state: AppState; update: Update; close: () => void }) {
   const skin = skinOf(state)
   const remove = useRemove()
@@ -438,6 +644,7 @@ export function SkinSpace({ state, update, close }: { state: AppState; update: U
   const unused = STARTERS.filter((starter) => !skin.steps.some((step) => step.name.toLowerCase() === starter.name.toLowerCase()))
 
   const photos = <Photos state={state} update={update} />
+  const studio = <SkinStudio state={state} update={update} />
   return (
     <Modal title="Skin care" eyebrow="Your routine, gently kept" onClose={close} wide>
       <div className="sleep-space skin-space">
@@ -478,10 +685,10 @@ export function SkinSpace({ state, update, close }: { state: AppState; update: U
           </section>
         )}
 
+        {/* Set up first (about your skin, then the routine); once there's a routine, the everyday parts lead. */}
+        {!skin.steps.length && <AboutSkin state={state} update={update} />}
+        {skin.steps.length > 0 && studio}
         <Week state={state} update={update} />
-
-
-        {/* Set the routine first; once there is one, photos sit above it (it rarely changes). */}
         {skin.steps.length > 0 && photos}
         <section className="skin-section">
           <div className="sleep-space__head">
@@ -556,7 +763,9 @@ export function SkinSpace({ state, update, close }: { state: AppState; update: U
             </div>
           )}
         </section>
+        {!skin.steps.length && studio}
         {!skin.steps.length && photos}
+        {skin.steps.length > 0 && <AboutSkin state={state} update={update} />}
         <p className="capture-disclaimer">For keeping track, not medical advice. If something stings, burns or flares, pause it and ask a pharmacist or GP.</p>
       </div>
     </Modal>

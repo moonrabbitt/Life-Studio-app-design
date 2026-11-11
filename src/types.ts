@@ -512,4 +512,16 @@ export type SkinFeel = "calm" | "glowy" | "dry" | "oily" | "irritated" | "breako
 export type SkinCheck = { date: string; feel: SkinFeel[]; note?: string }
 // The image itself lives on the device (IndexedDB) and in the photo store, not in synced state.
 export type SkinPhoto = { id: string; date: string; note?: string; uploaded?: boolean }
-export type SkinCare = { steps: SkinStep[]; done: SkinDone[]; checks: SkinCheck[]; photos: SkinPhoto[] }
+// Skin type, what they'd like help with, and anything Studio should know (e.g. "on tretinoin from GP").
+export type SkinProfile = { type?: string; concerns: string[]; note?: string }
+// What Studio suggested last time, with what you did about each suggestion.
+export type SkinSuggestion = {
+  kind: "add" | "change" | "remove" | "tip"
+  title: string
+  why: string
+  target: string | null
+  step: { name: string; when: "am" | "pm"; schedule: "daily" | "days" | "weekly"; days: number[]; times: number; note: string | null } | null
+  status?: "applied" | "dismissed"
+}
+export type SkinReview = { at: string; summary: string; photoNotes: string | null; cautions: string[]; suggestions: SkinSuggestion[]; photos: number }
+export type SkinCare = { steps: SkinStep[]; done: SkinDone[]; checks: SkinCheck[]; photos: SkinPhoto[]; profile?: SkinProfile; review?: SkinReview }

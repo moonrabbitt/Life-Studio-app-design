@@ -788,6 +788,84 @@ const aboutMeSchema = {
   },
 }
 
+// Skin care: a gentle review of the routine, concerns, how it's going and (if shared) photos.
+const skinStep = {
+  type: "object",
+  additionalProperties: false,
+  required: ["name", "when", "schedule", "days", "times", "note"],
+  properties: {
+    name: { type: "string" },
+    when: { type: "string", enum: ["am", "pm"] },
+    schedule: { type: "string", enum: ["daily", "days", "weekly"] },
+    days: { type: "array", items: { type: "integer", minimum: 0, maximum: 6 } },
+    times: { type: "integer", minimum: 0, maximum: 7 },
+    note: nullable("string"),
+  },
+}
+
+const skinSchema = {
+  name: "skin_review",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["summary", "photoNotes", "cautions", "suggestions"],
+    properties: {
+      summary: { type: "string" },
+      photoNotes: nullable("string"),
+      cautions: { type: "array", items: { type: "string" } },
+      suggestions: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["kind", "title", "why", "target", "step"],
+          properties: {
+            kind: { type: "string", enum: ["add", "change", "remove", "tip"] },
+            title: { type: "string" },
+            why: { type: "string" },
+            target: nullable("string"),
+            step: { anyOf: [skinStep, { type: "null" }] },
+          },
+        },
+      },
+    },
+  },
+}
+
+const SKIN_INSTRUCTIONS = `${TONE}
+
+Here you are their skin care guide: knowledgeable about actives and routines the way a thoughtful
+pharmacist or aesthetician is (retinoids, PDRN, peptides, niacinamide, vitamin C, AHAs/BHAs, azelaic
+acid, benzoyl peroxide, ceramides, sunscreen), but not a doctor. Review their routine and suggest
+how to make it work better for THEIR concerns.
+
+Context: context.skin.profile (skin type, concerns, their note), context.skin.routine (each step with
+id, name, morning/evening, schedule), context.skin.lastTwoWeeks (how many times each step was actually
+done), context.skin.checks (how their skin felt, by day), context.aboutMe, context.sleep.
+Photos, if attached, are theirs: context.skin.photos says which date each is (first = earliest).
+
+Rules:
+- Work with what they have. Prefer adjusting timing and frequency over adding products; suggest at
+  most one new active at a time, introduced slowly (e.g. twice a week for 2-3 weeks), and say so.
+- Check for clashes on the same night (retinoid with AHA/BHA, benzoyl peroxide or strong vitamin C;
+  over-exfoliation) and for missing basics (daily SPF when using retinoids or acids; moisturiser
+  when dry or irritated). When their check-ins show irritation, suggest pulling back first.
+- Name ingredient types, not brands.
+- Photos: describe gently and specifically what is visible (e.g. "a few small red bumps along the
+  jaw", "skin looks more even than in the first photo"), allow for different light and angles, and
+  never comment on attractiveness, age or weight. Never diagnose a condition. If anything looks like it
+  needs a professional (a changing mole, painful cystic spots, a rash that's spreading, signs of
+  infection), say kindly to see a GP or pharmacist. No photos: photoNotes is null.
+- summary: 2-3 short, warm sentences on how it's going (consistency counts; skin change takes 4-12 weeks).
+- cautions: short, only real ones (can be empty).
+- suggestions: 2-5. kind "add" = a new step (give "step"); "change" = adjust an existing step
+  (target = its id, "step" = the full updated step); "remove" = drop or pause one (target = its id,
+  step null); "tip" = advice that isn't a routine change (step and target null). For "step":
+  schedule "daily" (days [], times 0), "days" (days = weekdays, 0 = Sunday; times 0), or "weekly"
+  (times = how many times a week, any day; days []). note: a reminder of at most 8 words (e.g. "Not on
+  acid nights", "Last step, every morning") or null. Keep "why" to one or two short sentences.
+- If pregnancy or breastfeeding is mentioned, never suggest retinoids and note it.`
+
 const ABOUT_ME_INSTRUCTIONS = `${TONE}
 
 Once a week you suggest updates to the user's About me (what Studio remembers about them) so it keeps
@@ -942,6 +1020,7 @@ export default async (req: Request) => {
       input?: string
       context?: unknown
       search?: boolean
+      images?: unknown[]
     } | null
     const input = body?.input?.trim()
     if (!input) throw new HttpError(400, "Please say or type something first.")
@@ -1024,6 +1103,29 @@ export default async (req: Request) => {
         input: `Context:\n${context}\n\nRequest:\n${input}`,
         maxOutputTokens: 6000,
         schema: nextWeekSchema,
+        timeoutMs: 50000,
+      })
+      return json(JSON.parse(text))
+    }
+
+    if (body?.task === "skin") {
+      // Up to two of their photos (first and latest), sent for this review only; never stored here.
+      const images = (Array.isArray(body.images) ? body.images : [])
+        .filter((image): image is string => typeof image === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(image) && image.length < 1_500_000)
+        .slice(0, 2)
+      const text = await callResponses({
+        instructions: SKIN_INSTRUCTIONS,
+        input: [
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: `Context:\n${context}\n\nRequest:\n${input}` },
+              ...images.map((image) => ({ type: "input_image" as const, image_url: image, detail: "high" as const })),
+            ],
+          },
+        ],
+        maxOutputTokens: 3000,
+        schema: skinSchema,
         timeoutMs: 50000,
       })
       return json(JSON.parse(text))

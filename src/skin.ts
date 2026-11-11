@@ -1,6 +1,6 @@
 import { downloadPhoto, getPasscode, uploadPhoto } from "./sync"
 import { addDays } from "./training"
-import type { AppState, SkinCare, SkinFeel, SkinSchedule, SkinStep } from "./types"
+import type { AppState, SkinCare, SkinFeel, SkinSchedule, SkinStep, SkinSuggestion } from "./types"
 
 export const emptySkin = (): SkinCare => ({ steps: [], done: [], checks: [], photos: [] })
 export const skinOf = (state: AppState): SkinCare => ({ ...emptySkin(), ...state.skin })
@@ -70,17 +70,53 @@ export const toggleDone = (current: AppState, stepId: string, date: string): App
   return { ...current, skin: { ...skin, done } }
 }
 
-// What Studio sees: the routine and how the last fortnight went (no photos).
+export const SKIN_TYPES = ["Dry", "Oily", "Combination", "Normal", "Sensitive"]
+export const CONCERNS = ["Breakouts", "Texture", "Dark spots", "Redness", "Dryness", "Fine lines", "Dullness", "Pores", "Dark circles"]
+
+const localToday = () => {
+  const now = new Date()
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+}
+
+// What Studio sees: skin type and concerns, the routine, how often each step really happened lately,
+// and how the skin has felt (never the photos, unless you share them for a review).
 export function skinContext(state: AppState) {
   const skin = state.skin
-  if (!skin?.steps.length) return undefined
-  const now = new Date()
-  const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
-  const from = addDays(today, -14)
+  if (!skin?.steps.length && !skin?.profile?.concerns.length && !skin?.profile?.type) return undefined
+  const today = localToday()
+  const from = addDays(today, -13)
   return {
-    routine: skin.steps.map((step) => `${step.name} (${whenLabel(step.when).toLowerCase()}, ${scheduleLabel(step.schedule).toLowerCase()})`),
-    recentSkin: skin.checks.filter((check) => check.date >= from).map((check) => ({ date: check.date, feel: check.feel, note: check.note })),
+    profile: skin.profile ?? null,
+    routine: skin.steps.map((step) => ({ id: step.id, name: step.name, when: whenLabel(step.when).toLowerCase(), schedule: scheduleLabel(step.schedule), note: step.note ?? null })),
+    lastTwoWeeks: Object.fromEntries(skin.steps.map((step) => [step.name, skin.done.filter((item) => item.stepId === step.id && item.date >= from).length])),
+    checks: skin.checks.filter((check) => check.date >= addDays(today, -27)).map((check) => ({ date: check.date, feel: check.feel, note: check.note ?? null })),
   }
+}
+
+// A suggested step from Studio, as a routine step.
+export function stepFromSuggestion(suggestion: SkinSuggestion, id: string): SkinStep | null {
+  const step = suggestion.step
+  if (!step?.name.trim()) return null
+  const schedule: SkinSchedule =
+    step.schedule === "days" && step.days.length
+      ? { kind: "days", days: [...new Set(step.days.filter((day) => day >= 0 && day <= 6))] }
+      : step.schedule === "weekly"
+        ? { kind: "weekly", times: Math.min(7, Math.max(1, step.times || 1)) }
+        : { kind: "daily" }
+  return { id, name: step.name.trim(), when: step.when === "am" ? "am" : "pm", schedule, note: step.note?.trim() || undefined }
+}
+
+// A photo as a small JPEG data URL, for sharing with Studio in a review.
+export async function photoForStudio(id: string) {
+  const blob = await loadPhoto(id)
+  if (!blob) return null
+  const small = await shrinkPhoto(blob, 1024)
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(small)
+  })
 }
 
 // Photos ----------------------------------------------------------------------
@@ -128,7 +164,7 @@ export async function loadPhoto(id: string) {
 }
 
 // Shrink a photo from the camera to at most 1280px on the long side, as a JPEG (a few hundred KB).
-export async function shrinkPhoto(file: File, longest = 1280): Promise<Blob> {
+export async function shrinkPhoto(file: Blob, longest = 1280): Promise<Blob> {
   const url = URL.createObjectURL(file)
   try {
     const image = new Image()
