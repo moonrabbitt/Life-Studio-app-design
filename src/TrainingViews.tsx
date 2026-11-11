@@ -355,6 +355,7 @@ export function NextActionCard({
   onRoadmap,
   onSetupRestart,
   onOpenItem,
+  onOpenDay,
 }: {
   state: AppState
   update: Update
@@ -362,6 +363,7 @@ export function NextActionCard({
   onRoadmap: () => void
   onSetupRestart: () => void
   onOpenItem?: (id: string) => void
+  onOpenDay?: (date: string) => void
 }) {
   const next = nextUsefulAction(state.plan, today())
   const hasRestart = state.plan.some((item) => item.phase === "restart")
@@ -420,13 +422,14 @@ export function NextActionCard({
           {item.phase === "restart" ? "Restart phase · " : ""}
           {when === "today"
             ? "Next useful action"
-            : `${state.plan.some((other) => other.date === today() && isRestDay(other) && other.status !== "let-go") ? "Rest day today · " : "Nothing else today · "}next up ${formatDate(item.date, { weekday: "long" })}`}
+            : `${state.plan.some((other) => other.date === today() && isRestDay(other) && other.status !== "let-go") ? "Rest day today · " : "Nothing else today · "}next up ${dayName(item.date).toLowerCase().startsWith("tomorrow") ? "tomorrow" : formatDate(item.date, { weekday: "long" })}`}
         </p>
         <StatusBadge item={item} />
       </div>
       <h2>{item.title}</h2>
       <p className="today-next__meta">
-        <Clock3 size={15} /> {timeLabel(item)}
+        <Clock3 size={15} /> {when === "later" && <strong>{dayName(item.date)} · </strong>}
+        {timeLabel(item)}
       </p>
       {item.details?.[0] && <p>{item.details[0]}</p>}
       {state.checkIn === "low" && item.shortVersion && (
@@ -484,13 +487,23 @@ export function NextActionCard({
             <CalendarCheck size={16} /> Review the starter fortnight
           </button>
         )}
-        <button type="button" className="text-link" onClick={onRoadmap}>
-          Your journey <ChevronRight size={16} />
-        </button>
+        {when === "later" && onOpenDay ? (
+          <button type="button" className="text-link" onClick={() => onOpenDay(item.date)}>
+            See {dayName(item.date)} in Plan <ChevronRight size={16} />
+          </button>
+        ) : (
+          <button type="button" className="text-link" onClick={onRoadmap}>
+            Your journey <ChevronRight size={16} />
+          </button>
+        )}
       </div>
     </section>
   )
 }
+
+// "Tomorrow", or the weekday and date (e.g. "Thursday 13 Nov") for later days.
+const dayName = (date: string) =>
+  date === addDays(today(), 1) ? "Tomorrow" : formatDate(date, { weekday: "long", day: "numeric", month: "short" })
 
 export function RestartSetup({
   state,

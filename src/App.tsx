@@ -312,6 +312,7 @@ function TodayView({
   onRoadmap,
   onSetupRestart,
   onOpenItem,
+  onOpenDay,
 }: {
   state: AppState
   update: (recipe: (current: AppState) => AppState, message?: string) => void
@@ -321,6 +322,7 @@ function TodayView({
   onRoadmap: () => void
   onSetupRestart: () => void
   onOpenItem: (id: string) => void
+  onOpenDay: (date: string) => void
 }) {
   const remove = useRemove()
   const currentItems = state.plan
@@ -699,6 +701,7 @@ function TodayView({
               onRoadmap={onRoadmap}
               onSetupRestart={onSetupRestart}
               onOpenItem={onOpenItem}
+              onOpenDay={onOpenDay}
             />
           </div>
         )}
@@ -742,11 +745,12 @@ function PlanView({
   )
   const todayDate = today()
   const stripRef = useRef<HTMLElement>(null)
+  const startDate = focusDate && days.includes(focusDate) ? focusDate : todayDate
   useEffect(() => {
     const strip = stripRef.current
-    const button = strip?.querySelector<HTMLElement>(`[data-date="${todayDate}"]`)
+    const button = strip?.querySelector<HTMLElement>(`[data-date="${startDate}"]`)
     if (strip && button) strip.scrollLeft = button.offsetLeft - strip.offsetLeft - 16
-  }, [todayDate])
+  }, [startDate])
   const backToToday = () => {
     setSelected(todayDate)
     const strip = stripRef.current
@@ -4467,7 +4471,9 @@ export default function App() {
     }
   }, [])
 
-  const navigate = (next: Route) => {
+  // Plan opens on today unless something asks it to show a particular day.
+  const navigate = (next: Route, planDate?: string) => {
+    setPlanFocus(planDate ?? null)
     setRoute(next)
     window.history.pushState({}, "", routePath[next])
     window.scrollTo({ top: 0, behavior: "smooth" })
@@ -4591,6 +4597,7 @@ export default function App() {
             onRoadmap={() => navigate("progress")}
             onSetupRestart={() => setRestartSetup(true)}
             onOpenItem={setOpenItemId}
+            onOpenDay={(date) => navigate("plan", date)}
           />
         )}
         {route === "plan" && (
@@ -4798,8 +4805,7 @@ export default function App() {
             if (to.kind === "space") setSpace(to.space)
             else if (to.kind === "progress") navigate("progress")
             else {
-              setPlanFocus(to.date)
-              navigate("plan")
+              navigate("plan", to.date)
             }
           }}
         />
@@ -4814,8 +4820,7 @@ export default function App() {
             if (to.kind === "space") setSpace(to.space)
             else if (to.kind === "progress") navigate("progress")
             else {
-              setPlanFocus(to.date)
-              navigate("plan")
+              navigate("plan", to.date)
             }
           }}
         />
@@ -4847,8 +4852,7 @@ export default function App() {
           update={update}
           close={() => setSpace(null)}
           onGoPlan={(date) => {
-            setPlanFocus(date)
-            navigate("plan")
+            navigate("plan", date)
           }}
         />
       )}
