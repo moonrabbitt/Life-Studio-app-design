@@ -1,6 +1,7 @@
 import { localDate, type StudioAction, type StudioProposal } from "./ai"
 import { areaMeta } from "./data"
 import { removePlanItem } from "./series"
+import { applySkinAction, skinActionValid } from "./skin"
 import { checkPlacement } from "./training"
 import type { ActivityKind, AppState, Area, PlanItem } from "./types"
 
@@ -40,6 +41,7 @@ export const blankAction = (
   why: null,
   details: null,
   workout: null,
+  skin: null,
 })
 
 // Offline fallback: a small keyword parser used when the AI service is unreachable.
@@ -293,6 +295,11 @@ export function applyAction(current: AppState, action: StudioAction): AppState {
           ...current.transactions,
         ],
       }
+    case "add_skin_step":
+    case "change_skin_step":
+    case "remove_skin_step":
+    case "log_skin":
+      return applySkinAction(current, action.type, action.skin, date)
     case "log_activity": {
       const log = {
         completedAt: new Date().toISOString(),
@@ -421,6 +428,13 @@ export function destinationOf(action: StudioAction, state: AppState): { label: s
     }
     case "log_activity":
       return { label: "Logged in your Plan and Journey", to: { kind: "plan", date } }
+    case "add_skin_step":
+    case "change_skin_step":
+      return { label: "In your Skin care routine", to: { kind: "space", space: "skin" } }
+    case "remove_skin_step":
+      return { label: "Taken out of your Skin care routine", to: { kind: "space", space: "skin" } }
+    case "log_skin":
+      return { label: "Ticked off in Skin care", to: { kind: "space", space: "skin" } }
     default:
       return { label: `Added to your Plan · ${day}`, to: { kind: "plan", date } }
   }
@@ -429,6 +443,7 @@ export function destinationOf(action: StudioAction, state: AppState): { label: s
 
 // Moving or completing needs a real, still-open plan item.
 export function isValidAction(state: AppState, action: StudioAction) {
+  if (action.type.endsWith("_skin_step") || action.type === "log_skin") return skinActionValid(state, action.type, action.skin)
   if (action.type === "delete_plan") return state.plan.some((item) => item.id === action.planId)
   if (action.type === "move_plan" || action.type === "complete_plan" || action.type === "set_aside_plan")
     return state.plan.some((item) => item.id === action.planId && item.status !== "complete")

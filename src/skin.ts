@@ -1,3 +1,4 @@
+import type { SkinChatStep } from "./ai"
 import { downloadPhoto, getPasscode, uploadPhoto } from "./sync"
 import { addDays } from "./training"
 import type { AppState, SkinCare, SkinFeel, SkinSchedule, SkinStep, SkinSuggestion } from "./types"
@@ -104,6 +105,48 @@ export function stepFromSuggestion(suggestion: SkinSuggestion, id: string): Skin
         ? { kind: "weekly", times: Math.min(7, Math.max(1, step.times || 1)) }
         : { kind: "daily" }
   return { id, name: step.name.trim(), when: step.when === "am" ? "am" : "pm", schedule, note: step.note?.trim() || undefined }
+}
+
+// A step Studio proposed in chat, as a routine step (keeping what it doesn't mention from `base`).
+const stepFromChat = (chat: SkinChatStep, id: string, base?: SkinStep): SkinStep | null => {
+  const name = chat.name?.trim() || base?.name
+  if (!name) return null
+  const schedule: SkinSchedule =
+    chat.schedule === "days" && chat.days.length
+      ? { kind: "days", days: [...new Set(chat.days.filter((day) => day >= 0 && day <= 6))] }
+      : chat.schedule === "weekly"
+        ? { kind: "weekly", times: Math.min(7, Math.max(1, chat.times || 1)) }
+        : chat.schedule === "daily"
+          ? { kind: "daily" }
+          : (base?.schedule ?? { kind: "daily" })
+  return { id, name, when: chat.when ?? base?.when ?? "pm", schedule, note: chat.note?.trim() || base?.note }
+}
+
+// Apply a skin care action confirmed in Studio chat.
+export function applySkinAction(current: AppState, type: string, chat: SkinChatStep | null | undefined, date: string): AppState {
+  if (!chat) return current
+  const skin = skinOf(current)
+  const target = skin.steps.find((step) => step.id === chat.stepId) ?? (chat.name ? skin.steps.find((step) => step.name.toLowerCase() === chat.name!.trim().toLowerCase()) : undefined)
+  if (type === "add_skin_step") {
+    const step = stepFromChat(chat, crypto.randomUUID())
+    return step ? { ...current, skin: { ...skin, steps: [...skin.steps, step] } } : current
+  }
+  if (!target) return current
+  if (type === "change_skin_step") {
+    const step = stepFromChat(chat, target.id, target)
+    return step ? { ...current, skin: { ...skin, steps: skin.steps.map((item) => (item.id === target.id ? step : item)) } } : current
+  }
+  if (type === "remove_skin_step") return { ...current, skin: { ...skin, steps: skin.steps.filter((item) => item.id !== target.id) } }
+  if (type === "log_skin") return isDone(skin, target.id, date) ? current : toggleDone(current, target.id, date)
+  return current
+}
+
+// Changing, removing or logging needs a step that's really in the routine.
+export const skinActionValid = (state: AppState, type: string, chat: SkinChatStep | null | undefined) => {
+  if (!chat) return false
+  if (type === "add_skin_step") return !!chat.name?.trim()
+  const steps = skinOf(state).steps
+  return steps.some((step) => step.id === chat.stepId || (!!chat.name && step.name.toLowerCase() === chat.name.trim().toLowerCase()))
 }
 
 // A photo as a small JPEG data URL, for sharing with Studio in a review.

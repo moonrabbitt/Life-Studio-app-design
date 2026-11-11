@@ -151,6 +151,22 @@ SAFETY
 - If nothing current is flagged, don't bring up old injuries or "see a professional before impact".
 - No medical claims, no calorie or weight-loss talk.`
 
+// A skin care step in chat: which step (by id) and/or its new details.
+const skinChat = {
+  type: ["object", "null"],
+  additionalProperties: false,
+  required: ["stepId", "name", "when", "schedule", "days", "times", "note"],
+  properties: {
+    stepId: nullable("string"),
+    name: nullable("string"),
+    when: { type: ["string", "null"], enum: ["am", "pm", null] },
+    schedule: { type: ["string", "null"], enum: ["daily", "days", "weekly", null] },
+    days: { type: "array", items: { type: "integer", minimum: 0, maximum: 6 } },
+    times: { type: "integer", minimum: 0, maximum: 7 },
+    note: nullable("string"),
+  },
+}
+
 const assistSchema = {
   name: "studio_proposal",
   schema: {
@@ -190,6 +206,7 @@ const assistSchema = {
             "workout",
             "weeks",
             "scope",
+            "skin",
           ],
           properties: {
             type: {
@@ -207,6 +224,10 @@ const assistSchema = {
                 "add_transaction",
                 "add_gym_session",
                 "log_activity",
+                "add_skin_step",
+                "change_skin_step",
+                "remove_skin_step",
+                "log_skin",
               ],
             },
             summary: { type: "string" },
@@ -257,6 +278,7 @@ const assistSchema = {
             workout: { type: ["array", "null"], items: workoutItem },
             weeks: nullable("integer"),
             scope: { type: ["string", "null"], enum: ["this", "future", null] },
+            skin: skinChat,
           },
         },
       },
@@ -330,6 +352,19 @@ their plan items (with ids), and goals. Rules:
   fits. Never point at an item whose status is complete. Include title (what they actually did),
   duration, effort (easy|comfortable|hard|very-hard) if stated, body = their note, and concern = true
   only if they mention pain, injury or feeling unwell. Never invent numbers they did not say.
+- SKIN CARE (context.skin has their routine with step ids, skin type, concerns, how often each step was
+  done lately and how their skin felt). Use these actions, never add_plan, for skin care:
+  - add_skin_step: a new step in their routine. skin = { stepId: null, name, when "am"|"pm", schedule
+    "daily" (days [], times 0) | "days" (days = weekdays, 0 = Sunday; times 0) | "weekly" (times = how
+    many times a week, any day; days []), note: at most 8 words or null }.
+  - change_skin_step: change an existing step's name, time of day, schedule or note. skin.stepId = its id
+    from context.skin.routine, and every other field = the full updated step.
+  - remove_skin_step: take a step out. skin.stepId = its id; other fields null, days [], times 0.
+  - log_skin: they say they DID a step ("did my retinol tonight"). skin.stepId = its id, date = the day
+    (today unless they say otherwise); other skin fields null, days [], times 0. One action per step.
+  Give skin advice like a thoughtful pharmacist (no brands, no diagnosis; one new active at a time;
+  watch for retinoid + acid clashes; SPF daily with actives). summary e.g. "Add PDRN · evening, once a week".
+  When not a skin action, skin = null.
 - Plans with status "proposed" are suggestions the user has not accepted yet. Never pile missed or
   skipped sessions onto other days.
 - "summary" is a one-line human description of the action shown to the user, including day and time.

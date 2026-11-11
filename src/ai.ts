@@ -20,6 +20,10 @@ export type StudioAction = {
     | "add_transaction"
     | "add_gym_session"
     | "log_activity"
+    | "add_skin_step"
+    | "change_skin_step"
+    | "remove_skin_step"
+    | "log_skin"
   summary: string
   title: string | null
   body: string | null
@@ -44,6 +48,18 @@ export type StudioAction = {
   workout?: PlannedExercise[] | null
   weeks?: number | null
   scope?: "this" | "future" | null
+  // Skin care actions: which step, and/or its new details.
+  skin?: SkinChatStep | null
+}
+
+export type SkinChatStep = {
+  stepId: string | null
+  name: string | null
+  when: "am" | "pm" | null
+  schedule: "daily" | "days" | "weekly" | null
+  days: number[]
+  times: number
+  note: string | null
 }
 
 export type StudioProposal = { reply: string; actions: StudioAction[]; sources?: { title: string; url: string }[] }
