@@ -1,3 +1,4 @@
+import { skinContext } from "./skin"
 import { weatherContext } from "./weather"
 import { authHeaders } from "./sync"
 import { withoutCautions } from "./corrections"
@@ -152,6 +153,8 @@ function studioContext(state: AppState) {
     aboutMe: state.aboutMe && { ...Object.fromEntries(Object.entries(state.aboutMe).filter(([key, value]) => key !== "updatedAt" && value)), lastUpdated: state.aboutMe.updatedAt },
     notesForStudio: (state.movementNotes ?? []).slice(0, 12).map((note) => note.text),
     sleep: sleepContext(state),
+    // Their skin care routine and how their skin has felt lately (no photos).
+    skin: skinContext(state),
     // Forecast for the next few days (unknown beyond that): plan outdoor things around it.
     weather: weatherContext(),
     // Little things that made them happy lately: use them to suggest things they'll enjoy.

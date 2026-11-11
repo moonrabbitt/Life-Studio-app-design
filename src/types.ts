@@ -469,6 +469,8 @@ export type AppState = {
   aboutMeSuggestions?: { weekStart: string; at: string; items: AboutMeSuggestion[] }
   // Lights out / lights on, to see sleep patterns over time.
   sleep?: SleepEntry[]
+  // Skin care: your routine, what you did, how your skin felt, and progress photos.
+  skin?: SkinCare
   pastPlans?: PastPlan[]
   events?: { fairplayConfirmed?: boolean; hackneyBooked?: boolean; fairplayBooked?: boolean }
   series?: Series[]
@@ -492,3 +494,22 @@ export type AppState = {
     phaseLog?: { phase: number; date: string; title?: string }[]
   }
 }
+
+// Skin care -------------------------------------------------------------------
+// When a step is due: every day, on chosen weekdays (0 = Sunday), or a few times a week on any day.
+export type SkinSchedule = { kind: "daily" } | { kind: "days"; days: number[] } | { kind: "weekly"; times: number }
+export type SkinStep = {
+  id: string
+  name: string
+  when: "am" | "pm"
+  schedule: SkinSchedule
+  // e.g. "Not on the same night as acids"
+  note?: string
+}
+// One step done on one day.
+export type SkinDone = { id: string; stepId: string; date: string; at: string }
+export type SkinFeel = "calm" | "glowy" | "dry" | "oily" | "irritated" | "breakout"
+export type SkinCheck = { date: string; feel: SkinFeel[]; note?: string }
+// The image itself lives on the device (IndexedDB) and in the photo store, not in synced state.
+export type SkinPhoto = { id: string; date: string; note?: string; uploaded?: boolean }
+export type SkinCare = { steps: SkinStep[]; done: SkinDone[]; checks: SkinCheck[]; photos: SkinPhoto[] }

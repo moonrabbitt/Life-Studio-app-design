@@ -15,6 +15,7 @@ import {
   CircleDollarSign,
   Coffee,
   Dumbbell,
+  Droplet,
   Feather,
   Film,
   Heart,
@@ -128,6 +129,7 @@ import { Tour } from "./Tour"
 import { NotificationSettings } from "./NotificationSettings"
 import { markSeen } from "./notifications"
 import { AboutMeNudge, useWeeklyAboutMe } from "./AboutMeUpdates"
+import { SkinSpace, SkinTonight } from "./SkinViews"
 import { nearBedtime, openSleep, SleepSpace, SleepToggle } from "./SleepViews"
 import { HappinessCard, HappinessJar } from "./HappinessViews"
 import { NextWeekPlanner, nextWeekDue } from "./NextWeek"
@@ -268,7 +270,17 @@ const partOfDay = () => {
 }
 
 // Evenings and nights: one line about today, and a peek at tomorrow.
-function WindDown({ state, onReflect }: { state: AppState; onReflect: () => void }) {
+function WindDown({
+  state,
+  update,
+  onReflect,
+  onSkin,
+}: {
+  state: AppState
+  update: (recipe: (current: AppState) => AppState, message?: string) => void
+  onReflect: () => void
+  onSkin: () => void
+}) {
   const date = new Date(`${today()}T12:00:00`)
   date.setDate(date.getDate() + (new Date().getHours() < 4 ? 0 : 1))
   const tomorrow = localDate(date)
@@ -284,6 +296,7 @@ function WindDown({ state, onReflect }: { state: AppState; onReflect: () => void
           Write one line
         </Button>
       </div>
+      <SkinTonight state={state} update={update} onOpen={onSkin} />
       <div className="wind-down__tomorrow">
         <p className="eyebrow">Tomorrow</p>
         {items.length ? (
@@ -638,7 +651,7 @@ function TodayView({
     ),
     sleep: <SleepToggle state={state} update={update} onOpen={() => onOpenSpace("sleep")} featured={isPhone ? sleepFirst : sleepMatters} />,
     happiness: <HappinessCard state={state} update={update} onOpen={() => onOpenSpace("happiness")} />,
-    winddown: <WindDown state={state} onReflect={() => onOpenSpace("reflect")} />,
+    winddown: <WindDown state={state} update={update} onReflect={() => onOpenSpace("reflect")} onSkin={() => onOpenSpace("skin")} />,
     corner: <div className="page-grid">{corner}</div>,
   }
   // In the evening, something starting soon (within two hours) brings the schedule up first.
@@ -1503,6 +1516,20 @@ function MySpaceView({
         <span>
           <strong>Sleep</strong>
           <small>Lights out and lights on, so you can see your patterns.</small>
+        </span>
+        <ChevronRight size={20} />
+      </button>
+      <button type="button" className="about-card" onClick={() => openSpace("skin")}>
+        <span className="about-card__icon">
+          <Droplet size={21} />
+        </span>
+        <span>
+          <strong>Skin care</strong>
+          <small>
+            {state.skin?.steps.length
+              ? `${state.skin.steps.length} step${state.skin.steps.length === 1 ? "" : "s"} in your routine${state.skin.photos.length ? ` · ${state.skin.photos.length} photo${state.skin.photos.length === 1 ? "" : "s"}` : ""}`
+              : "Your routine, what you did, and photos to see the change."}
+          </small>
         </span>
         <ChevronRight size={20} />
       </button>
@@ -4857,6 +4884,7 @@ export default function App() {
         />
       )}
       {space === "sleep" && <SleepSpace state={state} update={update} close={() => setSpace(null)} />}
+      {space === "skin" && <SkinSpace state={state} update={update} close={() => setSpace(null)} />}
       {space === "happiness" && <HappinessJar state={state} update={update} close={() => setSpace(null)} />}
       {space === "about" && (
         <AboutMeSpace

@@ -91,3 +91,19 @@ export async function downloadVoice(id: string) {
 export async function removeVoice(id: string) {
   await request(`/api/voice?id=${encodeURIComponent(id)}`, { method: "DELETE" })
 }
+
+export async function uploadPhoto(id: string, blob: Blob) {
+  await request(`/api/photo?id=${encodeURIComponent(id)}`, {
+    method: "PUT",
+    headers: { "Content-Type": blob.type || "image/jpeg" },
+    body: blob,
+  })
+}
+
+export async function downloadPhoto(id: string) {
+  return (await request(`/api/photo?id=${encodeURIComponent(id)}`)).blob()
+}
+
+export async function removePhoto(id: string) {
+  await request(`/api/photo?id=${encodeURIComponent(id)}`, { method: "DELETE" })
+}

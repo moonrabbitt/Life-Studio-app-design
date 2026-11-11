@@ -10797,3 +10797,339 @@ label.setup-review__pick > span {
     justify-content: flex-start;
   }
 }
+
+/* Skin care: the space, and the night routine in the evening wind-down. */
+.skin-section {
+  display: grid;
+  gap: 0.7rem;
+  min-width: 0;
+}
+.skin-section h3 {
+  margin: 0;
+}
+.skin-section__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  justify-content: flex-end;
+}
+.skin-today-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.7rem;
+}
+.skin-part {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface);
+}
+.skin-part .eyebrow,
+.skin-today__head .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+}
+.skin-part__empty {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+.skin-ticks {
+  display: grid;
+  gap: 0.35rem;
+}
+.skin-tick {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.skin-tick__box {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 1.5px solid var(--sage);
+  border-radius: 0.45rem;
+  color: var(--surface);
+}
+.skin-tick__text {
+  display: grid;
+  min-width: 0;
+}
+.skin-tick__text small {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+.skin-tick.is-done {
+  background: var(--sage-soft);
+}
+.skin-tick.is-done .skin-tick__box {
+  border-color: var(--moss);
+  background: var(--moss);
+}
+.skin-tick.is-done strong {
+  text-decoration: line-through;
+  text-decoration-color: var(--sage);
+}
+.skin-feel {
+  display: grid;
+  gap: 0.45rem;
+}
+.skin-feel > span,
+.skin-form__row > span,
+.skin-starters > small {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.skin-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.skin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 38px;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.skin-chip.is-active {
+  border-color: var(--moss);
+  background: var(--sage-soft);
+  color: var(--moss-dark);
+}
+.skin-chip--add {
+  border-style: dashed;
+}
+.skin-starters {
+  display: grid;
+  gap: 0.45rem;
+}
+.skin-form {
+  min-width: 0;
+}
+.skin-form label {
+  display: grid;
+  gap: 0.3rem;
+}
+.skin-form__row {
+  display: grid;
+  gap: 0.4rem;
+}
+.skin-week {
+  display: grid;
+  align-items: center;
+  gap: 0.3rem;
+  overflow-x: auto;
+}
+.skin-week > small {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  text-align: center;
+}
+.skin-week > small.is-today {
+  color: var(--moss-dark);
+  font-weight: 800;
+}
+.skin-week__row {
+  display: contents;
+}
+.skin-week__name {
+  overflow: hidden;
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.skin-week__cell {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  background: var(--surface);
+  color: var(--surface);
+  cursor: pointer;
+}
+.skin-week__cell.is-due {
+  border-style: dashed;
+  border-color: var(--sage);
+}
+.skin-week__cell.is-done {
+  border-color: var(--moss);
+  background: var(--moss);
+}
+.skin-photo-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem;
+  border: 1.5px dashed var(--sage);
+  border-radius: 1rem;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.skin-photo-empty > span {
+  display: grid;
+  gap: 0.2rem;
+}
+.skin-photo-empty small {
+  color: var(--ink-soft);
+}
+.skin-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.5rem;
+}
+.skin-photo {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+.skin-photo img,
+.skin-photo .skin-photo__loading,
+.skin-photo .skin-photo__missing {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 0.8rem;
+  object-fit: cover;
+  background: var(--paper-deep);
+}
+.skin-photo small {
+  font-size: 0.75rem;
+}
+.skin-photo__missing {
+  display: grid;
+  place-items: center;
+  padding: 0.4rem;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  text-align: center;
+}
+.skin-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.skin-compare figure {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  min-width: 0;
+}
+.skin-compare__image {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 0.9rem;
+  object-fit: cover;
+  background: var(--paper-deep);
+}
+.skin-compare figcaption {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.skin-compare select {
+  min-width: 0;
+}
+.skin-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+  background: rgb(20 18 14 / 72%);
+}
+.skin-viewer__inner {
+  display: grid;
+  gap: 0.6rem;
+  width: min(100%, 32rem);
+  max-height: 100%;
+  padding: 0.6rem;
+  border-radius: 1.2rem;
+  background: var(--surface);
+}
+.skin-viewer__image {
+  width: 100%;
+  max-height: 70vh;
+  border-radius: 0.8rem;
+  object-fit: contain;
+  background: var(--paper-deep);
+}
+.skin-viewer__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0 0.3rem;
+}
+.skin-viewer__bar strong {
+  flex: 1;
+}
+.text-link--danger {
+  color: var(--terracotta);
+}
+.skin-today__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.skin-tonight__nudge {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.1rem;
+}
+.skin-tonight__done {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--moss-dark);
+  font-weight: 600;
+}
+@media (max-width: 699px) {
+  .skin-form input,
+  .skin-compare select {
+    font-size: 16px;
+  }
+}
+.skin-photo-empty > svg {
+  flex: none;
+}
